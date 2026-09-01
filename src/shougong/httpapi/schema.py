@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
-from shougong.usecase.srs.model import SrsCard
-from shougong.usecase.study.model import StudyItem
+from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
+from shougong.usecase.study.model import ReviewResult, StudyItem
 
 
 class HealthCheckResponse(BaseModel):
@@ -78,3 +79,31 @@ class StudyItemResponse(BaseModel):
 
 class AddStudyItemRequest(BaseModel):
     dictionary_entry_id: int
+
+
+class ReviewRequest(BaseModel):
+    rating: Literal["again", "hard", "good", "easy"]
+
+    def to_domain(self) -> SrsRating:
+        return SrsRating[self.rating.upper()]
+
+
+class ReviewLogResponse(BaseModel):
+    rating: str
+    review_datetime: datetime
+
+    @classmethod
+    def from_domain(cls, log: SrsReviewLog) -> ReviewLogResponse:
+        return cls(rating=log.rating.name.lower(), review_datetime=log.review_datetime)
+
+
+class ReviewResponse(BaseModel):
+    item: StudyItemResponse
+    review: ReviewLogResponse
+
+    @classmethod
+    def from_domain(cls, result: ReviewResult) -> ReviewResponse:
+        return cls(
+            item=StudyItemResponse.from_domain(result.item),
+            review=ReviewLogResponse.from_domain(result.log),
+        )
