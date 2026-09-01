@@ -1,20 +1,52 @@
-# python
+# shougong (手工)
 
-A working Python backend service skeleton — the same layered hexagonal architecture as the
-`kotlin/` scaffold, using today's Python tooling: HTTP server (FastAPI), a hand-written
-composition root instead of a DI framework, async database access (SQLAlchemy 2 / MySQL),
-outbound HTTP (httpx), Docker, linting/formatting (Ruff), types (mypy `--strict`),
-architecture enforcement (import-linter), and an integration-test harness (Testcontainers) — all
-wired together and demonstrated end-to-end through one working example endpoint (a health check).
+A backend for learning to hand-write Chinese characters with a spaced-repetition system
+(FSRS, via [`py-fsrs`](https://pypi.org/project/fsrs/)). Built on a layered hexagonal
+architecture: FastAPI HTTP layer, a hand-written composition root instead of a DI framework,
+async database access (SQLAlchemy 2 / MySQL), outbound HTTP (httpx), Docker, Ruff, mypy
+`--strict`, import-linter, and a Testcontainers integration harness.
+
+Features are delivered in increments: **(1) dictionary lookup**, (2) enqueuing study items,
+(3) the review loop.
 
 ## Quick start
 
 ```bash
 uv sync                       # create .venv + install everything
-uv run poe run                # start the service on http://localhost:8080 (needs MySQL — see below)
-docker-compose up -d mysql    # local MySQL on :3306
+docker compose up -d mysql    # local MySQL on :3306 (managed separately from the app)
+uv run poe run                # start the service on http://localhost:8080
 curl localhost:8080/health
 ```
+
+## Run in Docker
+
+**Whole stack (app + MySQL)** — builds the image and starts everything:
+
+```bash
+docker compose -f docker-compose.full.yml up --build
+```
+
+**App only** — the image never contains the database; point it at an external MySQL:
+
+```bash
+docker build -t shougong .
+docker run --rm -p 8080:8080 \
+  -e MYSQL__HOST=host.docker.internal \
+  -e MYSQL__DATABASE=shougong \
+  -e MYSQL__USER=root -e MYSQL__PASSWORD= \
+  shougong
+```
+
+`docker-compose.yml` stays as a **DB-only** helper for local dev (`docker compose up -d mysql`
+while you run the app with `uv run poe run`).
+
+All config is via env vars (`APP_ENV`, `HTTP_PORT`, `LOG_LEVEL`, `MYSQL__*`,
+`GATEWAYS__APP__HOST`) — see `.env.example`. Nested keys use `__`.
+
+## API collection
+
+`postman/shougong.postman_collection.json` — a Postman collection covering every endpoint,
+kept in sync with each increment. Import it and set the `baseUrl` variable.
 
 ## Tasks (`uv run poe <task>`)
 
@@ -29,11 +61,14 @@ curl localhost:8080/health
 | `test-integration` | integration tests (needs a Docker daemon)              |
 | `check`            | everything CI runs                                      |
 
-## Starting a new project from it
+## The dictionary
 
-Copy the `python/` folder, then rename the `template` package: the directory
-`src/template/`, `packages = ["src/template"]` and `name` in `pyproject.toml`, the
-`root_package` / container names in `[tool.importlinter]`, the module paths in
-`Dockerfile` / `ci.yml` / `poe` tasks, and the `MYSQL_DATABASE` in `docker-compose.yml`.
+On startup the app downloads [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict)
+(licensed CC BY-SA 4.0) from MDBG and fills `dictionary_entry` — **once**, only when the table
+is empty. It runs in the background, so search results appear a few seconds after boot.
+
+Set `DICTIONARY_AUTOLOAD=false` to disable it. To force a refresh, clear the table
+(`TRUNCATE dictionary_entry`) and restart. Traditional forms are ignored — this trainer only
+drills simplified handwriting.
 
 See [CLAUDE.md](CLAUDE.md) for the architecture and the rules for evolving it.
