@@ -11,7 +11,8 @@ _NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
 
 def _scheduler() -> FsrsScheduler:
-    return FsrsScheduler(Scheduler(enable_fuzzing=False))
+    # Same config as the default (no learning/relearning steps), fuzzing off for determinism.
+    return FsrsScheduler(Scheduler(learning_steps=(), relearning_steps=(), enable_fuzzing=False))
 
 
 def test_new_card_is_due_now_and_learning() -> None:
@@ -22,22 +23,25 @@ def test_new_card_is_due_now_and_learning() -> None:
     assert card.last_review is None
 
 
-def test_review_good_moves_due_forward_and_records_the_rating() -> None:
+def test_first_review_skips_learning_and_schedules_days_out() -> None:
     scheduler = _scheduler()
     card = scheduler.new_card(_NOW)
 
     updated, log = scheduler.review(card, SrsRating.GOOD, _NOW)
 
-    assert updated.due > _NOW
+    assert updated.state is SrsState.REVIEW
+    assert updated.due - _NOW >= timedelta(days=1)
     assert updated.last_review == _NOW
     assert log.rating is SrsRating.GOOD
     assert log.review_datetime == _NOW
 
 
-def test_review_again_keeps_the_card_due_soon() -> None:
+def test_harder_ratings_are_scheduled_sooner_than_easier_ones() -> None:
     scheduler = _scheduler()
     card = scheduler.new_card(_NOW)
 
-    updated, _ = scheduler.review(card, SrsRating.AGAIN, _NOW)
+    again_due = scheduler.review(card, SrsRating.AGAIN, _NOW)[0].due
+    good_due = scheduler.review(card, SrsRating.GOOD, _NOW)[0].due
+    easy_due = scheduler.review(card, SrsRating.EASY, _NOW)[0].due
 
-    assert updated.due - _NOW <= timedelta(minutes=10)
+    assert again_due < good_due < easy_due

@@ -36,9 +36,16 @@ def _from_fsrs(card: Card) -> SrsCard:
     )
 
 
+def _default_scheduler() -> Scheduler:
+    # No short-term learning phase: `learning_steps=()` means a card is scheduled
+    # days out on its very first review, and `relearning_steps=()` means an
+    # "Again" in Review keeps the card in Review instead of dropping to Relearning.
+    return Scheduler(learning_steps=(), relearning_steps=())
+
+
 class FsrsScheduler(ISrsScheduler):
     def __init__(self, scheduler: Scheduler | None = None) -> None:
-        self._scheduler = scheduler or Scheduler()
+        self._scheduler = scheduler or _default_scheduler()
 
     def new_card(self, now: datetime) -> SrsCard:
         return _from_fsrs(Card(due=now))
