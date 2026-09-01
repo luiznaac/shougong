@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS study_item (
     id               BIGINT      NOT NULL AUTO_INCREMENT,
     entry_id         BIGINT      NOT NULL,
     card_state       SMALLINT    NOT NULL,
-    card_step        INT         NULL,
     card_stability   DOUBLE      NULL,
     card_difficulty  DOUBLE      NULL,
     card_due         DATETIME(6) NOT NULL,

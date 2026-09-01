@@ -33,7 +33,6 @@ def _as_utc(value: datetime | None) -> datetime | None:
 def _card_of(row: StudyItemEntity) -> SrsCard:
     return SrsCard(
         state=SrsState(row.card_state),
-        step=row.card_step,
         stability=row.card_stability,
         difficulty=row.card_difficulty,
         due=_as_utc(row.card_due),  # type: ignore[arg-type]  # column is NOT NULL
@@ -60,7 +59,6 @@ class StudyItemRepository(IStudyItemRepository):
             row = StudyItemEntity(
                 entry_id=entry.id,
                 card_state=int(card.state),
-                card_step=card.step,
                 card_stability=card.stability,
                 card_difficulty=card.difficulty,
                 card_due=_naive_utc(card.due),
@@ -101,7 +99,6 @@ class StudyItemRepository(IStudyItemRepository):
             if row is None:
                 raise ResourceNotFoundError("study_item", str(item_id))
             row.card_state = int(card.state)
-            row.card_step = card.step
             row.card_stability = card.stability
             row.card_difficulty = card.difficulty
             row.card_due = _naive_utc(card.due)

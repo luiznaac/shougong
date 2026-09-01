@@ -34,7 +34,7 @@ def make_dictionary_entry(
 
 
 def make_srs_card(*, due: datetime = _EPOCH) -> SrsCard:
-    return SrsCard(state=SrsState.LEARNING, step=0, stability=None, difficulty=None, due=due, last_review=None)
+    return SrsCard(state=SrsState.LEARNING, stability=None, difficulty=None, due=due, last_review=None)
 
 
 def make_study_item(
@@ -106,7 +106,6 @@ class StubSrsEngine(ISrsEngine):
     def review(self, card: SrsCard, rating: SrsRating, now: datetime) -> tuple[SrsCard, SrsReviewLog]:
         next_card = SrsCard(
             state=SrsState.REVIEW,
-            step=None,
             stability=1.0,
             difficulty=5.0,
             due=now + timedelta(days=1),

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Double, ForeignKey, Integer, SmallInteger
+from sqlalchemy import BigInteger, Double, ForeignKey, SmallInteger
 from sqlalchemy.dialects.mysql import DATETIME
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,7 +30,6 @@ class StudyItemEntity(Base):
         unique=True,
     )
     card_state: Mapped[int] = mapped_column(SmallInteger)
-    card_step: Mapped[int | None] = mapped_column(Integer)
     card_stability: Mapped[float | None] = mapped_column(Double)
     card_difficulty: Mapped[float | None] = mapped_column(Double)
     card_due: Mapped[datetime] = mapped_column(_Timestamp, index=True)
