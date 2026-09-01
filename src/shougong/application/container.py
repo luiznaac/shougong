@@ -30,14 +30,18 @@ from shougong.httpapi.configuration.server import build_app
 from shougong.httpapi.controller.base import IController
 from shougong.httpapi.controller.dictionary_controller import DictionaryController
 from shougong.httpapi.controller.health_controller import HealthController
+from shougong.httpapi.controller.study_controller import StudyController
 from shougong.persistence.configuration.database import build_engine, build_session_factory
 from shougong.persistence.configuration.transaction import SqlAlchemyTransactionTemplate
 from shougong.persistence.dictionary.repository import DictionaryRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
+from shougong.persistence.study.repository import StudyItemRepository
+from shougong.srs.fsrs_scheduler import FsrsScheduler
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
+from shougong.usecase.study.service import StudyService
 
 _log = get_logger(__name__)
 
@@ -65,10 +69,22 @@ class Container:
         self._dictionary_service = DictionaryService(self._dictionary_repository)
         self._cedict_source = CedictSource(self.http_client)
 
+        # --- study slice ----------------------------------------------
+        self._srs_scheduler = FsrsScheduler()
+        self._study_item_repository = StudyItemRepository(self.transaction_template)
+        self._study_service = StudyService(
+            self._study_item_repository,
+            self._dictionary_repository,
+            self._srs_scheduler,
+            self.clock,
+            self.transaction_template,
+        )
+
         # --- http layer ------------------------------------------------
         self.controllers: list[IController] = [
             HealthController(self.health_checkers),
             DictionaryController(self._dictionary_service),
+            StudyController(self._study_service),
         ]
 
         @asynccontextmanager

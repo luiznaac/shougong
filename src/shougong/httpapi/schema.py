@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
+from shougong.usecase.srs.model import SrsCard
+from shougong.usecase.study.model import StudyItem
 
 
 class HealthCheckResponse(BaseModel):
@@ -38,3 +40,41 @@ class DictionaryEntryResponse(BaseModel):
             pinyin=entry.pinyin,
             definitions=list(entry.definitions),
         )
+
+
+class SrsCardResponse(BaseModel):
+    state: str
+    due: datetime
+    stability: float | None
+    difficulty: float | None
+    last_review: datetime | None
+
+    @classmethod
+    def from_domain(cls, card: SrsCard) -> SrsCardResponse:
+        return cls(
+            state=card.state.name.lower(),
+            due=card.due,
+            stability=card.stability,
+            difficulty=card.difficulty,
+            last_review=card.last_review,
+        )
+
+
+class StudyItemResponse(BaseModel):
+    id: int
+    entry: DictionaryEntryResponse
+    card: SrsCardResponse
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, item: StudyItem) -> StudyItemResponse:
+        return cls(
+            id=item.id,
+            entry=DictionaryEntryResponse.from_domain(item.entry),
+            card=SrsCardResponse.from_domain(item.card),
+            created_at=item.created_at,
+        )
+
+
+class AddStudyItemRequest(BaseModel):
+    dictionary_entry_id: int
