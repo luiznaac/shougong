@@ -26,7 +26,7 @@ class StudyItemEntity(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     entry_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("dictionary_entry.id", ondelete="CASCADE"),
+        ForeignKey("dictionary_entry.id"),
         unique=True,
     )
     card_state: Mapped[int] = mapped_column(SmallInteger)
@@ -43,7 +43,7 @@ class ReviewLogEntity(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     study_item_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("study_item.id", ondelete="CASCADE"),
+        ForeignKey("study_item.id"),
         index=True,
     )
     rating: Mapped[int] = mapped_column(SmallInteger)
