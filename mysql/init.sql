@@ -29,3 +29,15 @@ CREATE TABLE IF NOT EXISTS study_item (
     CONSTRAINT fk_study_item_entry FOREIGN KEY (entry_id)
         REFERENCES dictionary_entry (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Append-only history of grades: one row per review of a study item.
+CREATE TABLE IF NOT EXISTS review_log (
+    id              BIGINT      NOT NULL AUTO_INCREMENT,
+    study_item_id   BIGINT      NOT NULL,
+    rating          SMALLINT    NOT NULL,
+    review_datetime DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_review_log_study_item (study_item_id),
+    CONSTRAINT fk_review_log_study_item FOREIGN KEY (study_item_id)
+        REFERENCES study_item (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
