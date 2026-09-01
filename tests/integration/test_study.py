@@ -86,22 +86,22 @@ async def test_reviewing_an_item_reschedules_it_and_records_history(
     assert [row["rating"] for row in history.json()] == ["good"]
 
 
-async def test_review_history_is_newest_first(container: Container, client: httpx.AsyncClient) -> None:
-    entry_id = await _seed_entry(container, simplified="金", pinyin="jin1")
-    item_id = (await client.post("/study-items", json={"dictionary_entry_id": entry_id})).json()["id"]
-
-    await client.post(f"/study-items/{item_id}/reviews", json={"rating": "again"})
-    await client.post(f"/study-items/{item_id}/reviews", json={"rating": "good"})
-
-    history = await client.get(f"/study-items/{item_id}/reviews")
-
-    assert [row["rating"] for row in history.json()] == ["good", "again"]
-
-
 async def test_reviewing_an_unknown_item_is_404(container: Container, client: httpx.AsyncClient) -> None:
     response = await client.post("/study-items/999999/reviews", json={"rating": "good"})
 
     assert response.status_code == 404
+
+
+async def test_reviewing_an_item_that_is_not_due_is_409(container: Container, client: httpx.AsyncClient) -> None:
+    entry_id = await _seed_entry(container, simplified="日", pinyin="ri4")
+    item_id = (await client.post("/study-items", json={"dictionary_entry_id": entry_id})).json()["id"]
+    # first review pushes the card days into the future
+    assert (await client.post(f"/study-items/{item_id}/reviews", json={"rating": "good"})).status_code == 201
+
+    again = await client.post(f"/study-items/{item_id}/reviews", json={"rating": "good"})
+
+    assert again.status_code == 409
+    assert len((await client.get(f"/study-items/{item_id}/reviews")).json()) == 1  # no second log
 
 
 async def test_review_rejects_an_unknown_rating(container: Container, client: httpx.AsyncClient) -> None:

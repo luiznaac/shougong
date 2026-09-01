@@ -154,7 +154,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["study-items", "{{studyItemId}}", "reviews"]
             },
-            "description": "Grade a study item — rating is one of again | hard | good | easy. FSRS reschedules the card; 201 + Location, returns the updated item and the logged grade. 404 if the item is unknown, 422 for an unknown rating."
+            "description": "Grade a study item — rating is one of again | hard | good | easy. FSRS reschedules the card; 201 + Location, returns the updated item and the logged grade. 404 if the item is unknown, 409 if it is not due yet, 422 for an unknown rating."
           }
         },
         {

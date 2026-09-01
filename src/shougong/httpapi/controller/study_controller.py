@@ -3,7 +3,8 @@
 `POST /study-items`              enqueue a dictionary entry (201 + Location).
 `GET  /study-items`              list items; `?due=true` filters to what's due now.
 `GET  /study-items/{id}`         a single item.
-`POST /study-items/{id}/reviews` grade an item and let FSRS reschedule it (201 + Location).
+`POST /study-items/{id}/reviews` grade an item and let FSRS reschedule it (201 + Location);
+                                409 if the item is not due yet.
 `GET  /study-items/{id}/reviews` the item's grade history, newest first.
 """
 

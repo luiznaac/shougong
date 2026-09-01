@@ -59,7 +59,10 @@ class StudyService:
             item = await self._study.get(item_id)
             if item is None:
                 raise ResourceNotFoundError("study_item", str(item_id))
-            next_card, log = self._engine.review(item.card, rating, self._clock.now())
+            now = self._clock.now()
+            if item.card.due > now:
+                raise ConflictError(f"study item {item_id} is not due until {item.card.due.isoformat()}")
+            next_card, log = self._engine.review(item.card, rating, now)
             updated = await self._study.update_card(item_id, next_card)
             await self._study.add_review_log(item_id, log)
             _log.info("study.item.reviewed", item_id=item_id, rating=rating.name.lower(), due=next_card.due.isoformat())

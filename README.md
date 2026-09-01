@@ -53,8 +53,8 @@ cards become due at once instead of trickling in through the day.
 `GET /study-items?due=true` is the queue to practise now. For each item, `POST
 /study-items/{id}/reviews` with `{"rating": "again|hard|good|easy"}` hands the grade to FSRS,
 which advances the card and pushes `due` out (snapped to the day boundary). The item drops out
-of the due list until then. `GET /study-items/{id}/reviews` returns the grade history, newest
-first.
+of the due list until then, and reviewing it again before it comes due is rejected with `409`.
+`GET /study-items/{id}/reviews` returns the grade history, newest first.
 
 ## API collection
 
