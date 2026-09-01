@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     http_port: int = 8080
     log_level: str = "INFO"
 
+    # On startup, download CC-CEDICT and fill `dictionary_entry` if it is empty.
+    dictionary_autoload: bool = True
+
     mysql: MySqlConfig = Field(default_factory=MySqlConfig)
     gateways: GatewaysConfig = Field(default_factory=GatewaysConfig)
 
