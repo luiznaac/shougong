@@ -53,9 +53,9 @@ async def container(settings: Settings) -> AsyncIterator[Container]:
 
 @pytest.fixture(autouse=True)
 async def _schema(container: Container) -> None:
-    # Import every entity module so it registers on Base.metadata, then
-    # rebuild the schema for a clean slate (init.sql isn't run by testcontainers).
-    import shougong.persistence.dictionary.entity  # noqa: F401
+    # Building the Container imports every repository (and hence every entity
+    # module), so Base.metadata is fully populated by the time we get here.
+    # init.sql isn't run by testcontainers, so rebuild the schema per test.
     from shougong.persistence.configuration.base import Base
 
     async with container.engine.begin() as conn:

@@ -6,12 +6,17 @@ Import from here instead of hand-rolling doubles in each test.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
+from datetime import UTC, datetime, timedelta
 from itertools import count
 from typing import TypeVar
 
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
+from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
+from shougong.usecase.study.model import StudyItem
 
 _T = TypeVar("_T")
+
+_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def make_dictionary_entry(
@@ -22,6 +27,25 @@ def make_dictionary_entry(
     definitions: tuple[str, ...] = ("to learn", "to study"),
 ) -> DictionaryEntry:
     return DictionaryEntry(id=entry_id, simplified=simplified, pinyin=pinyin, definitions=definitions)
+
+
+def make_srs_card(*, due: datetime = _EPOCH) -> SrsCard:
+    return SrsCard(state=SrsState.LEARNING, step=0, stability=None, difficulty=None, due=due, last_review=None)
+
+
+def make_study_item(
+    *,
+    item_id: int = 1,
+    entry: DictionaryEntry | None = None,
+    card: SrsCard | None = None,
+    created_at: datetime = _EPOCH,
+) -> StudyItem:
+    return StudyItem(
+        id=item_id,
+        entry=entry or make_dictionary_entry(),
+        card=card or make_srs_card(),
+        created_at=created_at,
+    )
 
 
 class FakeTransactionTemplate:
@@ -67,3 +91,44 @@ class FakeCedictSource:
     async def fetch(self) -> list[CedictRecord]:
         self.fetch_calls += 1
         return list(self.records)
+
+
+class StubSrsScheduler:
+    """Deterministic scheduler: new cards are due `now`, a review pushes due out a day."""
+
+    def new_card(self, now: datetime) -> SrsCard:
+        return make_srs_card(due=now)
+
+    def review(self, card: SrsCard, rating: SrsRating, now: datetime) -> tuple[SrsCard, SrsReviewLog]:
+        next_card = SrsCard(
+            state=SrsState.REVIEW,
+            step=None,
+            stability=1.0,
+            difficulty=5.0,
+            due=now + timedelta(days=1),
+            last_review=now,
+        )
+        return next_card, SrsReviewLog(rating=rating, review_datetime=now)
+
+
+class FakeStudyItemRepository:
+    def __init__(self, items: list[StudyItem] | None = None) -> None:
+        self.items: list[StudyItem] = list(items or [])
+        self._ids = count(1)
+
+    async def create(self, entry: DictionaryEntry, card: SrsCard, created_at: datetime) -> StudyItem:
+        item = StudyItem(id=next(self._ids), entry=entry, card=card, created_at=created_at)
+        self.items.append(item)
+        return item
+
+    async def get(self, item_id: int) -> StudyItem | None:
+        return next((i for i in self.items if i.id == item_id), None)
+
+    async def exists_for_entry(self, entry_id: int) -> bool:
+        return any(i.entry.id == entry_id for i in self.items)
+
+    async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]:
+        rows = sorted(self.items, key=lambda i: (i.card.due, i.id))
+        if due_before is not None:
+            rows = [i for i in rows if i.card.due <= due_before]
+        return rows[offset : offset + limit]
