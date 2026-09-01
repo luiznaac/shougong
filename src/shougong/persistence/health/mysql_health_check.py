@@ -6,10 +6,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from shougong.usecase.commons.time import IClock
-from shougong.usecase.health.checker import HealthCheckResult
+from shougong.usecase.health.checker import HealthCheckResult, IHealthChecker
 
 
-class MySqlConnectionHealthCheck:
+class MySqlConnectionHealthCheck(IHealthChecker):
     def __init__(self, engine: AsyncEngine, clock: IClock) -> None:
         self._engine = engine
         self._clock = clock

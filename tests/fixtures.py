@@ -10,8 +10,12 @@ from datetime import UTC, datetime, timedelta
 from itertools import count
 from typing import TypeVar
 
+from shougong.usecase.configuration.transaction import ITransactionTemplate
+from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
+from shougong.usecase.srs.scheduler import ISrsScheduler
+from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import StudyItem
 
 _T = TypeVar("_T")
@@ -48,14 +52,14 @@ def make_study_item(
     )
 
 
-class FakeTransactionTemplate:
+class FakeTransactionTemplate(ITransactionTemplate):
     """Runs the block straight through — no real transaction."""
 
     async def execute(self, block: Callable[[], Awaitable[_T]]) -> _T:
         return await block()
 
 
-class FakeDictionaryRepository:
+class FakeDictionaryRepository(IDictionaryRepository):
     def __init__(self, entries: list[DictionaryEntry] | None = None) -> None:
         self.entries: list[DictionaryEntry] = list(entries or [])
         self._ids = count(1)
@@ -83,7 +87,7 @@ class FakeDictionaryRepository:
         return len(records)
 
 
-class FakeCedictSource:
+class FakeCedictSource(ICedictSource):
     def __init__(self, records: list[CedictRecord] | None = None) -> None:
         self.records: list[CedictRecord] = list(records or [])
         self.fetch_calls = 0
@@ -93,7 +97,7 @@ class FakeCedictSource:
         return list(self.records)
 
 
-class StubSrsScheduler:
+class StubSrsScheduler(ISrsScheduler):
     """Deterministic scheduler: new cards are due `now`, a review pushes due out a day."""
 
     def new_card(self, now: datetime) -> SrsCard:
@@ -111,7 +115,7 @@ class StubSrsScheduler:
         return next_card, SrsReviewLog(rating=rating, review_datetime=now)
 
 
-class FakeStudyItemRepository:
+class FakeStudyItemRepository(IStudyItemRepository):
     def __init__(self, items: list[StudyItem] | None = None) -> None:
         self.items: list[StudyItem] = list(items or [])
         self._ids = count(1)

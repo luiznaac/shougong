@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from shougong.usecase.commons.time import IClock
-from shougong.usecase.health.checker import HealthCheckResult
+from shougong.usecase.health.checker import HealthCheckResult, IHealthChecker
 from shougong.usecase.health.gateway import IHealthGateway
 
 
-class HttpClientHealthCheck:
+class HttpClientHealthCheck(IHealthChecker):
     def __init__(self, health_gateway: IHealthGateway, clock: IClock) -> None:
         self._health_gateway = health_gateway
         self._clock = clock

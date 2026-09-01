@@ -11,11 +11,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response
 
+from shougong.httpapi.controller.base import IController
 from shougong.httpapi.schema import AddStudyItemRequest, StudyItemResponse
 from shougong.usecase.study.service import StudyService
 
 
-class StudyController:
+class StudyController(IController):
     def __init__(self, service: StudyService) -> None:
         self._service = service
 

@@ -10,13 +10,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from shougong.httpapi.controller.base import IController
 from shougong.httpapi.schema import DictionaryEntryResponse
 from shougong.usecase.dictionary.service import DictionaryService
 
 _MAX_LIMIT = 100
 
 
-class DictionaryController:
+class DictionaryController(IController):
     def __init__(self, service: DictionaryService) -> None:
         self._service = service
 

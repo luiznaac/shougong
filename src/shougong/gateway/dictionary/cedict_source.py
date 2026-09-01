@@ -16,6 +16,7 @@ import re
 import httpx
 
 from shougong.usecase.commons.logging import get_logger
+from shougong.usecase.dictionary.gateway import ICedictSource
 from shougong.usecase.dictionary.model import CedictRecord
 
 _MDBG_URL = "https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz"
@@ -43,7 +44,7 @@ def parse_cedict(text: str) -> list[CedictRecord]:
     return records
 
 
-class CedictSource:
+class CedictSource(ICedictSource):
     def __init__(self, client: httpx.AsyncClient, url: str = _MDBG_URL) -> None:
         self._client = client
         self._url = url

@@ -14,14 +14,14 @@ class IClock(Protocol):
     def now(self) -> datetime: ...
 
 
-class SystemClock:
+class SystemClock(IClock):
     """Production clock. Swap for a fixed clock in tests."""
 
     def now(self) -> datetime:
         return datetime.now(tz=UTC)
 
 
-class FixedClock:
+class FixedClock(IClock):
     """Test double: always returns the same instant."""
 
     def __init__(self, instant: datetime) -> None:

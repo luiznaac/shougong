@@ -10,12 +10,13 @@ from collections.abc import Sequence
 
 from fastapi import APIRouter
 
+from shougong.httpapi.controller.base import IController
 from shougong.httpapi.schema import HealthCheckResponse
 from shougong.usecase.commons.asyncx import map_async
 from shougong.usecase.health.checker import IHealthChecker
 
 
-class HealthController:
+class HealthController(IController):
     def __init__(self, health_checkers: Sequence[IHealthChecker]) -> None:
         self._health_checkers = health_checkers
 

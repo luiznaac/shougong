@@ -11,6 +11,7 @@ from datetime import datetime
 from fsrs import Card, Rating, Scheduler, State
 
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
+from shougong.usecase.srs.scheduler import ISrsScheduler
 
 
 def _to_fsrs(card: SrsCard) -> Card:
@@ -35,7 +36,7 @@ def _from_fsrs(card: Card) -> SrsCard:
     )
 
 
-class FsrsScheduler:
+class FsrsScheduler(ISrsScheduler):
     def __init__(self, scheduler: Scheduler | None = None) -> None:
         self._scheduler = scheduler or Scheduler()
 

@@ -13,12 +13,14 @@ from typing import TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from shougong.usecase.configuration.transaction import ITransactionTemplate
+
 _T = TypeVar("_T")
 
 _current_session: ContextVar[AsyncSession | None] = ContextVar("_current_session", default=None)
 
 
-class SqlAlchemyTransactionTemplate:
+class SqlAlchemyTransactionTemplate(ITransactionTemplate):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 

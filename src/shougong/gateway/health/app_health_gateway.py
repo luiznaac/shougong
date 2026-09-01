@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import httpx
 
+from shougong.usecase.health.gateway import IHealthGateway
 
-class AppHealthGateway:
+
+class AppHealthGateway(IHealthGateway):
     def __init__(self, client: httpx.AsyncClient, base_url: str) -> None:
         self._client = client
         self._base_url = base_url.rstrip("/")

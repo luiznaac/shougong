@@ -15,6 +15,7 @@ from shougong.persistence.configuration.transaction import (
     current_session,
 )
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
+from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
 
 _BULK_BATCH = 1000
@@ -29,7 +30,7 @@ def to_domain(row: DictionaryEntryEntity) -> DictionaryEntry:
     )
 
 
-class DictionaryRepository:
+class DictionaryRepository(IDictionaryRepository):
     def __init__(self, transaction_template: SqlAlchemyTransactionTemplate) -> None:
         self._tx = transaction_template
 

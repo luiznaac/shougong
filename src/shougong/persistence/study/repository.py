@@ -15,6 +15,7 @@ from shougong.persistence.dictionary.repository import to_domain as _entry_to_do
 from shougong.persistence.study.entity import StudyItemEntity
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.srs.model import SrsCard, SrsState
+from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import StudyItem
 
 
@@ -48,7 +49,7 @@ def _to_domain(row: StudyItemEntity, entry: DictionaryEntryEntity) -> StudyItem:
     )
 
 
-class StudyItemRepository:
+class StudyItemRepository(IStudyItemRepository):
     def __init__(self, transaction_template: SqlAlchemyTransactionTemplate) -> None:
         self._tx = transaction_template
 
