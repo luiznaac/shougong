@@ -1,0 +1,24 @@
+# keep the build context small — only what the runtime image needs
+.git
+.github
+.venv
+**/__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.import_linter_cache
+.coverage
+coverage.xml
+htmlcov
+.env
+.idea
+.vscode
+tests
+postman
+docs
+mysql
+*.md
+docker-compose*.yml
+.pre-commit-config.yaml
+.python-version

@@ -51,6 +51,18 @@ async def container(settings: Settings) -> AsyncIterator[Container]:
         await instance.aclose()
 
 
+@pytest.fixture(autouse=True)
+async def _schema(container: Container) -> None:
+    # Import every entity module so it registers on Base.metadata, then
+    # rebuild the schema for a clean slate (init.sql isn't run by testcontainers).
+    import shougong.persistence.dictionary.entity  # noqa: F401
+    from shougong.persistence.configuration.base import Base
+
+    async with container.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+
 @pytest.fixture
 async def client(container: Container) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=container.app)

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
 
 
@@ -20,4 +21,20 @@ class HealthCheckResponse(BaseModel):
             service_name=result.service_name,
             is_healthy=result.is_healthy,
             timestamp=result.timestamp,
+        )
+
+
+class DictionaryEntryResponse(BaseModel):
+    id: int
+    simplified: str
+    pinyin: str
+    definitions: list[str]
+
+    @classmethod
+    def from_domain(cls, entry: DictionaryEntry) -> DictionaryEntryResponse:
+        return cls(
+            id=entry.id,
+            simplified=entry.simplified,
+            pinyin=entry.pinyin,
+            definitions=list(entry.definitions),
         )

@@ -1,0 +1,79 @@
+{
+  "info": {
+    "name": "shougong",
+    "description": "Chinese handwriting SRS trainer. Kept in sync with the implemented endpoints, increment by increment.\n\nSet the `baseUrl` collection variable (default http://localhost:8080).\n\nImplemented so far: increment 1 — dictionary lookup. The dictionary auto-populates from CC-CEDICT on first startup (once), so search results appear a few seconds after the app boots.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "dictionaryEntryId", "value": "1", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Aggregate health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Runs every registered health check (MySQL connection, outbound HTTP client)."
+          }
+        },
+        {
+          "name": "Internal liveness probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/internal",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "internal"]
+            },
+            "description": "Cheap liveness check. Always {\"is_healthy\": true} when the process is up."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dictionary",
+      "item": [
+        {
+          "name": "Search dictionary entries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dictionary-entries?q=学&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["dictionary-entries"],
+              "query": [
+                { "key": "q", "value": "学", "description": "matches simplified hanzi or pinyin (required)" },
+                { "key": "limit", "value": "20", "description": "1..100, default 20" }
+              ]
+            },
+            "description": "Case-insensitive LIKE match on simplified form or pinyin, shortest words first."
+          }
+        },
+        {
+          "name": "Get dictionary entry by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dictionary-entries/{{dictionaryEntryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["dictionary-entries", "{{dictionaryEntryId}}"]
+            },
+            "description": "404 if the id is unknown."
+          }
+        }
+      ]
+    }
+  ]
+}
