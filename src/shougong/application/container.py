@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI
@@ -41,6 +42,7 @@ from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
+from shougong.usecase.srs.day_boundary import DayBoundaryEngine
 from shougong.usecase.study.service import StudyService
 
 _log = get_logger(__name__)
@@ -70,7 +72,7 @@ class Container:
         self._cedict_source = CedictSource(self.http_client)
 
         # --- study slice ----------------------------------------------
-        self._srs_engine = FsrsEngine()
+        self._srs_engine = DayBoundaryEngine(FsrsEngine(), ZoneInfo(settings.study_timezone))
         self._study_item_repository = StudyItemRepository(self.transaction_template)
         self._study_service = StudyService(
             self._study_item_repository,

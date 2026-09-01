@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # On startup, download CC-CEDICT and fill `dictionary_entry` if it is empty.
     dictionary_autoload: bool = True
 
+    # IANA timezone whose midnight is the SRS "day boundary": a day's cards all
+    # become due at once (local midnight) rather than through the day.
+    study_timezone: str = "UTC"
+
     mysql: MySqlConfig = Field(default_factory=MySqlConfig)
     gateways: GatewaysConfig = Field(default_factory=GatewaysConfig)
 

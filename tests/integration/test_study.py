@@ -26,6 +26,7 @@ async def test_add_lists_and_fetches_a_study_item(container: Container, client: 
     body = created.json()
     assert body["entry"]["id"] == entry_id
     assert body["card"]["state"] == "learning"
+    assert body["card"]["due"].endswith("T00:00:00Z")  # snapped to the day boundary
 
     listed = await client.get("/study-items")
     assert [row["id"] for row in listed.json()] == [body["id"]]

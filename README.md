@@ -41,7 +41,12 @@ docker run --rm -p 8080:8080 \
 while you run the app with `uv run poe run`).
 
 All config is via env vars (`APP_ENV`, `HTTP_PORT`, `LOG_LEVEL`, `MYSQL__*`,
-`GATEWAYS__APP__HOST`) — see `.env.example`. Nested keys use `__`.
+`GATEWAYS__APP__HOST`, `DICTIONARY_AUTOLOAD`, `STUDY_TIMEZONE`) — see `.env.example`.
+Nested keys use `__`.
+
+`STUDY_TIMEZONE` (an IANA name like `America/Sao_Paulo`, default `UTC`) sets the SRS day
+boundary: every card's due time is rounded down to that timezone's midnight, so a whole day's
+cards become due at once instead of trickling in through the day.
 
 ## API collection
 
