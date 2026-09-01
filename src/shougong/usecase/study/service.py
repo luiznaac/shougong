@@ -7,7 +7,7 @@ from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
-from shougong.usecase.srs.scheduler import ISrsScheduler
+from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import StudyItem
 
@@ -19,13 +19,13 @@ class StudyService:
         self,
         study_repository: IStudyItemRepository,
         dictionary_repository: IDictionaryRepository,
-        scheduler: ISrsScheduler,
+        engine: ISrsEngine,
         clock: IClock,
         transaction_template: ITransactionTemplate,
     ) -> None:
         self._study = study_repository
         self._dictionary = dictionary_repository
-        self._scheduler = scheduler
+        self._engine = engine
         self._clock = clock
         self._tx = transaction_template
 
@@ -37,7 +37,7 @@ class StudyService:
             if await self._study.exists_for_entry(entry_id):
                 raise ConflictError(f"dictionary entry {entry_id} is already a study item")
             now = self._clock.now()
-            item = await self._study.create(entry, self._scheduler.new_card(now), now)
+            item = await self._study.create(entry, self._engine.new_card(now), now)
             _log.info("study.item.added", item_id=item.id, entry_id=entry_id)
             return item
 

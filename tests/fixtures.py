@@ -13,8 +13,8 @@ from typing import TypeVar
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
+from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
-from shougong.usecase.srs.scheduler import ISrsScheduler
 from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import StudyItem
 
@@ -97,8 +97,8 @@ class FakeCedictSource(ICedictSource):
         return list(self.records)
 
 
-class StubSrsScheduler(ISrsScheduler):
-    """Deterministic scheduler: new cards are due `now`, a review pushes due out a day."""
+class StubSrsEngine(ISrsEngine):
+    """Deterministic engine: new cards are due `now`, a review pushes due out a day."""
 
     def new_card(self, now: datetime) -> SrsCard:
         return make_srs_card(due=now)

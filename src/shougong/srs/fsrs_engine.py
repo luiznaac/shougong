@@ -1,4 +1,4 @@
-"""`FsrsScheduler` — implements `ISrsScheduler` on top of `open-spaced-repetition/py-fsrs`.
+"""`FsrsEngine` — implements `ISrsEngine` on top of `open-spaced-repetition/py-fsrs`.
 
 This is the ONLY module allowed to import `fsrs`. It converts between the
 first-party `shougong.usecase.srs` types and `fsrs`'s own at the boundary.
@@ -10,8 +10,8 @@ from datetime import datetime
 
 from fsrs import Card, Rating, Scheduler, State
 
+from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
-from shougong.usecase.srs.scheduler import ISrsScheduler
 
 
 def _to_fsrs(card: SrsCard) -> Card:
@@ -43,7 +43,7 @@ def _default_scheduler() -> Scheduler:
     return Scheduler(learning_steps=(), relearning_steps=())
 
 
-class FsrsScheduler(ISrsScheduler):
+class FsrsEngine(ISrsEngine):
     def __init__(self, scheduler: Scheduler | None = None) -> None:
         self._scheduler = scheduler or _default_scheduler()
 

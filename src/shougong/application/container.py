@@ -36,7 +36,7 @@ from shougong.persistence.configuration.transaction import SqlAlchemyTransaction
 from shougong.persistence.dictionary.repository import DictionaryRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
 from shougong.persistence.study.repository import StudyItemRepository
-from shougong.srs.fsrs_scheduler import FsrsScheduler
+from shougong.srs.fsrs_engine import FsrsEngine
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
@@ -70,12 +70,12 @@ class Container:
         self._cedict_source = CedictSource(self.http_client)
 
         # --- study slice ----------------------------------------------
-        self._srs_scheduler = FsrsScheduler()
+        self._srs_engine = FsrsEngine()
         self._study_item_repository = StudyItemRepository(self.transaction_template)
         self._study_service = StudyService(
             self._study_item_repository,
             self._dictionary_repository,
-            self._srs_scheduler,
+            self._srs_engine,
             self.clock,
             self.transaction_template,
         )

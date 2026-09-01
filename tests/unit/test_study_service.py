@@ -9,7 +9,7 @@ from tests.fixtures import (
     FakeDictionaryRepository,
     FakeStudyItemRepository,
     FakeTransactionTemplate,
-    StubSrsScheduler,
+    StubSrsEngine,
     make_dictionary_entry,
     make_srs_card,
     make_study_item,
@@ -26,7 +26,7 @@ def _service(
     return StudyService(
         study or FakeStudyItemRepository(),
         dictionary or FakeDictionaryRepository([make_dictionary_entry(entry_id=1)]),
-        StubSrsScheduler(),
+        StubSrsEngine(),
         FixedClock(_NOW),
         FakeTransactionTemplate(),
     )
