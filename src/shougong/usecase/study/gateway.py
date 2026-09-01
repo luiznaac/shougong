@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Protocol
 
 from shougong.usecase.dictionary.model import DictionaryEntry
-from shougong.usecase.srs.model import SrsCard
+from shougong.usecase.srs.model import SrsCard, SrsReviewLog
 from shougong.usecase.study.model import StudyItem
 
 
@@ -16,5 +16,11 @@ class IStudyItemRepository(Protocol):
     async def get(self, item_id: int) -> StudyItem | None: ...
 
     async def exists_for_entry(self, entry_id: int) -> bool: ...
+
+    async def update_card(self, item_id: int, card: SrsCard) -> StudyItem: ...
+
+    async def add_review_log(self, item_id: int, log: SrsReviewLog) -> None: ...
+
+    async def list_reviews(self, item_id: int, *, limit: int, offset: int) -> list[SrsReviewLog]: ...
 
     async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]: ...

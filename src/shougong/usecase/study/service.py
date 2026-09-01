@@ -8,8 +8,9 @@ from shougong.usecase.commons.time import IClock
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.srs.engine import ISrsEngine
+from shougong.usecase.srs.model import SrsRating, SrsReviewLog
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import StudyItem
+from shougong.usecase.study.model import ReviewResult, StudyItem
 
 _log = get_logger(__name__)
 
@@ -52,3 +53,24 @@ class StudyService:
         if item is None:
             raise ResourceNotFoundError("study_item", str(item_id))
         return item
+
+    async def review_item(self, item_id: int, rating: SrsRating) -> ReviewResult:
+        async def _run() -> ReviewResult:
+            item = await self._study.get(item_id)
+            if item is None:
+                raise ResourceNotFoundError("study_item", str(item_id))
+            next_card, log = self._engine.review(item.card, rating, self._clock.now())
+            updated = await self._study.update_card(item_id, next_card)
+            await self._study.add_review_log(item_id, log)
+            _log.info("study.item.reviewed", item_id=item_id, rating=rating.name.lower(), due=next_card.due.isoformat())
+            return ReviewResult(item=updated, log=log)
+
+        return await self._tx.execute(_run)
+
+    async def item_reviews(self, item_id: int, *, limit: int = 50, offset: int = 0) -> list[SrsReviewLog]:
+        async def _run() -> list[SrsReviewLog]:
+            if await self._study.get(item_id) is None:
+                raise ResourceNotFoundError("study_item", str(item_id))
+            return await self._study.list_reviews(item_id, limit=limit, offset=offset)
+
+        return await self._tx.execute(_run)
