@@ -11,3 +11,21 @@ CREATE TABLE IF NOT EXISTS dictionary_entry (
     KEY ix_dictionary_entry_simplified (simplified),
     KEY ix_dictionary_entry_pinyin (pinyin)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Dictionary entries the learner is studying, with their flattened FSRS card.
+CREATE TABLE IF NOT EXISTS study_item (
+    id               BIGINT      NOT NULL AUTO_INCREMENT,
+    entry_id         BIGINT      NOT NULL,
+    card_state       SMALLINT    NOT NULL,
+    card_step        INT         NULL,
+    card_stability   DOUBLE      NULL,
+    card_difficulty  DOUBLE      NULL,
+    card_due         DATETIME(6) NOT NULL,
+    card_last_review DATETIME(6) NULL,
+    created_at       DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_study_item_entry (entry_id),
+    KEY ix_study_item_card_due (card_due),
+    CONSTRAINT fk_study_item_entry FOREIGN KEY (entry_id)
+        REFERENCES dictionary_entry (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

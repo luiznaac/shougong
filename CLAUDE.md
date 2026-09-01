@@ -38,8 +38,9 @@ One installable package, `src/template/`, with one sub-package per layer:
 - **`gateway/`** — outbound HTTP (httpx). One shared `AsyncClient` from
   `configuration/http_client.py`, injected everywhere. `AppHealthGateway` + `HttpClientHealthCheck`
   are the worked example.
-- **`httpapi/`** — FastAPI. Each controller is a class with a `router() -> APIRouter` method
-  (`IController`, the `ControllerTemplate` analogue). `configuration/server.py` mounts every
+- **`httpapi/`** — FastAPI. Each controller is a class that inherits `IController` (the
+  `ControllerTemplate` analogue) and exposes a `router() -> APIRouter` method.
+  `configuration/server.py` mounts every
   controller the composition root passes it and installs the domain-exception handlers.
   DTOs live in `schema.py` (Pydantic, edge only).
 - **`application/`** — the composition root. `settings.py` (pydantic-settings, `APP_ENV` profile),
@@ -68,11 +69,11 @@ Example: a database-backed `widgets` catalog exposed over HTTP.
 3. **Write the service** in `usecase/widgets/service.py` — constructor-injected, depends on the
    port. Split a pure calculator from the orchestrator if there's real logic.
 4. **Implement the port** in `persistence/widgets/` — a SQLAlchemy entity on `Base`, plus
-   `class WidgetRepository:` whose methods run inside `transaction_template.execute(...)` and use
-   `current_session()`.
+   `class WidgetRepository(IWidgetRepository):` whose methods run inside
+   `transaction_template.execute(...)` and use `current_session()`.
 5. **Add the table** to `mysql/init.sql`.
-6. **Expose it**: `httpapi/controller/widget_controller.py` with a `router()` method; DTOs in
-   `schema.py`.
+6. **Expose it**: `httpapi/controller/widget_controller.py` — `class WidgetController(IController):`
+   with a `router()` method; DTOs in `schema.py`.
 7. **Wire it** in `application/container.py`: build the repository, pass it to `WidgetService`,
    append the controller to `self.controllers`.
 8. **Test** each layer: unit tests in `tests/unit/` (add shared builders to a `tests/fixtures.py`
@@ -82,8 +83,10 @@ Example: a database-backed `widgets` catalog exposed over HTTP.
 ## 4. Conventions
 
 - **`from __future__ import annotations`** at the top of every module.
-- Ports are `Protocol` with an `I` prefix; adapters need not inherit them (structural typing), but
-  may for clarity.
+- Ports are `Protocol` with an `I` prefix, and **every adapter explicitly inherits its port**
+  (`class WidgetRepository(IWidgetRepository):`). Structural typing makes the base optional at
+  runtime, but declaring it is what lets the IDE jump port↔implementations and makes mypy flag a
+  missing or misspelled method. Test doubles in `tests/fixtures.py` inherit their port too.
 - Domain models: `@dataclass(frozen=True, slots=True)`. Pydantic only in `httpapi/schema.py` and
   `application/settings.py`.
 - `async` all the way down; blocking IO via `anyio.to_thread`.

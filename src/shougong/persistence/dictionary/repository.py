@@ -15,12 +15,13 @@ from shougong.persistence.configuration.transaction import (
     current_session,
 )
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
+from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
 
 _BULK_BATCH = 1000
 
 
-def _to_domain(row: DictionaryEntryEntity) -> DictionaryEntry:
+def to_domain(row: DictionaryEntryEntity) -> DictionaryEntry:
     return DictionaryEntry(
         id=row.id,
         simplified=row.simplified,
@@ -29,7 +30,7 @@ def _to_domain(row: DictionaryEntryEntity) -> DictionaryEntry:
     )
 
 
-class DictionaryRepository:
+class DictionaryRepository(IDictionaryRepository):
     def __init__(self, transaction_template: SqlAlchemyTransactionTemplate) -> None:
         self._tx = transaction_template
 
@@ -52,7 +53,7 @@ class DictionaryRepository:
                 .limit(limit)
             )
             rows = (await session.execute(stmt)).scalars().all()
-            return [_to_domain(row) for row in rows]
+            return [to_domain(row) for row in rows]
 
         return await self._tx.execute(_run)
 
@@ -60,7 +61,7 @@ class DictionaryRepository:
         async def _run() -> DictionaryEntry | None:
             session = current_session()
             row = await session.get(DictionaryEntryEntity, entry_id)
-            return _to_domain(row) if row is not None else None
+            return to_domain(row) if row is not None else None
 
         return await self._tx.execute(_run)
 

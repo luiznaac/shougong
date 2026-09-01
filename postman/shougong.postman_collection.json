@@ -1,12 +1,13 @@
 {
   "info": {
     "name": "shougong",
-    "description": "Chinese handwriting SRS trainer. Kept in sync with the implemented endpoints, increment by increment.\n\nSet the `baseUrl` collection variable (default http://localhost:8080).\n\nImplemented so far: increment 1 — dictionary lookup. The dictionary auto-populates from CC-CEDICT on first startup (once), so search results appear a few seconds after the app boots.",
+    "description": "Chinese handwriting SRS trainer. Kept in sync with the implemented endpoints, increment by increment.\n\nSet the `baseUrl` collection variable (default http://localhost:8080).\n\nImplemented so far: increment 1 — dictionary lookup; increment 2 — study queue. The dictionary auto-populates from CC-CEDICT on first startup (once), so search results appear a few seconds after the app boots.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
-    { "key": "dictionaryEntryId", "value": "1", "type": "string" }
+    { "key": "dictionaryEntryId", "value": "1", "type": "string" },
+    { "key": "studyItemId", "value": "1", "type": "string" }
   ],
   "item": [
     {
@@ -69,6 +70,72 @@
               "raw": "{{baseUrl}}/dictionary-entries/{{dictionaryEntryId}}",
               "host": ["{{baseUrl}}"],
               "path": ["dictionary-entries", "{{dictionaryEntryId}}"]
+            },
+            "description": "404 if the id is unknown."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Study",
+      "item": [
+        {
+          "name": "Add a study item",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dictionary_entry_id\": {{dictionaryEntryId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/study-items",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-items"]
+            },
+            "description": "Enqueues a dictionary entry for study. 201 + Location header; 404 if the entry is unknown, 409 if it is already a study item."
+          }
+        },
+        {
+          "name": "List study items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/study-items?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-items"],
+              "query": [
+                { "key": "limit", "value": "50", "description": "1..200, default 50" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "All study items, soonest due first."
+          }
+        },
+        {
+          "name": "List due study items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/study-items?due=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-items"],
+              "query": [{ "key": "due", "value": "true", "description": "only items with card.due <= now" }]
+            },
+            "description": "What to practise right now."
+          }
+        },
+        {
+          "name": "Get study item by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/study-items/{{studyItemId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-items", "{{studyItemId}}"]
             },
             "description": "404 if the id is unknown."
           }

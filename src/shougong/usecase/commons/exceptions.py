@@ -16,3 +16,7 @@ class ResourceNotFoundError(DomainError):
 
 class InvalidArgumentError(DomainError):
     pass
+
+
+class ConflictError(DomainError):
+    """The request conflicts with the current state (e.g. a duplicate)."""

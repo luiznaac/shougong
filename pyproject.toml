@@ -13,6 +13,8 @@ dependencies = [
     "httpx>=0.28",
     "anyio>=4.7",
     "structlog>=24.4",
+    "fsrs>=6.3,<7",
+    "tzdata>=2026.3",
 ]
 
 [dependency-groups]
@@ -130,7 +132,7 @@ type = "layers"
 containers = ["shougong"]
 layers = [
     "application",
-    "(httpapi) (persistence) (gateway)",
+    "(httpapi) (persistence) (gateway) (srs)",
     "usecase",
 ]
 
@@ -138,4 +140,4 @@ layers = [
 name = "usecase is a pure core (no framework leakage)"
 type = "forbidden"
 source_modules = ["shougong.usecase"]
-forbidden_modules = ["fastapi", "sqlalchemy", "httpx", "uvicorn", "pydantic"]
+forbidden_modules = ["fastapi", "sqlalchemy", "httpx", "uvicorn", "pydantic", "fsrs"]

@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from shougong.httpapi.controller.base import IController
 from shougong.usecase.commons.exceptions import (
+    ConflictError,
     DomainError,
     InvalidArgumentError,
     ResourceNotFoundError,
@@ -48,6 +49,10 @@ def _install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(InvalidArgumentError)
     async def _invalid(_: Request, exc: InvalidArgumentError) -> JSONResponse:
         return _problem(400, "invalid_argument", str(exc))
+
+    @app.exception_handler(ConflictError)
+    async def _conflict(_: Request, exc: ConflictError) -> JSONResponse:
+        return _problem(409, "conflict", str(exc))
 
     @app.exception_handler(DomainError)
     async def _domain(_: Request, exc: DomainError) -> JSONResponse:
