@@ -59,3 +59,55 @@ async def test_add_unknown_entry_is_404(container: Container, client: httpx.Asyn
     response = await client.post("/study-items", json={"dictionary_entry_id": 999999})
 
     assert response.status_code == 404
+
+
+async def test_reviewing_an_item_reschedules_it_and_records_history(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    entry_id = await _seed_entry(container, simplified="木", pinyin="mu4")
+    item_id = (await client.post("/study-items", json={"dictionary_entry_id": entry_id})).json()["id"]
+    assert len((await client.get("/study-items", params={"due": "true"})).json()) == 1
+
+    reviewed = await client.post(f"/study-items/{item_id}/reviews", json={"rating": "good"})
+
+    assert reviewed.status_code == 201
+    assert reviewed.headers["location"] == f"/study-items/{item_id}/reviews"
+    body = reviewed.json()
+    assert body["review"]["rating"] == "good"
+    assert body["item"]["card"]["state"] == "review"
+    assert body["item"]["card"]["last_review"] is not None
+
+    # no longer due, and the card moved into the future
+    assert (await client.get("/study-items", params={"due": "true"})).json() == []
+    fetched = await client.get(f"/study-items/{item_id}")
+    assert fetched.json()["card"]["due"] > body["item"]["created_at"]
+
+    history = await client.get(f"/study-items/{item_id}/reviews")
+    assert [row["rating"] for row in history.json()] == ["good"]
+
+
+async def test_review_history_is_newest_first(container: Container, client: httpx.AsyncClient) -> None:
+    entry_id = await _seed_entry(container, simplified="金", pinyin="jin1")
+    item_id = (await client.post("/study-items", json={"dictionary_entry_id": entry_id})).json()["id"]
+
+    await client.post(f"/study-items/{item_id}/reviews", json={"rating": "again"})
+    await client.post(f"/study-items/{item_id}/reviews", json={"rating": "good"})
+
+    history = await client.get(f"/study-items/{item_id}/reviews")
+
+    assert [row["rating"] for row in history.json()] == ["good", "again"]
+
+
+async def test_reviewing_an_unknown_item_is_404(container: Container, client: httpx.AsyncClient) -> None:
+    response = await client.post("/study-items/999999/reviews", json={"rating": "good"})
+
+    assert response.status_code == 404
+
+
+async def test_review_rejects_an_unknown_rating(container: Container, client: httpx.AsyncClient) -> None:
+    entry_id = await _seed_entry(container, simplified="土", pinyin="tu3")
+    item_id = (await client.post("/study-items", json={"dictionary_entry_id": entry_id})).json()["id"]
+
+    response = await client.post(f"/study-items/{item_id}/reviews", json={"rating": "meh"})
+
+    assert response.status_code == 422

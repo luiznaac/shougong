@@ -118,6 +118,7 @@ class StubSrsEngine(ISrsEngine):
 class FakeStudyItemRepository(IStudyItemRepository):
     def __init__(self, items: list[StudyItem] | None = None) -> None:
         self.items: list[StudyItem] = list(items or [])
+        self.review_logs: dict[int, list[SrsReviewLog]] = {}
         self._ids = count(1)
 
     async def create(self, entry: DictionaryEntry, card: SrsCard, created_at: datetime) -> StudyItem:
@@ -136,3 +137,20 @@ class FakeStudyItemRepository(IStudyItemRepository):
         if due_before is not None:
             rows = [i for i in rows if i.card.due <= due_before]
         return rows[offset : offset + limit]
+
+    async def update_card(self, item_id: int, card: SrsCard) -> StudyItem:
+        for index, item in enumerate(self.items):
+            if item.id == item_id:
+                updated = StudyItem(id=item.id, entry=item.entry, card=card, created_at=item.created_at)
+                self.items[index] = updated
+                return updated
+        raise KeyError(item_id)
+
+    async def add_review_log(self, item_id: int, log: SrsReviewLog) -> None:
+        self.review_logs.setdefault(item_id, []).append(log)
+
+    async def list_reviews(self, item_id: int, *, limit: int, offset: int) -> list[SrsReviewLog]:
+        logs = self.review_logs.get(item_id, [])
+        # newest first; ties broken by later insertion first, mirroring the repo's id DESC
+        order = sorted(range(len(logs)), key=lambda i: (logs[i].review_datetime, i), reverse=True)
+        return [logs[i] for i in order][offset : offset + limit]
