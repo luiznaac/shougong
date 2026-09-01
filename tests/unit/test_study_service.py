@@ -4,6 +4,7 @@ import pytest
 
 from shougong.usecase.commons.exceptions import ConflictError, ResourceNotFoundError
 from shougong.usecase.commons.time import FixedClock
+from shougong.usecase.srs.model import SrsRating, SrsReviewLog
 from shougong.usecase.study.service import StudyService
 from tests.fixtures import (
     FakeDictionaryRepository,
@@ -75,3 +76,52 @@ async def test_get_item_missing_raises_not_found() -> None:
 
     with pytest.raises(ResourceNotFoundError):
         await service.get_item(123)
+
+
+async def test_review_item_reschedules_the_card_and_logs_the_grade() -> None:
+    study = FakeStudyItemRepository([make_study_item(item_id=1, card=make_srs_card(due=_NOW))])
+    service = _service(study=study)
+
+    result = await service.review_item(1, SrsRating.GOOD)
+
+    assert result.item.card.due > _NOW  # StubSrsEngine pushes it out a day
+    assert study.items[0].card.due == result.item.card.due  # persisted
+    assert [log.rating for log in study.review_logs[1]] == [SrsRating.GOOD]
+    assert result.log.rating is SrsRating.GOOD
+
+
+async def test_review_item_unknown_raises_not_found() -> None:
+    service = _service(study=FakeStudyItemRepository())
+
+    with pytest.raises(ResourceNotFoundError):
+        await service.review_item(999, SrsRating.AGAIN)
+
+
+async def test_review_item_not_yet_due_is_rejected() -> None:
+    not_due = make_study_item(item_id=1, card=make_srs_card(due=_NOW.replace(year=2027)))
+    study = FakeStudyItemRepository([not_due])
+    service = _service(study=study)
+
+    with pytest.raises(ConflictError):
+        await service.review_item(1, SrsRating.GOOD)
+
+    assert study.review_logs == {}  # nothing was written
+    assert study.items[0].card.due == _NOW.replace(year=2027)  # card untouched
+
+
+async def test_item_reviews_lists_history_newest_first() -> None:
+    study = FakeStudyItemRepository([make_study_item(item_id=1)])
+    await study.add_review_log(1, SrsReviewLog(rating=SrsRating.GOOD, review_datetime=_NOW))
+    await study.add_review_log(1, SrsReviewLog(rating=SrsRating.AGAIN, review_datetime=_NOW.replace(year=2027)))
+    service = _service(study=study)
+
+    history = await service.item_reviews(1)
+
+    assert [log.rating for log in history] == [SrsRating.AGAIN, SrsRating.GOOD]
+
+
+async def test_item_reviews_unknown_raises_not_found() -> None:
+    service = _service(study=FakeStudyItemRepository())
+
+    with pytest.raises(ResourceNotFoundError):
+        await service.item_reviews(999)

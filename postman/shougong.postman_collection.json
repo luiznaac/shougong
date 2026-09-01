@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "shougong",
-    "description": "Chinese handwriting SRS trainer. Kept in sync with the implemented endpoints, increment by increment.\n\nSet the `baseUrl` collection variable (default http://localhost:8080).\n\nImplemented so far: increment 1 — dictionary lookup; increment 2 — study queue. The dictionary auto-populates from CC-CEDICT on first startup (once), so search results appear a few seconds after the app boots.",
+    "description": "Chinese handwriting SRS trainer. Covers every implemented endpoint.\n\nSet the `baseUrl` collection variable (default http://localhost:8080).\n\nEndpoints: dictionary lookup, the study queue, and the review loop (grade a due item, FSRS reschedules it, history is kept). The dictionary auto-populates from CC-CEDICT on first startup (once), so search results appear a few seconds after the app boots.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -138,6 +138,40 @@
               "path": ["study-items", "{{studyItemId}}"]
             },
             "description": "404 if the id is unknown."
+          }
+        },
+        {
+          "name": "Submit a review",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": \"good\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/study-items/{{studyItemId}}/reviews",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-items", "{{studyItemId}}", "reviews"]
+            },
+            "description": "Grade a study item — rating is one of again | hard | good | easy. FSRS reschedules the card; 201 + Location, returns the updated item and the logged grade. 404 if the item is unknown, 409 if it is not due yet, 422 for an unknown rating."
+          }
+        },
+        {
+          "name": "List review history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/study-items/{{studyItemId}}/reviews?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-items", "{{studyItemId}}", "reviews"],
+              "query": [
+                { "key": "limit", "value": "50", "description": "1..200, default 50" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "The item's grades, newest first. 404 if the item is unknown."
           }
         }
       ]

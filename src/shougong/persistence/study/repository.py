@@ -12,9 +12,10 @@ from shougong.persistence.configuration.transaction import (
 )
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
 from shougong.persistence.dictionary.repository import to_domain as _entry_to_domain
-from shougong.persistence.study.entity import StudyItemEntity
+from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity
+from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.dictionary.model import DictionaryEntry
-from shougong.usecase.srs.model import SrsCard, SrsState
+from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import StudyItem
 
@@ -32,7 +33,6 @@ def _as_utc(value: datetime | None) -> datetime | None:
 def _card_of(row: StudyItemEntity) -> SrsCard:
     return SrsCard(
         state=SrsState(row.card_state),
-        step=row.card_step,
         stability=row.card_stability,
         difficulty=row.card_difficulty,
         due=_as_utc(row.card_due),  # type: ignore[arg-type]  # column is NOT NULL
@@ -59,7 +59,6 @@ class StudyItemRepository(IStudyItemRepository):
             row = StudyItemEntity(
                 entry_id=entry.id,
                 card_state=int(card.state),
-                card_step=card.step,
                 card_stability=card.stability,
                 card_difficulty=card.difficulty,
                 card_due=_naive_utc(card.due),
@@ -90,6 +89,56 @@ class StudyItemRepository(IStudyItemRepository):
             session = current_session()
             found = await session.scalar(select(exists().where(StudyItemEntity.entry_id == entry_id)))
             return bool(found)
+
+        return await self._tx.execute(_run)
+
+    async def update_card(self, item_id: int, card: SrsCard) -> StudyItem:
+        async def _run() -> StudyItem:
+            session = current_session()
+            row = await session.get(StudyItemEntity, item_id)
+            if row is None:
+                raise ResourceNotFoundError("study_item", str(item_id))
+            row.card_state = int(card.state)
+            row.card_stability = card.stability
+            row.card_difficulty = card.difficulty
+            row.card_due = _naive_utc(card.due)
+            row.card_last_review = _naive_utc(card.last_review) if card.last_review else None
+            await session.flush()
+            entry = await session.get(DictionaryEntryEntity, row.entry_id)
+            assert entry is not None  # entry_id is a NOT NULL foreign key
+            return _to_domain(row, entry)
+
+        return await self._tx.execute(_run)
+
+    async def add_review_log(self, item_id: int, log: SrsReviewLog) -> None:
+        async def _run() -> None:
+            session = current_session()
+            session.add(
+                ReviewLogEntity(
+                    study_item_id=item_id,
+                    rating=int(log.rating),
+                    review_datetime=_naive_utc(log.review_datetime),
+                )
+            )
+            await session.flush()
+
+        await self._tx.execute(_run)
+
+    async def list_reviews(self, item_id: int, *, limit: int, offset: int) -> list[SrsReviewLog]:
+        async def _run() -> list[SrsReviewLog]:
+            session = current_session()
+            stmt = (
+                select(ReviewLogEntity)
+                .where(ReviewLogEntity.study_item_id == item_id)
+                .order_by(ReviewLogEntity.review_datetime.desc(), ReviewLogEntity.id.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+            return [
+                SrsReviewLog(rating=SrsRating(row.rating), review_datetime=_as_utc(row.review_datetime))  # type: ignore[arg-type]  # column is NOT NULL
+                for row in rows
+            ]
 
         return await self._tx.execute(_run)
 

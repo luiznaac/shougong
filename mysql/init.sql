@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS study_item (
     id               BIGINT      NOT NULL AUTO_INCREMENT,
     entry_id         BIGINT      NOT NULL,
     card_state       SMALLINT    NOT NULL,
-    card_step        INT         NULL,
     card_stability   DOUBLE      NULL,
     card_difficulty  DOUBLE      NULL,
     card_due         DATETIME(6) NOT NULL,
@@ -27,5 +26,17 @@ CREATE TABLE IF NOT EXISTS study_item (
     UNIQUE KEY uq_study_item_entry (entry_id),
     KEY ix_study_item_card_due (card_due),
     CONSTRAINT fk_study_item_entry FOREIGN KEY (entry_id)
-        REFERENCES dictionary_entry (id) ON DELETE CASCADE
+        REFERENCES dictionary_entry (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Append-only history of grades: one row per review of a study item.
+CREATE TABLE IF NOT EXISTS review_log (
+    id              BIGINT      NOT NULL AUTO_INCREMENT,
+    study_item_id   BIGINT      NOT NULL,
+    rating          SMALLINT    NOT NULL,
+    review_datetime DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_review_log_study_item (study_item_id),
+    CONSTRAINT fk_review_log_study_item FOREIGN KEY (study_item_id)
+        REFERENCES study_item (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

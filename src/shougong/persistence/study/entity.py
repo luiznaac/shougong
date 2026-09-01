@@ -1,14 +1,16 @@
-"""ORM entity for the `study_item` table. Keep in sync with `mysql/init.sql`.
+"""ORM entities for the `study_item` and `review_log` tables. Keep in sync with
+`mysql/init.sql`.
 
-The FSRS card is flattened into `card_*` columns; `card_due` is indexed for the
-"what's due now" query. Datetimes are stored as naive UTC (MySQL has no tz).
+The FSRS card is flattened into `study_item.card_*` columns; `card_due` is indexed
+for the "what's due now" query. `review_log` is the append-only history of grades.
+Datetimes are stored as naive UTC (MySQL has no tz).
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Double, ForeignKey, Integer, SmallInteger
+from sqlalchemy import BigInteger, Double, ForeignKey, SmallInteger
 from sqlalchemy.dialects.mysql import DATETIME
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,13 +26,25 @@ class StudyItemEntity(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     entry_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("dictionary_entry.id", ondelete="CASCADE"),
+        ForeignKey("dictionary_entry.id"),
         unique=True,
     )
     card_state: Mapped[int] = mapped_column(SmallInteger)
-    card_step: Mapped[int | None] = mapped_column(Integer)
     card_stability: Mapped[float | None] = mapped_column(Double)
     card_difficulty: Mapped[float | None] = mapped_column(Double)
     card_due: Mapped[datetime] = mapped_column(_Timestamp, index=True)
     card_last_review: Mapped[datetime | None] = mapped_column(_Timestamp)
     created_at: Mapped[datetime] = mapped_column(_Timestamp)
+
+
+class ReviewLogEntity(Base):
+    __tablename__ = "review_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    study_item_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("study_item.id"),
+        index=True,
+    )
+    rating: Mapped[int] = mapped_column(SmallInteger)
+    review_datetime: Mapped[datetime] = mapped_column(_Timestamp)

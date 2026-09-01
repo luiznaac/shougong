@@ -2,6 +2,10 @@
 
 The `fsrs` library never reaches this far in: the adapter in `shougong.srs`
 converts between these types and `fsrs`'s own.
+
+FSRS's `Card.step` (the learning/relearning step index) is deliberately not mirrored:
+this app runs with no learning or relearning steps, so it is always 0 (Learning) or
+None (Review) and `fsrs` derives it from `state` on its own.
 """
 
 from __future__ import annotations
@@ -27,7 +31,6 @@ class SrsState(IntEnum):
 @dataclass(frozen=True, slots=True)
 class SrsCard:
     state: SrsState
-    step: int | None
     stability: float | None
     difficulty: float | None
     due: datetime

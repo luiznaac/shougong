@@ -6,8 +6,8 @@ architecture: FastAPI HTTP layer, a hand-written composition root instead of a D
 async database access (SQLAlchemy 2 / MySQL), outbound HTTP (httpx), Docker, Ruff, mypy
 `--strict`, import-linter, and a Testcontainers integration harness.
 
-Features are delivered in increments: **(1) dictionary lookup**, (2) enqueuing study items,
-(3) the review loop.
+Three things it does: look up characters in a dictionary, enqueue entries as study items, and
+run the review loop — grade a due item `again | hard | good | easy` and FSRS reschedules it.
 
 ## Quick start
 
@@ -48,10 +48,18 @@ Nested keys use `__`.
 boundary: every card's due time is rounded down to that timezone's midnight, so a whole day's
 cards become due at once instead of trickling in through the day.
 
+## The review loop
+
+`GET /study-items?due=true` is the queue to practise now. For each item, `POST
+/study-items/{id}/reviews` with `{"rating": "again|hard|good|easy"}` hands the grade to FSRS,
+which advances the card and pushes `due` out (snapped to the day boundary). The item drops out
+of the due list until then, and reviewing it again before it comes due is rejected with `409`.
+`GET /study-items/{id}/reviews` returns the grade history, newest first.
+
 ## API collection
 
-`postman/shougong.postman_collection.json` — a Postman collection covering every endpoint,
-kept in sync with each increment. Import it and set the `baseUrl` variable.
+`postman/shougong.postman_collection.json` — a Postman collection covering every endpoint.
+Import it and set the `baseUrl` variable.
 
 ## Tasks (`uv run poe <task>`)
 

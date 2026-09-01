@@ -15,9 +15,10 @@ from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsStat
 
 
 def _to_fsrs(card: SrsCard) -> Card:
+    # `step` is intentionally not tracked: with no learning/relearning steps a card is only
+    # ever on step 0 (Learning) or None (Review), which `fsrs.Card` derives from `state` itself.
     return Card(
         state=State(card.state.value),
-        step=card.step,
         stability=card.stability,
         difficulty=card.difficulty,
         due=card.due,
@@ -28,7 +29,6 @@ def _to_fsrs(card: SrsCard) -> Card:
 def _from_fsrs(card: Card) -> SrsCard:
     return SrsCard(
         state=SrsState(card.state.value),
-        step=card.step,
         stability=card.stability,
         difficulty=card.difficulty,
         due=card.due,
