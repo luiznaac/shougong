@@ -6,11 +6,8 @@
 `POST /study-items/{id}/reviews` grade an item and let FSRS reschedule it (201 + Location);
                                 409 if the item is not due yet.
 `GET  /study-items/{id}/reviews` the item's grade history, newest first.
-`GET  /study-items/{id}/history` the item's history — one row per change, newest first,
-                                each with the time it was written.
-`GET  /study-items/history/learning-to-review`
-                                across all items, the history row that moved each one
-                                from learning into review, newest first.
+
+The item's history trail lives in `StudyItemHistoryController`.
 """
 
 from __future__ import annotations
@@ -25,7 +22,6 @@ from shougong.httpapi.schema import (
     ReviewLogResponse,
     ReviewRequest,
     ReviewResponse,
-    StudyItemHistoryResponse,
     StudyItemResponse,
 )
 from shougong.usecase.study.service import StudyService
@@ -71,22 +67,5 @@ class StudyController(IController):
         ) -> list[ReviewLogResponse]:
             logs = await self._service.item_reviews(item_id, limit=limit, offset=offset)
             return [ReviewLogResponse.from_domain(log) for log in logs]
-
-        @router.get("/history/learning-to-review")
-        async def list_learning_to_review(
-            limit: Annotated[int, Query(ge=1, le=200)] = 50,
-            offset: Annotated[int, Query(ge=0)] = 0,
-        ) -> list[StudyItemHistoryResponse]:
-            rows = await self._service.learning_to_review_transitions(limit=limit, offset=offset)
-            return [StudyItemHistoryResponse.from_domain(row) for row in rows]
-
-        @router.get("/{item_id}/history")
-        async def list_history(
-            item_id: int,
-            limit: Annotated[int, Query(ge=1, le=200)] = 50,
-            offset: Annotated[int, Query(ge=0)] = 0,
-        ) -> list[StudyItemHistoryResponse]:
-            history = await self._service.item_history(item_id, limit=limit, offset=offset)
-            return [StudyItemHistoryResponse.from_domain(row) for row in history]
 
         return router

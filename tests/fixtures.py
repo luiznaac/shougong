@@ -16,7 +16,9 @@ from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import StudyItem, StudyItemHistory
+from shougong.usecase.study.model import StudyItem
+from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
+from shougong.usecase.study_item_history.model import StudyItemHistory
 
 _T = TypeVar("_T")
 
@@ -114,28 +116,57 @@ class StubSrsEngine(ISrsEngine):
         return next_card, SrsReviewLog(rating=rating, review_datetime=now)
 
 
+class FakeStudyItemHistoryRepository(IStudyItemHistoryRepository):
+    def __init__(self) -> None:
+        self.rows: list[StudyItemHistory] = []  # every recorded snapshot, in write order
+
+    async def record(self, item: StudyItem, recorded_at: datetime) -> None:
+        self.rows.append(
+            StudyItemHistory(
+                study_item_id=item.id,
+                entry=item.entry,
+                card=item.card,
+                created_at=recorded_at,
+            )
+        )
+
+    def _newest_first(self, rows: list[StudyItemHistory]) -> list[StudyItemHistory]:
+        # ties broken by later write first, mirroring the repo's created_at/id DESC
+        write_order = {id(row): i for i, row in enumerate(self.rows)}
+        return sorted(rows, key=lambda r: (r.created_at, write_order[id(r)]), reverse=True)
+
+    async def list_for_item(self, item_id: int, *, limit: int, offset: int) -> list[StudyItemHistory]:
+        rows = self._newest_first([r for r in self.rows if r.study_item_id == item_id])
+        return rows[offset : offset + limit]
+
+    async def list_learning_to_review_transitions(self, *, limit: int, offset: int) -> list[StudyItemHistory]:
+        by_item: dict[int, list[StudyItemHistory]] = {}
+        for row in self.rows:
+            by_item.setdefault(row.study_item_id, []).append(row)
+        transitions: list[StudyItemHistory] = []
+        for trail in by_item.values():
+            for previous, current in pairwise(trail):  # rows are in write == trail order
+                if previous.card.state is SrsState.LEARNING and current.card.state is SrsState.REVIEW:
+                    transitions.append(current)
+        return self._newest_first(transitions)[offset : offset + limit]
+
+
 class FakeStudyItemRepository(IStudyItemRepository):
-    def __init__(self, items: list[StudyItem] | None = None) -> None:
+    def __init__(
+        self,
+        items: list[StudyItem] | None = None,
+        *,
+        history: FakeStudyItemHistoryRepository | None = None,
+    ) -> None:
         self.items: list[StudyItem] = list(items or [])
         self.review_logs: dict[int, list[SrsReviewLog]] = {}
-        self.history: dict[int, list[StudyItemHistory]] = {}
-        self._history_writes: list[StudyItemHistory] = []  # every row in write order, for tie-breaking
+        self.history = history or FakeStudyItemHistoryRepository()
         self._ids = count(1)
-
-    def _record_history(self, item: StudyItem, created_at: datetime) -> None:
-        row = StudyItemHistory(
-            study_item_id=item.id,
-            entry=item.entry,
-            card=item.card,
-            created_at=created_at,
-        )
-        self.history.setdefault(item.id, []).append(row)
-        self._history_writes.append(row)
 
     async def create(self, entry: DictionaryEntry, card: SrsCard, created_at: datetime) -> StudyItem:
         item = StudyItem(id=next(self._ids), entry=entry, card=card, created_at=created_at)
         self.items.append(item)
-        self._record_history(item, created_at)
+        await self.history.record(item, created_at)
         return item
 
     async def get(self, item_id: int) -> StudyItem | None:
@@ -155,7 +186,7 @@ class FakeStudyItemRepository(IStudyItemRepository):
             if item.id == item_id:
                 updated = StudyItem(id=item.id, entry=item.entry, card=card, created_at=item.created_at)
                 self.items[index] = updated
-                self._record_history(updated, changed_at)
+                await self.history.record(updated, changed_at)
                 return updated
         raise KeyError(item_id)
 
@@ -167,21 +198,3 @@ class FakeStudyItemRepository(IStudyItemRepository):
         # newest first; ties broken by later insertion first, mirroring the repo's id DESC
         order = sorted(range(len(logs)), key=lambda i: (logs[i].review_datetime, i), reverse=True)
         return [logs[i] for i in order][offset : offset + limit]
-
-    async def list_history(self, item_id: int, *, limit: int, offset: int) -> list[StudyItemHistory]:
-        rows = self.history.get(item_id, [])
-        # newest first; ties broken by later insertion first, mirroring the repo's created_at/id DESC
-        order = sorted(range(len(rows)), key=lambda i: (rows[i].created_at, i), reverse=True)
-        return [rows[i] for i in order][offset : offset + limit]
-
-    async def list_learning_to_review_transitions(self, *, limit: int, offset: int) -> list[StudyItemHistory]:
-        write_order = {id(row): i for i, row in enumerate(self._history_writes)}
-        transitions: list[StudyItemHistory] = []
-        for rows in self.history.values():
-            trail = sorted(rows, key=lambda r: (r.created_at, write_order[id(r)]))
-            for previous, current in pairwise(trail):
-                if previous.card.state is SrsState.LEARNING and current.card.state is SrsState.REVIEW:
-                    transitions.append(current)
-        # newest first; ties broken by later write first, mirroring the repo's created_at/id DESC
-        transitions.sort(key=lambda r: (r.created_at, write_order[id(r)]), reverse=True)
-        return transitions[offset : offset + limit]

@@ -32,11 +32,13 @@ from shougong.httpapi.controller.base import IController
 from shougong.httpapi.controller.dictionary_controller import DictionaryController
 from shougong.httpapi.controller.health_controller import HealthController
 from shougong.httpapi.controller.study_controller import StudyController
+from shougong.httpapi.controller.study_item_history_controller import StudyItemHistoryController
 from shougong.persistence.configuration.database import build_engine, build_session_factory
 from shougong.persistence.configuration.transaction import SqlAlchemyTransactionTemplate
 from shougong.persistence.dictionary.repository import DictionaryRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
 from shougong.persistence.study.repository import StudyItemRepository
+from shougong.persistence.study_item_history.repository import StudyItemHistoryRepository
 from shougong.srs.fsrs_engine import FsrsEngine
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock, SystemClock
@@ -44,6 +46,7 @@ from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
 from shougong.usecase.srs.day_boundary import DayBoundaryEngine
 from shougong.usecase.study.service import StudyService
+from shougong.usecase.study_item_history.service import StudyItemHistoryService
 
 _log = get_logger(__name__)
 
@@ -73,12 +76,21 @@ class Container:
 
         # --- study slice ----------------------------------------------
         self._srs_engine = DayBoundaryEngine(FsrsEngine(), ZoneInfo(settings.study_timezone))
-        self._study_item_repository = StudyItemRepository(self.transaction_template)
+        self._study_item_history_repository = StudyItemHistoryRepository(self.transaction_template)
+        self._study_item_repository = StudyItemRepository(
+            self.transaction_template,
+            self._study_item_history_repository,
+        )
         self._study_service = StudyService(
             self._study_item_repository,
             self._dictionary_repository,
             self._srs_engine,
             self.clock,
+            self.transaction_template,
+        )
+        self._study_item_history_service = StudyItemHistoryService(
+            self._study_item_history_repository,
+            self._study_item_repository,
             self.transaction_template,
         )
 
@@ -87,6 +99,7 @@ class Container:
             HealthController(self.health_checkers),
             DictionaryController(self._dictionary_service),
             StudyController(self._study_service),
+            StudyItemHistoryController(self._study_item_history_service),
         ]
 
         @asynccontextmanager
