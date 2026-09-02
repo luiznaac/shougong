@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
@@ -181,6 +181,37 @@ class StudyItemRepository(IStudyItemRepository):
             )
             rows = (await session.execute(stmt)).all()
             return [_history_to_domain(history, entry) for history, entry in rows]
+
+        return await self._tx.execute(_run)
+
+    async def list_learning_to_review_transitions(self, *, limit: int, offset: int) -> list[StudyItemHistory]:
+        async def _run() -> list[StudyItemHistory]:
+            session = current_session()
+            history = StudyItemHistoryEntity
+            # LAG gives each history row the state of the item's previous row, in trail order.
+            previous_state = func.lag(history.card_state).over(
+                partition_by=history.study_item_id,
+                order_by=(history.created_at.asc(), history.id.asc()),
+            )
+            ranked = select(
+                history.id.label("history_id"),
+                history.card_state.label("state"),
+                previous_state.label("previous_state"),
+            ).subquery()
+            transition_ids = select(ranked.c.history_id).where(
+                ranked.c.state == int(SrsState.REVIEW),
+                ranked.c.previous_state == int(SrsState.LEARNING),
+            )
+            stmt = (
+                select(StudyItemHistoryEntity, DictionaryEntryEntity)
+                .join(DictionaryEntryEntity, StudyItemHistoryEntity.entry_id == DictionaryEntryEntity.id)
+                .where(StudyItemHistoryEntity.id.in_(transition_ids))
+                .order_by(StudyItemHistoryEntity.created_at.desc(), StudyItemHistoryEntity.id.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            rows = (await session.execute(stmt)).all()
+            return [_history_to_domain(entry_history, entry) for entry_history, entry in rows]
 
         return await self._tx.execute(_run)
 

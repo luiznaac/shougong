@@ -190,6 +190,23 @@
             },
             "description": "The study item's history — a row saved when it was created and after each change (e.g. a review reschedules the card), each with its own created_at — newest first. 404 if the item is unknown."
           }
+        },
+        {
+          "name": "List learning-to-review transitions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/study-items/history/learning-to-review?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-items", "history", "learning-to-review"],
+              "query": [
+                { "key": "limit", "value": "50", "description": "1..200, default 50" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Across every study item, the single history row that moved it from learning into review state, newest first. One row per item that has graduated; items still in learning are absent."
+          }
         }
       ]
     }

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
-from itertools import count
+from itertools import count, pairwise
 from typing import TypeVar
 
 from shougong.usecase.configuration.transaction import ITransactionTemplate
@@ -119,17 +119,18 @@ class FakeStudyItemRepository(IStudyItemRepository):
         self.items: list[StudyItem] = list(items or [])
         self.review_logs: dict[int, list[SrsReviewLog]] = {}
         self.history: dict[int, list[StudyItemHistory]] = {}
+        self._history_writes: list[StudyItemHistory] = []  # every row in write order, for tie-breaking
         self._ids = count(1)
 
     def _record_history(self, item: StudyItem, created_at: datetime) -> None:
-        self.history.setdefault(item.id, []).append(
-            StudyItemHistory(
-                study_item_id=item.id,
-                entry=item.entry,
-                card=item.card,
-                created_at=created_at,
-            )
+        row = StudyItemHistory(
+            study_item_id=item.id,
+            entry=item.entry,
+            card=item.card,
+            created_at=created_at,
         )
+        self.history.setdefault(item.id, []).append(row)
+        self._history_writes.append(row)
 
     async def create(self, entry: DictionaryEntry, card: SrsCard, created_at: datetime) -> StudyItem:
         item = StudyItem(id=next(self._ids), entry=entry, card=card, created_at=created_at)
@@ -172,3 +173,15 @@ class FakeStudyItemRepository(IStudyItemRepository):
         # newest first; ties broken by later insertion first, mirroring the repo's created_at/id DESC
         order = sorted(range(len(rows)), key=lambda i: (rows[i].created_at, i), reverse=True)
         return [rows[i] for i in order][offset : offset + limit]
+
+    async def list_learning_to_review_transitions(self, *, limit: int, offset: int) -> list[StudyItemHistory]:
+        write_order = {id(row): i for i, row in enumerate(self._history_writes)}
+        transitions: list[StudyItemHistory] = []
+        for rows in self.history.values():
+            trail = sorted(rows, key=lambda r: (r.created_at, write_order[id(r)]))
+            for previous, current in pairwise(trail):
+                if previous.card.state is SrsState.LEARNING and current.card.state is SrsState.REVIEW:
+                    transitions.append(current)
+        # newest first; ties broken by later write first, mirroring the repo's created_at/id DESC
+        transitions.sort(key=lambda r: (r.created_at, write_order[id(r)]), reverse=True)
+        return transitions[offset : offset + limit]

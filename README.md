@@ -57,6 +57,9 @@ of the due list until then, and reviewing it again before it comes due is reject
 `GET /study-items/{id}/reviews` returns the grade history, newest first.
 `GET /study-items/{id}/history` returns the study item's history, newest first — a row saved when
 the item is created and after every change, each with its own `created_at`.
+`GET /study-items/history/learning-to-review` returns, across every study item, the single history
+row that moved it from learning into review (a card graduates once its first review lands), newest
+first and paginated with `limit` / `offset`.
 
 ## API collection
 

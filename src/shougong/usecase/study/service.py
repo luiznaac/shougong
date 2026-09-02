@@ -87,3 +87,9 @@ class StudyService:
             return await self._study.list_history(item_id, limit=limit, offset=offset)
 
         return await self._tx.execute(_run)
+
+    async def learning_to_review_transitions(self, *, limit: int = 50, offset: int = 0) -> list[StudyItemHistory]:
+        """Across every study item, the history row that moved it from learning into review,
+        newest first. One row per item that has graduated; items still learning are absent."""
+
+        return await self._study.list_learning_to_review_transitions(limit=limit, offset=offset)
