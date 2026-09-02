@@ -23,7 +23,3 @@ export function formatDateTime(iso: string): string {
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", { dateStyle: "medium" });
 }
-
-export function isDue(iso: string): boolean {
-  return new Date(iso).getTime() <= Date.now();
-}

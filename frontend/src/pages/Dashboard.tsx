@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useStudyItems } from "../api/queries.ts";
-import { isDue } from "../lib/format.ts";
 import { tallyGroups } from "../lib/srs.ts";
 import { SrsDistribution } from "../components/SrsDistribution.tsx";
 import { UpcomingReviews } from "../components/UpcomingReviews.tsx";
@@ -10,6 +9,7 @@ import { ProgressTiles } from "../components/ProgressTiles.tsx";
 
 export function Dashboard() {
   const { data: items, isLoading, error } = useStudyItems();
+  const { data: dueItems } = useStudyItems({ due: true });
 
   if (isLoading) return <p className="text-slate-400">Carregando…</p>;
   if (error) return <p className="text-rose-400">Falha ao carregar: {String(error)}</p>;
@@ -17,11 +17,10 @@ export function Dashboard() {
 
   // Left button → lesson flow: everything still in `learning`.
   const lessonCount = items.filter((i) => i.card.state === "learning").length;
-  // Right button → review flow: only `review`-state items that are due (learning
-  // items are handled by the lesson flow, not counted here).
-  const reviewCount = items.filter(
-    (i) => i.card.state === "review" && isDue(i.card.due),
-  ).length;
+  // Right button → review flow: `due=true` comes straight from the backend
+  // (it owns the day-boundary logic); keep only the `review`-state ones —
+  // learning items are handled by the lesson flow.
+  const reviewCount = (dueItems ?? []).filter((i) => i.card.state === "review").length;
   const tally = tallyGroups(items.map((i) => i.card));
 
   return (
