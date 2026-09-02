@@ -40,3 +40,24 @@ CREATE TABLE IF NOT EXISTS review_log (
     CONSTRAINT fk_review_log_study_item FOREIGN KEY (study_item_id)
         REFERENCES study_item (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Append-only trail of study_item state: the card columns copied from study_item
+-- plus this row's own created_at, one row written when the item is created and one
+-- after every change.
+CREATE TABLE IF NOT EXISTS study_item_history (
+    id               BIGINT      NOT NULL AUTO_INCREMENT,
+    study_item_id    BIGINT      NOT NULL,
+    created_at       DATETIME(6) NOT NULL,
+    entry_id         BIGINT      NOT NULL,
+    card_state       SMALLINT    NOT NULL,
+    card_stability   DOUBLE      NULL,
+    card_difficulty  DOUBLE      NULL,
+    card_due         DATETIME(6) NOT NULL,
+    card_last_review DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    KEY ix_study_item_history_item_created (study_item_id, created_at),
+    CONSTRAINT fk_study_item_history_study_item FOREIGN KEY (study_item_id)
+        REFERENCES study_item (id),
+    CONSTRAINT fk_study_item_history_entry FOREIGN KEY (entry_id)
+        REFERENCES dictionary_entry (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

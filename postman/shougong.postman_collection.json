@@ -173,6 +173,23 @@
             },
             "description": "The item's grades, newest first. 404 if the item is unknown."
           }
+        },
+        {
+          "name": "List study item history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/study-items/{{studyItemId}}/history?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-items", "{{studyItemId}}", "history"],
+              "query": [
+                { "key": "limit", "value": "50", "description": "1..200, default 50" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "The study item's history — a row saved when it was created and after each change (e.g. a review reschedules the card), each with its own created_at — newest first. 404 if the item is unknown."
+          }
         }
       ]
     }

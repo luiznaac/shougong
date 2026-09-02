@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
-from shougong.usecase.study.model import ReviewResult, StudyItem
+from shougong.usecase.study.model import ReviewResult, StudyItem, StudyItemHistory
 
 
 class HealthCheckResponse(BaseModel):
@@ -95,6 +95,22 @@ class ReviewLogResponse(BaseModel):
     @classmethod
     def from_domain(cls, log: SrsReviewLog) -> ReviewLogResponse:
         return cls(rating=log.rating.name.lower(), review_datetime=log.review_datetime)
+
+
+class StudyItemHistoryResponse(BaseModel):
+    study_item_id: int
+    entry: DictionaryEntryResponse
+    card: SrsCardResponse
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, history: StudyItemHistory) -> StudyItemHistoryResponse:
+        return cls(
+            study_item_id=history.study_item_id,
+            entry=DictionaryEntryResponse.from_domain(history.entry),
+            card=SrsCardResponse.from_domain(history.card),
+            created_at=history.created_at,
+        )
 
 
 class ReviewResponse(BaseModel):

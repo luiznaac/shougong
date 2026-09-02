@@ -55,6 +55,8 @@ cards become due at once instead of trickling in through the day.
 which advances the card and pushes `due` out (snapped to the day boundary). The item drops out
 of the due list until then, and reviewing it again before it comes due is rejected with `409`.
 `GET /study-items/{id}/reviews` returns the grade history, newest first.
+`GET /study-items/{id}/history` returns the study item's history, newest first — a row saved when
+the item is created and after every change, each with its own `created_at`.
 
 ## API collection
 
