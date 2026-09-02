@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useItemHistory, useStudyItem } from "../api/queries.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
+import { Hanzi } from "../components/Hanzi.tsx";
 import { ItemMetricChart } from "../components/ItemMetricChart.tsx";
 import { formatDate, formatDateTime } from "../lib/format.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
@@ -30,10 +31,13 @@ export function StudyItemPage() {
         ← Painel
       </Link>
 
-      <header className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 py-10">
-        <span lang="zh-Hans" className="font-hanzi text-8xl text-slate-50">
-          {item.entry.simplified}
-        </span>
+      <header className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-10">
+        <Hanzi
+          text={item.entry.simplified}
+          singleCharPx={96}
+          boxPx={360}
+          className="text-slate-50"
+        />
         <Pinyin value={item.entry.pinyin} className="text-3xl font-light" />
         <span
           className="rounded-full px-3 py-0.5 text-xs font-semibold text-white"

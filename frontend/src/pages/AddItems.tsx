@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAddStudyItem, useDictionarySearch, useStudyItems } from "../api/queries.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
+import { Hanzi } from "../components/Hanzi.tsx";
 import { ApiError } from "../api/client.ts";
 
 export function AddItems() {
@@ -66,9 +67,12 @@ export function AddItems() {
           const enqueued = enqueuedIds.has(entry.id);
           return (
             <li key={entry.id} className="flex items-center gap-4 py-3">
-              <span lang="zh-Hans" className="font-hanzi text-3xl text-slate-100">
-                {entry.simplified}
-              </span>
+              <Hanzi
+                text={entry.simplified}
+                singleCharPx={30}
+                boxPx={170}
+                className="shrink-0 text-slate-100"
+              />
               <div className="min-w-0">
                 <Pinyin value={entry.pinyin} className="text-sm" />
                 <p className="truncate text-sm text-slate-400">
