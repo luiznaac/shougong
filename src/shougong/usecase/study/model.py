@@ -28,3 +28,16 @@ class ReviewResult:
 
     item: StudyItem
     log: SrsReviewLog
+
+
+@dataclass(frozen=True, slots=True)
+class StudyItemHistory:
+    """A study item's state at one moment, recorded when the item is created and
+    after every change. `created_at` is when this history row was written (not the
+    study item's own creation time).
+    """
+
+    study_item_id: int
+    entry: DictionaryEntry
+    card: SrsCard
+    created_at: datetime

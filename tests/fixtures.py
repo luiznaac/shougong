@@ -16,7 +16,7 @@ from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import StudyItem
+from shougong.usecase.study.model import StudyItem, StudyItemHistory
 
 _T = TypeVar("_T")
 
@@ -118,11 +118,23 @@ class FakeStudyItemRepository(IStudyItemRepository):
     def __init__(self, items: list[StudyItem] | None = None) -> None:
         self.items: list[StudyItem] = list(items or [])
         self.review_logs: dict[int, list[SrsReviewLog]] = {}
+        self.history: dict[int, list[StudyItemHistory]] = {}
         self._ids = count(1)
+
+    def _record_history(self, item: StudyItem, created_at: datetime) -> None:
+        self.history.setdefault(item.id, []).append(
+            StudyItemHistory(
+                study_item_id=item.id,
+                entry=item.entry,
+                card=item.card,
+                created_at=created_at,
+            )
+        )
 
     async def create(self, entry: DictionaryEntry, card: SrsCard, created_at: datetime) -> StudyItem:
         item = StudyItem(id=next(self._ids), entry=entry, card=card, created_at=created_at)
         self.items.append(item)
+        self._record_history(item, created_at)
         return item
 
     async def get(self, item_id: int) -> StudyItem | None:
@@ -137,11 +149,12 @@ class FakeStudyItemRepository(IStudyItemRepository):
             rows = [i for i in rows if i.card.due <= due_before]
         return rows[offset : offset + limit]
 
-    async def update_card(self, item_id: int, card: SrsCard) -> StudyItem:
+    async def update_card(self, item_id: int, card: SrsCard, changed_at: datetime) -> StudyItem:
         for index, item in enumerate(self.items):
             if item.id == item_id:
                 updated = StudyItem(id=item.id, entry=item.entry, card=card, created_at=item.created_at)
                 self.items[index] = updated
+                self._record_history(updated, changed_at)
                 return updated
         raise KeyError(item_id)
 
@@ -153,3 +166,9 @@ class FakeStudyItemRepository(IStudyItemRepository):
         # newest first; ties broken by later insertion first, mirroring the repo's id DESC
         order = sorted(range(len(logs)), key=lambda i: (logs[i].review_datetime, i), reverse=True)
         return [logs[i] for i in order][offset : offset + limit]
+
+    async def list_history(self, item_id: int, *, limit: int, offset: int) -> list[StudyItemHistory]:
+        rows = self.history.get(item_id, [])
+        # newest first; ties broken by later insertion first, mirroring the repo's created_at/id DESC
+        order = sorted(range(len(rows)), key=lambda i: (rows[i].created_at, i), reverse=True)
+        return [rows[i] for i in order][offset : offset + limit]
