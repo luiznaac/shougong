@@ -147,10 +147,14 @@ export function Quiz({
             <div className="w-full max-w-xl">
               {phase === "info" ? (
                 <InfoCard item={current} onContinue={() => setPhase("prompt")} />
-              ) : phase === "prompt" ? (
-                <PromptCard item={current} onReveal={() => setPhase("revealed")} />
               ) : (
-                <RevealCard item={current} onGrade={grade} disabled={submitting} />
+                <QuizCard
+                  item={current}
+                  revealed={phase === "revealed"}
+                  onReveal={() => setPhase("revealed")}
+                  onGrade={grade}
+                  disabled={submitting}
+                />
               )}
             </div>
           )
@@ -169,92 +173,121 @@ export function Quiz({
 function InfoCard({ item, onContinue }: { item: StudyItem; onContinue: () => void }) {
   return (
     <div className="flex flex-col items-center gap-6 text-center">
-      <p className="text-sm uppercase tracking-widest text-slate-500">Item novo</p>
-      <span lang="zh-Hans" className="font-hanzi text-[9rem] leading-none text-slate-50">
-        {item.entry.simplified}
-      </span>
-      <Pinyin value={item.entry.pinyin} className="text-3xl font-light" />
-      <ul className="space-y-0.5 text-lg text-slate-300">
-        {item.entry.definitions.slice(0, 6).map((d, i) => (
-          <li key={i}>{d}</li>
-        ))}
-      </ul>
-      <p className="text-sm text-slate-500">
-        Memorize o traçado — a seguir você escreve de memória.
+      <p className="h-4 text-xs font-medium uppercase tracking-widest text-slate-500">
+        Item novo
       </p>
-      <button
-        onClick={onContinue}
-        className="rounded-lg bg-slate-100 px-8 py-3 font-semibold text-slate-900 hover:bg-white"
-      >
-        Continuar <kbd className="ml-2 rounded bg-slate-300 px-1.5 text-xs">espaço</kbd>
-      </button>
-    </div>
-  );
-}
 
-function PromptCard({ item, onReveal }: { item: StudyItem; onReveal: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-8 text-center">
-      <p className="text-sm uppercase tracking-widest text-slate-500">
-        Escreva o caractere à mão
-      </p>
-      <Pinyin value={item.entry.pinyin} className="text-5xl font-light sm:text-6xl" />
+      <Pinyin value={item.entry.pinyin} className="text-4xl font-light sm:text-5xl" />
+
       <ul className="space-y-1 text-lg text-slate-300">
         {item.entry.definitions.slice(0, 5).map((d, i) => (
           <li key={i}>{d}</li>
         ))}
       </ul>
-      <div
-        className="flex h-40 w-40 items-center justify-center rounded-xl border-2 border-dashed border-white/15 font-hanzi text-7xl text-slate-700 select-none"
-        aria-hidden
-      >
-        ?
+
+      <div className="[perspective:1200px]">
+        <div className="flex h-56 w-56 items-center justify-center rounded-2xl border-2 border-accent-500/40 bg-slate-900">
+          <span lang="zh-Hans" className="font-hanzi text-[7rem] leading-none text-slate-50">
+            {item.entry.simplified}
+          </span>
+        </div>
       </div>
-      <button
-        onClick={onReveal}
-        className="rounded-lg bg-slate-100 px-8 py-3 font-semibold text-slate-900 hover:bg-white"
-      >
-        Revelar <kbd className="ml-2 rounded bg-slate-300 px-1.5 text-xs">espaço</kbd>
-      </button>
+
+      <div className="flex min-h-[3.5rem] flex-col items-center gap-3">
+        <p className="text-sm text-slate-500">
+          Memorize o traçado — a seguir você escreve de memória.
+        </p>
+        <button
+          onClick={onContinue}
+          className="rounded-lg bg-slate-100 px-8 py-3 font-semibold text-slate-900 hover:bg-white"
+        >
+          Continuar <kbd className="ml-2 rounded bg-slate-300 px-1.5 text-xs">espaço</kbd>
+        </button>
+      </div>
     </div>
   );
 }
 
-function RevealCard({
+/**
+ * One card layout for both quiz phases — pinyin and meanings hold their place,
+ * only the centre panel flips (dashed "?" → the hanzi) so the reveal reads as
+ * the same card turning over rather than a new screen.
+ */
+function QuizCard({
   item,
+  revealed,
+  onReveal,
   onGrade,
   disabled,
 }: {
   item: StudyItem;
+  revealed: boolean;
+  onReveal: () => void;
   onGrade: (r: SrsRating) => void;
   disabled: boolean;
 }) {
   return (
     <div className="flex flex-col items-center gap-6 text-center">
-      <span lang="zh-Hans" className="font-hanzi text-[10rem] leading-none text-slate-50">
-        {item.entry.simplified}
-      </span>
-      <Pinyin value={item.entry.pinyin} className="text-3xl font-light" />
-      <ul className="space-y-0.5 text-slate-400">
+      <p className="h-4 text-xs font-medium uppercase tracking-widest text-slate-500">
+        {revealed ? "Você acertou a escrita?" : "Escreva o caractere à mão"}
+      </p>
+
+      <Pinyin value={item.entry.pinyin} className="text-4xl font-light sm:text-5xl" />
+
+      <ul className="space-y-1 text-lg text-slate-300">
         {item.entry.definitions.slice(0, 5).map((d, i) => (
           <li key={i}>{d}</li>
         ))}
       </ul>
-      <p className="pt-2 text-sm text-slate-500">Você acertou a escrita?</p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {RATINGS.map((r) => (
-          <button
-            key={r.key}
-            disabled={disabled}
-            onClick={() => onGrade(r.key)}
-            className={`rounded-lg px-5 py-3 font-semibold text-white transition-colors disabled:opacity-50 ${r.className}`}
-          >
-            {r.label}
-            <kbd className="ml-2 rounded bg-black/20 px-1.5 text-xs">{r.hotkey}</kbd>
-          </button>
-        ))}
+
+      <div className="[perspective:1200px]">
+        <div
+          className={`relative h-56 w-56 transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none ${
+            revealed ? "[transform:rotateY(180deg)]" : ""
+          }`}
+        >
+          <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-dashed border-white/15 [backface-visibility:hidden]">
+            <span className="font-hanzi text-8xl text-slate-700 select-none" aria-hidden>
+              ?
+            </span>
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-accent-500/40 bg-slate-900 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+            <span lang="zh-Hans" className="font-hanzi text-[7rem] leading-none text-slate-50">
+              {item.entry.simplified}
+            </span>
+          </div>
+        </div>
       </div>
-      <Link to={`/items/${item.id}`} className="text-xs text-slate-500 hover:text-slate-300">
+
+      <div className="flex min-h-[3.5rem] items-start justify-center">
+        {revealed ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {RATINGS.map((r) => (
+              <button
+                key={r.key}
+                disabled={disabled}
+                onClick={() => onGrade(r.key)}
+                className={`rounded-lg px-5 py-3 font-semibold text-white transition-colors disabled:opacity-50 ${r.className}`}
+              >
+                {r.label}
+                <kbd className="ml-2 rounded bg-black/20 px-1.5 text-xs">{r.hotkey}</kbd>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <button
+            onClick={onReveal}
+            className="rounded-lg bg-slate-100 px-8 py-3 font-semibold text-slate-900 hover:bg-white"
+          >
+            Revelar <kbd className="ml-2 rounded bg-slate-300 px-1.5 text-xs">espaço</kbd>
+          </button>
+        )}
+      </div>
+
+      <Link
+        to={`/items/${item.id}`}
+        className={`text-xs text-slate-500 hover:text-slate-300 ${revealed ? "" : "invisible"}`}
+      >
         ver página do item
       </Link>
     </div>
