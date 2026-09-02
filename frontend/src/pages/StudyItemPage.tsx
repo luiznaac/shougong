@@ -83,20 +83,18 @@ export function StudyItemPage() {
               const lvl = levelOf(s.card);
               return (
                 <li key={i} className="flex items-center gap-3 py-2 text-sm">
-                  <span className="w-14 font-medium text-slate-200">
-                    {RATING_LABEL[s.rating]}
-                  </span>
                   <span
                     className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-white"
                     style={{ background: levelColor(lvl) }}
                   >
                     {levelLabel(lvl)}
                   </span>
+                  <span className="text-slate-400 capitalize">{s.card.state}</span>
                   <span className="text-slate-500">
                     {s.card.stability != null ? `${s.card.stability.toFixed(1)} d` : "—"}
                   </span>
                   <span className="ml-auto text-slate-500">
-                    {formatDateTime(s.reviewed_at)}
+                    {formatDateTime(s.created_at)}
                   </span>
                 </li>
               );

@@ -35,9 +35,14 @@ export interface ReviewResult {
   review: ReviewLog;
 }
 
-/** One snapshot of a study item's FSRS card, written per review (newest first). */
-export interface StudyItemHistoryEntry {
-  rating: SrsRating;
-  reviewed_at: string;
+/**
+ * A snapshot of a study item's state at one moment — written when the item is
+ * created and after every change. `created_at` is when the row was written, not
+ * the study item's own creation time. Returned newest first.
+ */
+export interface StudyItemHistory {
+  study_item_id: number;
+  entry: DictionaryEntry;
   card: SrsCard;
+  created_at: string;
 }
