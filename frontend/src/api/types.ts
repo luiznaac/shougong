@@ -34,3 +34,10 @@ export interface ReviewResult {
   item: StudyItem;
   review: ReviewLog;
 }
+
+/** One snapshot of a study item's FSRS card, written per review (newest first). */
+export interface StudyItemHistoryEntry {
+  rating: SrsRating;
+  reviewed_at: string;
+  card: SrsCard;
+}

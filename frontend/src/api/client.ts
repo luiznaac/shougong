@@ -4,6 +4,7 @@ import type {
   ReviewLog,
   SrsRating,
   StudyItem,
+  StudyItemHistoryEntry,
 } from "./types.ts";
 
 const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
@@ -82,5 +83,8 @@ export const api = {
   },
   listReviews(id: number, limit = 50): Promise<ReviewLog[]> {
     return request(`/study-items/${id}/reviews?limit=${limit}`);
+  },
+  listHistory(id: number, limit = 200): Promise<StudyItemHistoryEntry[]> {
+    return request(`/study-items/${id}/history?limit=${limit}`);
   },
 };

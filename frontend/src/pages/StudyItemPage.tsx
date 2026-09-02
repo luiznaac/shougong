@@ -1,8 +1,8 @@
 import { Link, useParams } from "react-router-dom";
-import { useReviewHistory, useStudyItem } from "../api/queries.ts";
+import { useItemHistory, useReviewHistory, useStudyItem } from "../api/queries.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { formatDateTime, fromNow } from "../lib/format.ts";
-import { STAGE_COLOR, STAGE_LABEL, stageOf } from "../lib/srs.ts";
+import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
 import type { SrsRating } from "../api/types.ts";
 
 const RATING_LABEL: Record<SrsRating, string> = {
@@ -17,12 +17,13 @@ export function StudyItemPage() {
   const itemId = Number(id);
   const { data: item, isLoading, error } = useStudyItem(itemId);
   const { data: history } = useReviewHistory(itemId);
+  const { data: snapshots } = useItemHistory(itemId);
 
   if (isLoading) return <p className="text-slate-400">Carregando…</p>;
   if (error) return <p className="text-rose-400">Falha ao carregar: {String(error)}</p>;
   if (!item) return null;
 
-  const stage = stageOf(item.card);
+  const level = levelOf(item.card);
 
   return (
     <div className="space-y-8">
@@ -37,9 +38,9 @@ export function StudyItemPage() {
         <Pinyin value={item.entry.pinyin} className="text-3xl font-light" />
         <span
           className="rounded-full px-3 py-0.5 text-xs font-semibold text-white"
-          style={{ background: STAGE_COLOR[stage] }}
+          style={{ background: levelColor(level) }}
         >
-          {STAGE_LABEL[stage]}
+          {levelLabel(level)}
         </span>
       </header>
 
@@ -74,11 +75,34 @@ export function StudyItemPage() {
 
       <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Histórico de reviews
+          Trajetória
         </h2>
-        {!history || history.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhum review ainda.</p>
-        ) : (
+        {snapshots && snapshots.length > 0 ? (
+          <ul className="divide-y divide-white/5">
+            {snapshots.map((s, i) => {
+              const lvl = levelOf(s.card);
+              return (
+                <li key={i} className="flex items-center gap-3 py-2 text-sm">
+                  <span className="w-14 font-medium text-slate-200">
+                    {RATING_LABEL[s.rating]}
+                  </span>
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-white"
+                    style={{ background: levelColor(lvl) }}
+                  >
+                    {levelLabel(lvl)}
+                  </span>
+                  <span className="text-slate-500">
+                    {s.card.stability != null ? `${s.card.stability.toFixed(1)} d` : "—"}
+                  </span>
+                  <span className="ml-auto text-slate-500">
+                    {formatDateTime(s.reviewed_at)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : history && history.length > 0 ? (
           <ul className="divide-y divide-white/5">
             {history.map((log, i) => (
               <li key={i} className="flex items-center justify-between py-2 text-sm">
@@ -87,6 +111,8 @@ export function StudyItemPage() {
               </li>
             ))}
           </ul>
+        ) : (
+          <p className="text-sm text-slate-500">Nenhum review ainda.</p>
         )}
       </section>
     </div>

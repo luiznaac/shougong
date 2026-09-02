@@ -36,7 +36,7 @@ Para buildar na raiz (`/`) em vez de `/shougong/`: `VITE_BASE=/ npm run build`.
 
 | Rota          | O quê                                                                    |
 | ------------- | ----------------------------------------------------------------------- |
-| `/`           | Painel: reviews due, progressão SRS, forecast 24h, próximos itens       |
+| `/`           | Painel estilo HanziHero: botões, SRS distribution, upcoming reviews, tiles |
 | `/review`     | Loop de review (tela cheia)                                             |
 | `/items/:id`  | Página do item: hanzi, pinyin, FSRS, histórico de reviews               |
 | `/add`        | Busca no dicionário e adiciona itens à fila                             |
@@ -59,8 +59,12 @@ pulado com um aviso.
   espelham `httpapi/schema.py` do backend.
 - `src/lib/pinyin.ts` — converte pinyin numerado (`zhi1 dao4`) para acentuado e
   expõe o tom de cada sílaba para colorir.
-- `src/lib/srs.ts` — o backend só guarda FSRS cru (state + stability). Os estágios
-  nomeados estilo WaniKani (Aprendiz/Guru/Mestre/Iluminado/Queimado) são derivados
-  **no cliente**, só para exibição.
+- `src/lib/srs.ts` — o backend só guarda FSRS cru (state + stability). O ladder de
+  níveis estilo HanziHero é derivado **no cliente** a partir do `stability` (dias):
+  Novice I/II (1d, 4d), Apprentice I/II (1sem, 2sem), Journeyman I/II (1mês, 2meses),
+  Expert I/II/III (4, 8, 12 meses), Master (>1 ano). O gráfico do painel agrupa em
+  Novice/Apprentice/Journeyman/Expert/Master.
+- `GET /study-items/{id}/history` — snapshots do card FSRS por review (novo no backend);
+  a página do item mostra a trajetória de nível a partir daí.
 - Mnemônicos, decomposição em componentes e níveis **não existem** no backend
   ainda — ficam para uma fase futura (nova tabela + campos).

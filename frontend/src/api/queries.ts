@@ -6,6 +6,7 @@ export const keys = {
   studyItems: (due?: boolean) => ["study-items", { due: due ?? false }] as const,
   studyItem: (id: number) => ["study-items", id] as const,
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
+  history: (id: number) => ["study-items", id, "history"] as const,
   dictionary: (q: string) => ["dictionary", q] as const,
 };
 
@@ -27,6 +28,13 @@ export function useReviewHistory(id: number) {
   return useQuery({
     queryKey: keys.reviews(id),
     queryFn: () => api.listReviews(id),
+  });
+}
+
+export function useItemHistory(id: number) {
+  return useQuery({
+    queryKey: keys.history(id),
+    queryFn: () => api.listHistory(id),
   });
 }
 
