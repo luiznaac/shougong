@@ -2,26 +2,25 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client.ts";
 import { Quiz } from "../components/Quiz.tsx";
 
-export function Review() {
-  // Snapshot the queue once, on entry. Only items already in `review`/`relearning`
-  // — brand-new `learning` items go through the lesson flow instead.
+export function Lesson() {
+  // Items still in `learning` — never successfully reviewed. Each is shown in
+  // full first, then quizzed once.
   const { data, isLoading, error } = useQuery({
-    queryKey: ["review-queue"],
+    queryKey: ["lesson-queue"],
     queryFn: async () => {
-      const due = await api.listAllStudyItems({ due: true });
-      return due.filter((i) => i.card.state !== "learning");
+      const all = await api.listAllStudyItems();
+      return all.filter((i) => i.card.state === "learning");
     },
     staleTime: Infinity,
     gcTime: 0,
   });
 
-  if (isLoading)
-    return <FullScreenMsg text="Carregando fila…" />;
+  if (isLoading) return <FullScreenMsg text="Carregando lição…" />;
   if (error)
     return <FullScreenMsg text={`Falha ao carregar: ${String(error)}`} tone="error" />;
 
   return (
-    <Quiz items={data ?? []} mode="review" emptyMessage="Nenhum item para revisar agora." />
+    <Quiz items={data ?? []} mode="lesson" emptyMessage="Nenhum item novo para aprender." />
   );
 }
 

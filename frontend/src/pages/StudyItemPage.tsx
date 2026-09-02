@@ -1,22 +1,21 @@
 import { Link, useParams } from "react-router-dom";
-import { useItemHistory, useReviewHistory, useStudyItem } from "../api/queries.ts";
+import { useItemHistory, useStudyItem } from "../api/queries.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
-import { formatDateTime, fromNow } from "../lib/format.ts";
+import { ItemMetricChart } from "../components/ItemMetricChart.tsx";
+import { formatDate, formatDateTime } from "../lib/format.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
-import type { SrsRating } from "../api/types.ts";
+import type { SrsState } from "../api/types.ts";
 
-const RATING_LABEL: Record<SrsRating, string> = {
-  again: "Errei",
-  hard: "Difícil",
-  good: "Bom",
-  easy: "Fácil",
+const FSRS_STATE_LABEL: Record<SrsState, string> = {
+  learning: "Aprendendo",
+  review: "Em revisão",
+  relearning: "Reaprendendo",
 };
 
 export function StudyItemPage() {
   const { id } = useParams();
   const itemId = Number(id);
   const { data: item, isLoading, error } = useStudyItem(itemId);
-  const { data: history } = useReviewHistory(itemId);
   const { data: snapshots } = useItemHistory(itemId);
 
   if (isLoading) return <p className="text-slate-400">Carregando…</p>;
@@ -56,8 +55,8 @@ export function StudyItemPage() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2">
-        <Fact label="Estado FSRS" value={item.card.state} />
-        <Fact label="Próximo review" value={`${fromNow(item.card.due)} · ${formatDateTime(item.card.due)}`} />
+        <Fact label="Estado FSRS" value={FSRS_STATE_LABEL[item.card.state]} />
+        <Fact label="Próximo review" value={formatDate(item.card.due)} />
         <Fact
           label="Estabilidade"
           value={item.card.stability != null ? `${item.card.stability.toFixed(1)} d` : "—"}
@@ -74,44 +73,10 @@ export function StudyItemPage() {
       </section>
 
       <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
           Trajetória
         </h2>
-        {snapshots && snapshots.length > 0 ? (
-          <ul className="divide-y divide-white/5">
-            {snapshots.map((s, i) => {
-              const lvl = levelOf(s.card);
-              return (
-                <li key={i} className="flex items-center gap-3 py-2 text-sm">
-                  <span
-                    className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-white"
-                    style={{ background: levelColor(lvl) }}
-                  >
-                    {levelLabel(lvl)}
-                  </span>
-                  <span className="text-slate-400 capitalize">{s.card.state}</span>
-                  <span className="text-slate-500">
-                    {s.card.stability != null ? `${s.card.stability.toFixed(1)} d` : "—"}
-                  </span>
-                  <span className="ml-auto text-slate-500">
-                    {formatDateTime(s.created_at)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : history && history.length > 0 ? (
-          <ul className="divide-y divide-white/5">
-            {history.map((log, i) => (
-              <li key={i} className="flex items-center justify-between py-2 text-sm">
-                <span className="font-medium text-slate-200">{RATING_LABEL[log.rating]}</span>
-                <span className="text-slate-500">{formatDateTime(log.review_datetime)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-slate-500">Nenhum review ainda.</p>
-        )}
+        <ItemMetricChart history={snapshots ?? []} />
       </section>
     </div>
   );

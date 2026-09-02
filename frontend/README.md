@@ -36,10 +36,14 @@ Para buildar na raiz (`/`) em vez de `/shougong/`: `VITE_BASE=/ npm run build`.
 
 | Rota          | O quê                                                                    |
 | ------------- | ----------------------------------------------------------------------- |
-| `/`           | Painel estilo HanziHero: botões, SRS distribution, upcoming reviews, tiles |
-| `/review`     | Loop de review (tela cheia)                                             |
-| `/items/:id`  | Página do item: hanzi, pinyin, FSRS, histórico de reviews               |
+| `/`           | Painel estilo HanziHero: 2 botões, SRS distribution, upcoming reviews, tiles |
+| `/lesson`     | Fluxo de lição (tela cheia) — itens em `learning`                       |
+| `/review`     | Loop de review (tela cheia) — itens em `review` que estão _due_         |
+| `/items/:id`  | Página do item: hanzi, pinyin, FSRS, gráfico de trajetória             |
 | `/add`        | Busca no dicionário e adiciona itens à fila                             |
+
+Os dois botões do painel: **esquerdo (azul)** = nº de itens em `learning` → `/lesson`;
+**direito (vermelho)** = nº de itens em `review` e _due_ (ignora `learning`) → `/review`.
 
 ### Fluxo do review (invertido — treino de escrita)
 
@@ -50,7 +54,13 @@ Para buildar na raiz (`/`) em vez de `/shougong/`: `VITE_BASE=/ npm run build`.
    FSRS (`POST /study-items/{id}/reviews`). `again` conta como erro na precisão.
 5. `Esc` sai a qualquer momento.
 
-Se um item deixou de estar _due_ no meio da sessão (backend responde `409`), ele é
+### Fluxo da lição
+
+Igual ao review, mas cada item começa com uma tela de **apresentação** (hanzi +
+pinyin + significados visíveis) antes do quiz. `Espaço` avança da apresentação
+para o quiz. Depois do quiz o item vira `review` normal via FSRS.
+
+Se um item não estiver disponível quando enviado (backend responde `409`), ele é
 pulado com um aviso.
 
 ## Notas de arquitetura

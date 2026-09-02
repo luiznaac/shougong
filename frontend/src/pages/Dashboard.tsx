@@ -15,9 +15,12 @@ export function Dashboard() {
   if (error) return <p className="text-rose-400">Falha ao carregar: {String(error)}</p>;
   if (!items) return null;
 
-  const dueCount = items.filter((i) => isDue(i.card.due)).length;
-  const newCount = items.filter(
-    (i) => i.card.state === "learning" && !i.card.last_review,
+  // Left button → lesson flow: everything still in `learning`.
+  const lessonCount = items.filter((i) => i.card.state === "learning").length;
+  // Right button → review flow: only `review`-state items that are due (learning
+  // items are handled by the lesson flow, not counted here).
+  const reviewCount = items.filter(
+    (i) => i.card.state === "review" && isDue(i.card.due),
   ).length;
   const tally = tallyGroups(items.map((i) => i.card));
 
@@ -25,17 +28,18 @@ export function Dashboard() {
     <div className="space-y-6">
       <section className="grid gap-4 sm:grid-cols-2">
         <BigButton
-          to="/add"
-          count={newCount}
-          label="Adicionar"
+          to="/lesson"
+          count={lessonCount}
+          label="Lições"
           className="from-cyan-400 to-blue-600"
+          disabled={lessonCount === 0}
         />
         <BigButton
           to="/review"
-          count={dueCount}
+          count={reviewCount}
           label="Reviews"
           className="from-rose-400 to-accent-600"
-          disabled={dueCount === 0}
+          disabled={reviewCount === 0}
         />
       </section>
 
