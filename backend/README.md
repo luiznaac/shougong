@@ -13,32 +13,15 @@ run the review loop — grade a due item `again | hard | good | easy` and FSRS r
 
 ```bash
 uv sync                       # create .venv + install everything
-docker compose up -d mysql    # local MySQL on :3306 (managed separately from the app)
+docker compose up -d mysql    # local MySQL on :3306 (from the repo-root compose)
 uv run poe run                # start the service on http://localhost:8080
 curl localhost:8080/health
 ```
 
-## Run in Docker
-
-**Whole stack (app + MySQL)** — builds the image and starts everything:
-
-```bash
-docker compose -f docker-compose.full.yml up --build
-```
-
-**App only** — the image never contains the database; point it at an external MySQL:
-
-```bash
-docker build -t shougong .
-docker run --rm -p 8080:8080 \
-  -e MYSQL__HOST=host.docker.internal \
-  -e MYSQL__DATABASE=shougong \
-  -e MYSQL__USER=root -e MYSQL__PASSWORD= \
-  shougong
-```
-
-`docker-compose.yml` stays as a **DB-only** helper for local dev (`docker compose up -d mysql`
-while you run the app with `uv run poe run`).
+`docker compose` lives at the **repo root** now — `docker compose up -d mysql` is
+the DB-only helper for this workflow, and `docker compose up --build` runs the
+full stack (combined backend + frontend image + MySQL). See the
+[root README](../README.md#docker) for the image layout and publishing.
 
 All config is via env vars (`APP_ENV`, `HTTP_PORT`, `LOG_LEVEL`, `MYSQL__*`,
 `GATEWAYS__APP__HOST`, `DICTIONARY_AUTOLOAD`, `STUDY_TIMEZONE`) — see `.env.example`.

@@ -104,5 +104,6 @@ not need Docker; integration tests spin up MySQL via Testcontainers and are mark
 ## 6. Renaming when starting a new project
 
 `template` -> `<project>` in: `src/template/` dir, `pyproject.toml` (`name`, hatch `packages`,
-`[tool.importlinter]` `root_package` + `containers`, `[tool.mypy]` `packages`), `Dockerfile`,
-`ci.yml`, `poe` tasks, and `MYSQL_DATABASE` in `docker-compose.yml` + `mysql/init.sql`.
+`[tool.importlinter]` `root_package` + `containers`, `[tool.mypy]` `packages`), the repo-root
+`Dockerfile` + `deploy/`, `ci.yml`, `poe` tasks, and `MYSQL_DATABASE` in the repo-root
+`docker-compose.yml` + `mysql/init.sql`.
