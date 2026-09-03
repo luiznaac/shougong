@@ -7,8 +7,8 @@ matters more than local cleverness.
 ## 1. What this is
 
 Not an application. A **starter skeleton** for a Python backend service, deliberately the same
-architecture as the sibling [`kotlin/`](../kotlin) scaffold (which itself is the template behind
-[chameidor](../../chameidor/CLAUDE.md) and [portfolio-2](../../portfolio-2/CLAUDE.md)). One
+architecture as the sibling [`kotlin/`](../../kotlin) scaffold (which itself is the template behind
+[chameidor](../../../chameidor/CLAUDE.md) and [portfolio-2](../../../portfolio-2/CLAUDE.md)). One
 vertical slice is implemented end-to-end — a **health check**. Keep it intact and working; it's
 the reference example for "how do I wire a new port/adapter".
 
