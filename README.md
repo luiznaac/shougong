@@ -24,6 +24,34 @@ npm run be:run     # backend  -> http://localhost:8080
 npm run fe:dev     # frontend -> http://localhost:5273  (proxies /api -> :8080)
 ```
 
+## Docker
+
+One image holds both processes — `uvicorn` (API) and `nginx` (the built SPA,
+which also reverse-proxies `/api` to uvicorn) — supervised by `supervisord`, on
+separate ports. The database is **not** in the image.
+
+```bash
+docker compose up --build     # app + MySQL, full stack
+#   UI   -> http://localhost:8081
+#   API  -> http://localhost:8080
+docker compose up -d mysql    # just the DB, for local `cd backend && uv run poe run`
+```
+
+Ports are configurable with `API_PORT` / `WEB_PORT`. For a standalone run against
+an external database:
+
+```bash
+docker run --rm -p 8080:8080 -p 8081:8081 \
+  -e MYSQL__HOST=host.docker.internal -e MYSQL__DATABASE=shougong \
+  -e MYSQL__USER=root -e MYSQL__PASSWORD= \
+  luiznaac/shougong:latest
+```
+
+**Publishing:** every push to `master` that touches `backend/`, `frontend/`,
+`Dockerfile`, or `deploy/` builds and pushes `luiznaac/shougong:latest` and
+`:sha-<short>` to Docker Hub (`.github/workflows/docker-publish.yml`). Needs repo
+secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+
 ## Checks
 
 ```bash

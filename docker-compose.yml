@@ -1,0 +1,55 @@
+# Full stack in one command: the combined app image (FastAPI backend + built
+# SPA, from ./Dockerfile) plus its MySQL.
+#
+#   docker compose up --build        # everything
+#   docker compose up -d mysql       # just the DB (for local `cd backend && uv run poe run`)
+#
+# The published image (docker.io/luiznaac/shougong) is the `app` service only —
+# in production the database is a separate, externally provisioned container.
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+      - MYSQL_DATABASE=shougong
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./backend/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - shougong-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: luiznaac/shougong:latest
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - APP_ENV=prod
+      - LOG_LEVEL=INFO
+      - API_PORT=8080
+      - WEB_PORT=8081
+      - DICTIONARY_AUTOLOAD=true
+      - STUDY_TIMEZONE=America/Sao_Paulo
+      - MYSQL__HOST=mysql
+      - MYSQL__PORT=3306
+      - MYSQL__USER=root
+      - MYSQL__PASSWORD=
+      - MYSQL__DATABASE=shougong
+      - GATEWAYS__APP__HOST=http://localhost:8080
+    ports:
+      - "8080:8080"   # API      (uvicorn)
+      - "8081:8081"   # web / UI  (nginx: SPA + /api proxy)
+
+volumes:
+  shougong-mysql-data:

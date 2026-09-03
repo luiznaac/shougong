@@ -12,6 +12,8 @@
     "fe:build": "npm --prefix frontend run build",
     "fe:typecheck": "npm --prefix frontend run typecheck",
     "check": "npm run be:check && npm run fe:typecheck && npm run fe:build",
-    "db": "docker compose -f backend/docker-compose.yml up -d mysql"
+    "db": "docker compose up -d mysql",
+    "up": "docker compose up --build",
+    "down": "docker compose down"
   }
 }
