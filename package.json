@@ -1,0 +1,17 @@
+{
+  "name": "shougong-monorepo",
+  "private": true,
+  "description": "Task runner for the shougong monorepo (backend/ + frontend/). Not a real Node package — just scripts. Use `just`/`make` equivalents if you install them.",
+  "scripts": {
+    "setup": "npm --prefix frontend install && npm run be:sync",
+    "be:sync": "cd backend && uv sync",
+    "be:run": "cd backend && uv run poe run",
+    "be:check": "cd backend && uv run poe check",
+    "be:test": "cd backend && uv run poe test",
+    "fe:dev": "npm --prefix frontend run dev",
+    "fe:build": "npm --prefix frontend run build",
+    "fe:typecheck": "npm --prefix frontend run typecheck",
+    "check": "npm run be:check && npm run fe:typecheck && npm run fe:build",
+    "db": "docker compose -f backend/docker-compose.yml up -d mysql"
+  }
+}

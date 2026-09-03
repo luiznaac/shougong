@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * Design tokens. Mixed WaniKani / HanziHero palette.
+ * SRS-stage colours follow WaniKani; type accent is HanziHero cerise.
+ * ------------------------------------------------------------------ */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-hanzi: "Noto Sans SC", "Noto Sans CJK SC", ui-sans-serif, sans-serif;
+
+  --color-accent-500: #e3116c; /* cerise — the "character" type colour */
+  --color-accent-600: #c50f5f;
+
+  /* pinyin tone colours — standard hue scheme, brightened so it also reads on
+     the coloured quiz bands */
+  --color-tone-1: #fb7185; /* ˉ  high    — rose   */
+  --color-tone-2: #34d399; /* ´  rising  — emerald */
+  --color-tone-3: #38bdf8; /* ˇ  low     — sky    */
+  --color-tone-4: #c084fc; /* `  falling — purple */
+  --color-tone-5: #94a3b8; /* neutral    — slate  */
+
+  /* SRS stage colours (WaniKani) */
+  --color-srs-apprentice: #dd0093;
+  --color-srs-guru: #882d9e;
+  --color-srs-master: #294ddb;
+  --color-srs-enlightened: #0093dd;
+  --color-srs-burned: #434343;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-slate-950 text-slate-200 font-sans antialiased;
+  }
+  :lang(zh) {
+    font-family: var(--font-hanzi);
+  }
+}
+
+/* tone-coloured pinyin syllables */
+.tone-1 { color: var(--color-tone-1); }
+.tone-2 { color: var(--color-tone-2); }
+.tone-3 { color: var(--color-tone-3); }
+.tone-4 { color: var(--color-tone-4); }
+.tone-5 { color: var(--color-tone-5); }
