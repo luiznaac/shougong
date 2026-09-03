@@ -38,6 +38,13 @@ export function useItemHistory(id: number) {
   });
 }
 
+export function useLearningToReviewHistory() {
+  return useQuery({
+    queryKey: ["study-items", "learning-to-review"],
+    queryFn: () => api.listLearningToReviewHistory(),
+  });
+}
+
 export function useDictionarySearch(q: string) {
   return useQuery({
     queryKey: keys.dictionary(q),

@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useStudyItems } from "../api/queries.ts";
+import { useLearningToReviewHistory, useStudyItems } from "../api/queries.ts";
 import { tallyGroups } from "../lib/srs.ts";
 import { SrsDistribution } from "../components/SrsDistribution.tsx";
 import { UpcomingReviews } from "../components/UpcomingReviews.tsx";
-import { ItemsAddedChart } from "../components/ItemsAddedChart.tsx";
+import { ItemsLearnedChart } from "../components/ItemsLearnedChart.tsx";
 import { ProgressTiles } from "../components/ProgressTiles.tsx";
 
 export function Dashboard() {
   const { data: items, isLoading, error } = useStudyItems();
   const { data: dueItems } = useStudyItems({ due: true });
+  const { data: learnedHistory } = useLearningToReviewHistory();
 
   if (isLoading) return <p className="text-slate-400">Carregando…</p>;
   if (error) return <p className="text-rose-400">Falha ao carregar: {String(error)}</p>;
@@ -50,8 +51,8 @@ export function Dashboard() {
         <Panel title="Upcoming Reviews">
           <UpcomingReviews items={items} />
         </Panel>
-        <Panel title="Itens adicionados">
-          <ItemsAddedChart items={items} />
+        <Panel title="Itens aprendidos">
+          <ItemsLearnedChart history={learnedHistory ?? []} />
         </Panel>
       </div>
 

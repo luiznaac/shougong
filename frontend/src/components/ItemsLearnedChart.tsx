@@ -1,17 +1,18 @@
 import { useMemo } from "react";
-import type { StudyItem } from "../api/types.ts";
+import type { StudyItemHistory } from "../api/types.ts";
 
 /**
- * Cumulative count of study items added over time, from `created_at`.
- * (The backend records when an item was enqueued, not when it was "learned".)
+ * Cumulative count of items that reached `review` state over time, aggregated by
+ * the `created_at` of their learning→review transition
+ * (GET /study-items/history/learning-to-review).
  */
-export function ItemsAddedChart({ items }: { items: StudyItem[] }) {
+export function ItemsLearnedChart({ history }: { history: StudyItemHistory[] }) {
   const { points, total, firstLabel, lastLabel } = useMemo(() => {
-    if (items.length === 0)
+    if (history.length === 0)
       return { points: "", total: 0, firstLabel: "", lastLabel: "" };
 
-    const dates = items
-      .map((i) => new Date(i.created_at).getTime())
+    const dates = history
+      .map((h) => new Date(h.created_at).getTime())
       .sort((a, b) => a - b);
     const start = startOfDay(dates[0]);
     const end = startOfDay(Date.now());
@@ -37,15 +38,15 @@ export function ItemsAddedChart({ items }: { items: StudyItem[] }) {
       firstLabel: new Date(start).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
       lastLabel: new Date(end).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
     };
-  }, [items]);
+  }, [history]);
 
-  if (items.length === 0)
-    return <p className="text-sm text-slate-500">Nenhum item ainda.</p>;
+  if (history.length === 0)
+    return <p className="text-sm text-slate-500">Nenhum item aprendido ainda.</p>;
 
   return (
     <div>
       <div className="mb-2 text-sm text-slate-300">
-        <span className="font-semibold tabular-nums text-slate-100">{total}</span> itens no total
+        <span className="font-semibold tabular-nums text-slate-100">{total}</span> itens aprendidos
       </div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-32 w-full">
         <polygon

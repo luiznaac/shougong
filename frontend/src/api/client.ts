@@ -87,4 +87,16 @@ export const api = {
   listHistory(id: number, limit = 200): Promise<StudyItemHistory[]> {
     return request(`/study-items/${id}/history?limit=${limit}`);
   },
+  /** Every item's learning→review transition row, paged through in full. */
+  async listLearningToReviewHistory(): Promise<StudyItemHistory[]> {
+    const all: StudyItemHistory[] = [];
+    for (let offset = 0; ; offset += 200) {
+      const page = await request<StudyItemHistory[]>(
+        `/study-items/history/learning-to-review?limit=200&offset=${offset}`,
+      );
+      all.push(...page);
+      if (page.length < 200) break;
+    }
+    return all;
+  },
 };

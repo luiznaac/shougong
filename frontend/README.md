@@ -74,7 +74,10 @@ pulado com um aviso.
   Novice I/II (1d, 4d), Apprentice I/II (1sem, 2sem), Journeyman I/II (1mês, 2meses),
   Expert I/II/III (4, 8, 12 meses), Master (>1 ano). O gráfico do painel agrupa em
   Novice/Apprentice/Journeyman/Expert/Master.
-- `GET /study-items/{id}/history` — snapshots do card FSRS por review (novo no backend);
-  a página do item mostra a trajetória de nível a partir daí.
+- `GET /study-items/{id}/history` — snapshots do item por mudança de estado; a página do
+  item plota estabilidade + dificuldade ao longo do tempo.
+- `GET /study-items/history/learning-to-review` — a transição learning→review de cada item
+  (paginado, `limit`/`offset`); o painel agrega por `created_at` num gráfico cumulativo de
+  "Itens aprendidos". `src/api/client.ts` pagina isso em `listLearningToReviewHistory()`.
 - Mnemônicos, decomposição em componentes e níveis **não existem** no backend
   ainda — ficam para uma fase futura (nova tabela + campos).
