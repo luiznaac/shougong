@@ -45,10 +45,10 @@ export function useLearningToReviewHistory() {
   });
 }
 
-export function useDictionarySearch(q: string) {
+export function useDictionarySearch(q: string, limit = 20) {
   return useQuery({
-    queryKey: keys.dictionary(q),
-    queryFn: () => api.searchDictionary(q),
+    queryKey: ["dictionary", q, limit],
+    queryFn: () => api.searchDictionary(q, limit),
     enabled: q.trim().length > 0,
   });
 }

@@ -43,7 +43,7 @@ Para buildar na raiz (`/`) em vez de `/shougong/`: `VITE_BASE=/ npm run build`.
 | `/`           | Painel estilo HanziHero: 2 botões, SRS distribution, upcoming reviews, tiles |
 | `/lesson`     | Quiz de lição (tela cheia) — itens em `learning`                        |
 | `/review`     | Quiz de review (tela cheia) — itens em `review` que estão _due_         |
-| `/items/:id`  | Página do item: hanzi, pinyin, FSRS, gráfico de trajetória              |
+| `/items/:id`  | Página do item: FSRS, gráfico de trajetória, itens relacionados          |
 | `/add`        | Busca no dicionário e adiciona itens à fila                             |
 
 Os dois botões do painel: **esquerdo (azul)** = nº de itens em `learning` → `/lesson`;
@@ -84,6 +84,9 @@ pulado com um aviso.
   `/lesson` (fases, flip, seleção de nota, Próximo/Rollback, atalhos).
 - `src/components/Hanzi.tsx` — renderiza hanzi numa linha só, encolhendo a fonte
   para palavras com vários caracteres (usado fora do quiz — tiles, header, busca).
+- `src/components/RelatedEntries.tsx` — "Itens relacionados" na página do item:
+  `GET /dictionary-entries?q=<hanzi>` (palavras que contêm o caractere), menos o
+  próprio; os que já estão em estudo linkam para a página, o resto tem "Adicionar".
 - `src/lib/pinyin.ts` — converte pinyin numerado (`zhi1 dao4`) para acentuado e
   expõe o tom de cada sílaba; `<Pinyin>` colore por tom (paleta em `index.css`,
   `--color-tone-*`), ou `coloured={false}` para texto liso.
