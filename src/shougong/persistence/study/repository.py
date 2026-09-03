@@ -12,12 +12,13 @@ from shougong.persistence.configuration.transaction import (
 )
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
 from shougong.persistence.dictionary.repository import to_domain as _entry_to_domain
-from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity, StudyItemHistoryEntity
+from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import StudyItem, StudyItemHistory
+from shougong.usecase.study.model import StudyItem
+from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
 
 
 def _naive_utc(value: datetime) -> datetime:
@@ -30,7 +31,7 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
-def _card_of(row: StudyItemEntity | StudyItemHistoryEntity) -> SrsCard:
+def _card_of(row: StudyItemEntity) -> SrsCard:
     return SrsCard(
         state=SrsState(row.card_state),
         stability=row.card_stability,
@@ -49,31 +50,14 @@ def _to_domain(row: StudyItemEntity, entry: DictionaryEntryEntity) -> StudyItem:
     )
 
 
-def _history_to_domain(row: StudyItemHistoryEntity, entry: DictionaryEntryEntity) -> StudyItemHistory:
-    return StudyItemHistory(
-        study_item_id=row.study_item_id,
-        entry=_entry_to_domain(entry),
-        card=_card_of(row),
-        created_at=_as_utc(row.created_at),  # type: ignore[arg-type]  # column is NOT NULL
-    )
-
-
-def _history_of(row: StudyItemEntity, created_at: datetime) -> StudyItemHistoryEntity:
-    return StudyItemHistoryEntity(
-        study_item_id=row.id,
-        created_at=_naive_utc(created_at),
-        entry_id=row.entry_id,
-        card_state=row.card_state,
-        card_stability=row.card_stability,
-        card_difficulty=row.card_difficulty,
-        card_due=row.card_due,
-        card_last_review=row.card_last_review,
-    )
-
-
 class StudyItemRepository(IStudyItemRepository):
-    def __init__(self, transaction_template: SqlAlchemyTransactionTemplate) -> None:
+    def __init__(
+        self,
+        transaction_template: SqlAlchemyTransactionTemplate,
+        history_repository: IStudyItemHistoryRepository,
+    ) -> None:
         self._tx = transaction_template
+        self._history = history_repository
 
     async def create(self, entry: DictionaryEntry, card: SrsCard, created_at: datetime) -> StudyItem:
         async def _run() -> StudyItem:
@@ -89,9 +73,9 @@ class StudyItemRepository(IStudyItemRepository):
             )
             session.add(row)
             await session.flush()
-            session.add(_history_of(row, created_at))
-            await session.flush()
-            return StudyItem(id=row.id, entry=entry, card=card, created_at=created_at)
+            item = StudyItem(id=row.id, entry=entry, card=card, created_at=created_at)
+            await self._history.record(item, created_at)
+            return item
 
         return await self._tx.execute(_run)
 
@@ -128,11 +112,11 @@ class StudyItemRepository(IStudyItemRepository):
             row.card_due = _naive_utc(card.due)
             row.card_last_review = _naive_utc(card.last_review) if card.last_review else None
             await session.flush()
-            session.add(_history_of(row, changed_at))
-            await session.flush()
             entry = await session.get(DictionaryEntryEntity, row.entry_id)
             assert entry is not None  # entry_id is a NOT NULL foreign key
-            return _to_domain(row, entry)
+            updated = _to_domain(row, entry)
+            await self._history.record(updated, changed_at)
+            return updated
 
         return await self._tx.execute(_run)
 
@@ -165,22 +149,6 @@ class StudyItemRepository(IStudyItemRepository):
                 SrsReviewLog(rating=SrsRating(row.rating), review_datetime=_as_utc(row.review_datetime))  # type: ignore[arg-type]  # column is NOT NULL
                 for row in rows
             ]
-
-        return await self._tx.execute(_run)
-
-    async def list_history(self, item_id: int, *, limit: int, offset: int) -> list[StudyItemHistory]:
-        async def _run() -> list[StudyItemHistory]:
-            session = current_session()
-            stmt = (
-                select(StudyItemHistoryEntity, DictionaryEntryEntity)
-                .join(DictionaryEntryEntity, StudyItemHistoryEntity.entry_id == DictionaryEntryEntity.id)
-                .where(StudyItemHistoryEntity.study_item_id == item_id)
-                .order_by(StudyItemHistoryEntity.created_at.desc(), StudyItemHistoryEntity.id.desc())
-                .limit(limit)
-                .offset(offset)
-            )
-            rows = (await session.execute(stmt)).all()
-            return [_history_to_domain(history, entry) for history, entry in rows]
 
         return await self._tx.execute(_run)
 

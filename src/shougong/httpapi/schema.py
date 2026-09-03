@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
-from shougong.usecase.study.model import ReviewResult, StudyItem, StudyItemHistory
+from shougong.usecase.study.model import ReviewResult, StudyItem
+from shougong.usecase.study_item_history.model import StudyItemHistory
 
 
 class HealthCheckResponse(BaseModel):

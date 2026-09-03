@@ -90,48 +90,6 @@ async def test_review_item_reschedules_the_card_and_logs_the_grade() -> None:
     assert result.log.rating is SrsRating.GOOD
 
 
-async def test_add_item_writes_a_creation_history_row() -> None:
-    service = _service()
-
-    item = await service.add_item(1)
-
-    (row,) = await service.item_history(item.id)
-    assert row.study_item_id == item.id
-    assert row.entry == item.entry
-    assert row.card == item.card
-    assert row.created_at == _NOW  # when the history row was written
-
-
-async def test_review_item_appends_a_history_row_for_the_updated_item() -> None:
-    service = _service()
-    item = await service.add_item(1)
-
-    result = await service.review_item(item.id, SrsRating.GOOD)
-
-    after_review, creation = await service.item_history(item.id)  # newest first
-    assert creation.card == item.card
-    assert after_review.card == result.item.card  # the state the review produced
-    assert after_review.created_at == _NOW  # the review time
-
-
-async def test_item_history_lists_rows_newest_first() -> None:
-    service = _service()
-    item = await service.add_item(1)
-    result = await service.review_item(item.id, SrsRating.GOOD)
-
-    history = await service.item_history(item.id)
-
-    assert [row.card for row in history] == [result.item.card, item.card]
-    assert {row.study_item_id for row in history} == {item.id}
-
-
-async def test_item_history_unknown_raises_not_found() -> None:
-    service = _service(study=FakeStudyItemRepository())
-
-    with pytest.raises(ResourceNotFoundError):
-        await service.item_history(999)
-
-
 async def test_review_item_unknown_raises_not_found() -> None:
     service = _service(study=FakeStudyItemRepository())
 
@@ -148,7 +106,7 @@ async def test_review_item_not_yet_due_is_rejected() -> None:
         await service.review_item(1, SrsRating.GOOD)
 
     assert study.review_logs == {}  # nothing was written
-    assert study.history == {}  # no history row either
+    assert study.history.rows == []  # no history row either
     assert study.items[0].card.due == _NOW.replace(year=2027)  # card untouched
 
 

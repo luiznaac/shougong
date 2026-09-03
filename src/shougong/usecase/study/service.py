@@ -10,7 +10,7 @@ from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsRating, SrsReviewLog
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import ReviewResult, StudyItem, StudyItemHistory
+from shougong.usecase.study.model import ReviewResult, StudyItem
 
 _log = get_logger(__name__)
 
@@ -75,15 +75,5 @@ class StudyService:
             if await self._study.get(item_id) is None:
                 raise ResourceNotFoundError("study_item", str(item_id))
             return await self._study.list_reviews(item_id, limit=limit, offset=offset)
-
-        return await self._tx.execute(_run)
-
-    async def item_history(self, item_id: int, *, limit: int = 50, offset: int = 0) -> list[StudyItemHistory]:
-        """The item's history, newest first — one row per change, starting at creation."""
-
-        async def _run() -> list[StudyItemHistory]:
-            if await self._study.get(item_id) is None:
-                raise ResourceNotFoundError("study_item", str(item_id))
-            return await self._study.list_history(item_id, limit=limit, offset=offset)
 
         return await self._tx.execute(_run)
