@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
 import { Pinyin } from "./Pinyin.tsx";
-import { Hanzi } from "./Hanzi.tsx";
 
 export const RATINGS: {
   key: SrsRating;
@@ -196,6 +195,9 @@ function QuizCard({
   disabled: boolean;
 }) {
   const hidden = phase === "prompt";
+  const chars = [...item.entry.simplified];
+  // Fit all cards within the column; one large card for a single character.
+  const sizePx = Math.min(224, Math.round((560 - (chars.length - 1) * 12) / chars.length));
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
@@ -211,26 +213,10 @@ function QuizCard({
         ))}
       </ul>
 
-      <div className="[perspective:1200px]">
-        <div
-          className={`relative h-56 w-56 transition-transform duration-500 [transform-style:preserve-3d] [will-change:transform] motion-reduce:transition-none ${
-            hidden ? "[transform:rotateY(180deg)]" : "[transform:rotateY(0deg)]"
-          }`}
-        >
-          <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-accent-500/40 bg-slate-900 [backface-visibility:hidden]">
-            <Hanzi
-              text={item.entry.simplified}
-              singleCharPx={112}
-              boxPx={224}
-              className="text-slate-50"
-            />
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-dashed border-white/15 [backface-visibility:hidden] [transform:rotateY(180deg)]">
-            <span className="font-hanzi text-8xl text-slate-700 select-none" aria-hidden>
-              ?
-            </span>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        {chars.map((ch, i) => (
+          <FlipCard key={i} char={ch} hidden={hidden} sizePx={sizePx} />
+        ))}
       </div>
 
       <div className="flex min-h-[6rem] flex-col items-center justify-start gap-3">
@@ -268,6 +254,50 @@ function QuizCard({
       >
         ver página do item
       </Link>
+    </div>
+  );
+}
+
+/**
+ * One flip card holding a single character. The whole set flips together (same
+ * `hidden`); each shows its character on the front and a dashed "?" on the back.
+ */
+function FlipCard({
+  char,
+  hidden,
+  sizePx,
+}: {
+  char: string;
+  hidden: boolean;
+  sizePx: number;
+}) {
+  return (
+    <div style={{ perspective: "1200px" }}>
+      <div
+        style={{ width: sizePx, height: sizePx }}
+        className={`relative transition-transform duration-500 [transform-style:preserve-3d] [will-change:transform] motion-reduce:transition-none ${
+          hidden ? "[transform:rotateY(180deg)]" : "[transform:rotateY(0deg)]"
+        }`}
+      >
+        <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-accent-500/40 bg-slate-900 [backface-visibility:hidden]">
+          <span
+            lang="zh-Hans"
+            className="font-hanzi leading-none text-slate-50"
+            style={{ fontSize: sizePx * 0.62 }}
+          >
+            {char}
+          </span>
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-dashed border-white/15 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+          <span
+            aria-hidden
+            className="font-hanzi leading-none text-slate-700 select-none"
+            style={{ fontSize: sizePx * 0.55 }}
+          >
+            ?
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
