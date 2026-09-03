@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
@@ -10,18 +10,31 @@ export const RATINGS: {
   hotkey: string;
   className: string;
 }[] = [
-  { key: "again", label: "Errei", hotkey: "1", className: "bg-rose-600 hover:bg-rose-500" },
-  { key: "hard", label: "Difícil", hotkey: "2", className: "bg-amber-600 hover:bg-amber-500" },
-  { key: "good", label: "Bom", hotkey: "3", className: "bg-emerald-600 hover:bg-emerald-500" },
-  { key: "easy", label: "Fácil", hotkey: "4", className: "bg-sky-600 hover:bg-sky-500" },
+  { key: "again", label: "Errei", hotkey: "1", className: "bg-rose-600" },
+  { key: "hard", label: "Difícil", hotkey: "2", className: "bg-amber-600" },
+  { key: "good", label: "Bom", hotkey: "3", className: "bg-emerald-600" },
+  { key: "easy", label: "Fácil", hotkey: "4", className: "bg-sky-600" },
 ];
 
 type Phase = "info" | "prompt" | "revealed";
 
+const QUESTION_LABEL: Record<Phase, string> = {
+  info: "Estude o item",
+  prompt: "Escreva o caractere à mão",
+  revealed: "Você acertou a escrita?",
+};
+
+const NEXT_LABEL: Record<Phase, string> = {
+  info: "Continuar",
+  prompt: "Revelar",
+  revealed: "Próximo",
+};
+
 /**
- * Full-screen quiz runner shared by Review and Lesson.
- * - review mode: prompt (pinyin + meanings, hanzi hidden) → reveal → self-grade
- * - lesson mode: an extra "info" step first, showing the full item to learn
+ * Full-screen quiz runner shared by Review and Lesson, HanziHero-styled:
+ * a coloured subject band (pinyin + flip cards + meaning), a question band,
+ * then a bottom toolbar. Nothing is submitted until "Próximo" confirms; the
+ * selected grade can be undone with "Rollback".
  */
 export function Quiz({
   items,
@@ -36,6 +49,7 @@ export function Quiz({
 
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<Phase>(mode === "lesson" ? "info" : "prompt");
+  const [selected, setSelected] = useState<SrsRating | null>(null);
   const [done, setDone] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [skipped, setSkipped] = useState(0);
@@ -47,65 +61,85 @@ export function Quiz({
   const accuracy = done > 0 ? Math.round((correct / done) * 100) : 100;
   const finished = idx >= items.length;
 
+  const bandClass =
+    mode === "lesson"
+      ? "from-violet-600 to-violet-800"
+      : "from-rose-500 to-accent-600";
+
   const advance = useCallback(() => {
+    setSelected(null);
     setPhase(mode === "lesson" ? "info" : "prompt");
     setIdx((i) => i + 1);
   }, [mode]);
 
-  const grade = useCallback(
-    async (rating: SrsRating) => {
-      if (!current || submitting) return;
-      setSubmitting(true);
-      try {
-        await api.reviewStudyItem(current.id, rating);
-        setDone((n) => n + 1);
-        if (rating !== "again") setCorrect((n) => n + 1);
-        advance();
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 409) {
-          setToast("Item não estava disponível — pulado.");
-          setSkipped((n) => n + 1);
-          advance();
-        } else {
-          setToast(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
-        }
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [current, submitting, advance],
-  );
+  // Forward: info → prompt → revealed → (submit + next). On `revealed` it only
+  // fires once a grade is selected, so it doubles as the answer confirmation.
+  const goNext = useCallback(async () => {
+    if (submitting || !current) return;
+    if (phase === "info") return setPhase("prompt");
+    if (phase === "prompt") return setPhase("revealed");
+    if (!selected) return;
 
-  const phaseRef = useRef(phase);
-  phaseRef.current = phase;
+    setSubmitting(true);
+    try {
+      await api.reviewStudyItem(current.id, selected);
+      setDone((n) => n + 1);
+      if (selected !== "again") setCorrect((n) => n + 1);
+      advance();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setToast("Item não estava disponível — pulado.");
+        setSkipped((n) => n + 1);
+        advance();
+      } else {
+        setToast(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }, [phase, selected, submitting, current, advance]);
+
+  // Backward: undo the selected grade, else step back a phase.
+  const rollback = useCallback(() => {
+    if (submitting) return;
+    if (phase === "revealed") {
+      if (selected) return setSelected(null);
+      return setPhase("prompt");
+    }
+    if (phase === "prompt" && mode === "lesson") return setPhase("info");
+  }, [phase, selected, submitting, mode]);
+
+  const canRollback =
+    phase === "revealed" || (phase === "prompt" && mode === "lesson");
+  const canGoNext = phase !== "revealed" || selected != null;
+
+  const stateRef = useRef({ phase, selected, canRollback });
+  stateRef.current = { phase, selected, canRollback };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      if (e.key === "Escape") {
-        navigate("/");
-        return;
+      if (e.key === "Escape") return navigate("/");
+
+      const { phase: p, canRollback: cr } = stateRef.current;
+      if ((e.key === "Backspace" || e.key === "z") && cr) {
+        e.preventDefault();
+        return rollback();
       }
-      if (phaseRef.current === "info") {
-        if (e.key === " " || e.key === "Enter") {
-          e.preventDefault();
-          setPhase("prompt");
-        }
-      } else if (phaseRef.current === "prompt") {
-        if (e.key === " " || e.key === "Enter") {
-          e.preventDefault();
-          setPhase("revealed");
-        }
-      } else {
+      if (p === "revealed") {
         const hit = RATINGS.find((r) => r.hotkey === e.key);
         if (hit) {
           e.preventDefault();
-          void grade(hit.key);
+          return setSelected(hit.key);
         }
+      }
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        void goNext();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [grade, navigate]);
+  }, [goNext, rollback, navigate]);
 
   useEffect(() => {
     if (!toast) return;
@@ -113,147 +147,143 @@ export function Quiz({
     return () => clearTimeout(t);
   }, [toast]);
 
-  return (
-    <div className="flex min-h-screen flex-col bg-slate-950">
-      <div className="flex items-center gap-4 border-b border-white/10 bg-slate-900/60 px-4 py-2 text-sm">
-        <button
-          onClick={() => navigate("/")}
-          className="text-slate-400 hover:text-slate-200"
-          title="Sair (Esc)"
-        >
-          ← Sair
-        </button>
-        <span className="text-slate-500">{mode === "lesson" ? "Lição" : "Review"}</span>
-        <div className="ml-auto flex items-center gap-4 tabular-nums text-slate-300">
-          <span title="Concluídos">✓ {done}</span>
-          <span title="Restantes">☰ {Math.max(0, remaining)}</span>
-          {mode === "review" && <span title="Acertos">👍 {accuracy}%</span>}
-        </div>
+  const topBar = (
+    <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-4 py-2.5 text-sm text-white/90">
+      <button onClick={() => navigate("/")} className="hover:text-white" title="Sair (Esc)">
+        ← Sair
+      </button>
+      <span className="text-xs uppercase tracking-widest text-white/60">
+        {mode === "lesson" ? "Lição" : "Review"}
+      </span>
+      <div className="ml-auto flex items-center gap-4 tabular-nums">
+        <span title="Concluídos">✓ {done}</span>
+        <span title="Restantes">☰ {Math.max(0, remaining)}</span>
+        {mode === "review" && <span title="Acertos">👍 {accuracy}%</span>}
       </div>
-
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-10">
-        {items.length === 0 ? (
-          <Empty message={emptyMessage} />
-        ) : finished ? (
-          <Summary
-            mode={mode}
-            done={done}
-            correct={correct}
-            skipped={skipped}
-            accuracy={accuracy}
-          />
-        ) : (
-          current && (
-            <div key={current.id} className="w-full max-w-xl">
-              <QuizCard
-                item={current}
-                phase={phase}
-                onContinue={() => setPhase("prompt")}
-                onReveal={() => setPhase("revealed")}
-                onGrade={grade}
-                disabled={submitting}
-              />
-            </div>
-          )
-        )}
-      </div>
-
-      {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-slate-800 px-4 py-2 text-sm text-slate-100 shadow-lg">
-          {toast}
-        </div>
-      )}
     </div>
   );
-}
 
-const PHASE_LABEL: Record<Phase, string> = {
-  info: "Item novo",
-  prompt: "Escreva à mão",
-  revealed: "Você acertou a escrita?",
-};
+  if (items.length === 0 || finished || !current) {
+    return (
+      <div className={`relative flex min-h-screen flex-col bg-gradient-to-b ${bandClass}`}>
+        {topBar}
+        <div className="flex flex-1 items-center justify-center px-4">
+          {items.length === 0 ? (
+            <Empty message={emptyMessage} />
+          ) : (
+            <Summary
+              mode={mode}
+              done={done}
+              correct={correct}
+              skipped={skipped}
+              accuracy={accuracy}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
-/**
- * One card layout across all phases — the label, pinyin and meanings hold their
- * place; only the centre panel flips. It shows the hanzi at `info` and
- * `revealed`, and flips over to a dashed "?" for `prompt`, so both the
- * lesson→quiz hide and the quiz reveal read as the same card turning.
- */
-function QuizCard({
-  item,
-  phase,
-  onContinue,
-  onReveal,
-  onGrade,
-  disabled,
-}: {
-  item: StudyItem;
-  phase: Phase;
-  onContinue: () => void;
-  onReveal: () => void;
-  onGrade: (r: SrsRating) => void;
-  disabled: boolean;
-}) {
-  const hidden = phase === "prompt";
-  const chars = [...item.entry.simplified];
-  // Fit all cards within the column; one large card for a single character.
-  const sizePx = Math.min(224, Math.round((560 - (chars.length - 1) * 12) / chars.length));
+  const chars = [...current.entry.simplified];
+  const sizePx = Math.min(180, Math.round((520 - (chars.length - 1) * 12) / chars.length));
 
   return (
-    <div className="flex flex-col items-center gap-6 text-center">
-      <p className="h-4 text-xs font-medium uppercase tracking-widest text-slate-500">
-        {PHASE_LABEL[phase]}
-      </p>
+    <div className="flex min-h-screen flex-col bg-slate-950">
+      {/* subject band */}
+      <section
+        className={`relative flex flex-col items-center justify-center gap-5 bg-gradient-to-b ${bandClass} px-4 pb-8 pt-14`}
+      >
+        {topBar}
 
-      <Pinyin value={item.entry.pinyin} className="text-4xl font-light sm:text-5xl" />
+        <Pinyin
+          value={current.entry.pinyin}
+          coloured={false}
+          className="text-2xl font-light text-white/90 sm:text-3xl"
+        />
 
-      <ul className="space-y-1 text-lg text-slate-300">
-        {item.entry.definitions.slice(0, 5).map((d, i) => (
-          <li key={i}>{d}</li>
-        ))}
-      </ul>
+        <div key={current.id} className="flex flex-wrap items-center justify-center gap-3">
+          {chars.map((ch, i) => (
+            <FlipCard key={i} char={ch} hidden={phase === "prompt"} sizePx={sizePx} />
+          ))}
+        </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        {chars.map((ch, i) => (
-          <FlipCard key={i} char={ch} hidden={hidden} sizePx={sizePx} />
-        ))}
-      </div>
+        <p className="max-w-lg text-lg font-semibold text-white drop-shadow sm:text-xl">
+          {current.entry.definitions.slice(0, 3).join(" · ")}
+        </p>
+      </section>
 
-      <div className="flex min-h-[6rem] flex-col items-center justify-start gap-3">
-        {phase === "info" ? (
-          <>
-            <p className="text-sm text-slate-500">
-              Memorize o traçado — a seguir você escreve de memória.
-            </p>
-            <ActionButton onClick={onContinue}>Continuar</ActionButton>
-          </>
-        ) : phase === "prompt" ? (
-          <ActionButton onClick={onReveal}>Revelar</ActionButton>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {RATINGS.map((r) => (
-              <button
-                key={r.key}
-                disabled={disabled}
-                onClick={() => onGrade(r.key)}
-                className={`rounded-lg px-5 py-3 font-semibold text-white transition-colors disabled:opacity-50 ${r.className}`}
-              >
-                {r.label}
-                <kbd className="ml-2 rounded bg-black/20 px-1.5 text-xs">{r.hotkey}</kbd>
-              </button>
-            ))}
+      {/* question band */}
+      <section className="flex items-center justify-center gap-2 bg-slate-800 px-4 py-4 text-center text-lg font-medium text-slate-100 sm:text-2xl">
+        <span aria-hidden>{phase === "revealed" ? "✅" : "✍️"}</span>
+        <span>{QUESTION_LABEL[phase]}</span>
+      </section>
+
+      {/* grade selection */}
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-8">
+        {phase === "info" && (
+          <p className="text-center text-sm text-slate-400">
+            Memorize o traçado — a seguir você escreve de memória.
+          </p>
+        )}
+        {phase === "revealed" && (
+          <div className="grid w-full max-w-lg grid-cols-2 gap-3 sm:grid-cols-4">
+            {RATINGS.map((r) => {
+              const isOn = selected === r.key;
+              const dim = selected != null && !isOn;
+              return (
+                <button
+                  key={r.key}
+                  onClick={() => setSelected(r.key)}
+                  className={`rounded-lg px-4 py-3 font-semibold transition ${
+                    dim
+                      ? "bg-slate-800 text-slate-500"
+                      : `${r.className} text-white`
+                  } ${isOn ? "ring-2 ring-white ring-offset-2 ring-offset-slate-950" : ""}`}
+                >
+                  {r.label}
+                  <kbd className="ml-2 rounded bg-black/25 px-1.5 text-xs">{r.hotkey}</kbd>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
 
-      <Link
-        to={`/items/${item.id}`}
-        className={`text-xs text-slate-500 hover:text-slate-300 ${
-          phase === "revealed" ? "" : "invisible"
-        }`}
-      >
-        ver página do item
-      </Link>
+      {/* toolbar */}
+      <div className="flex items-center gap-3 border-t border-white/10 bg-slate-900/70 px-4 py-3">
+        <button
+          onClick={rollback}
+          disabled={!canRollback || submitting}
+          className="rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-30"
+          title="Desfazer (Backspace)"
+        >
+          ↩ Rollback
+        </button>
+
+        {phase === "revealed" && (
+          <Link
+            to={`/items/${current.id}`}
+            className="text-xs text-slate-500 hover:text-slate-300"
+          >
+            ver página do item
+          </Link>
+        )}
+
+        <button
+          onClick={() => void goNext()}
+          disabled={!canGoNext || submitting}
+          className="ml-auto rounded-md bg-accent-500 px-6 py-2 font-semibold text-white transition hover:bg-accent-600 disabled:opacity-40"
+          title="Confirmar (Enter)"
+        >
+          {NEXT_LABEL[phase]} →
+        </button>
+      </div>
+
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 rounded-md bg-slate-800 px-4 py-2 text-sm text-slate-100 shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -279,19 +309,19 @@ function FlipCard({
           hidden ? "[transform:rotateY(180deg)]" : "[transform:rotateY(0deg)]"
         }`}
       >
-        <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-accent-500/40 bg-slate-900 [backface-visibility:hidden]">
+        <div className="absolute inset-0 flex items-center justify-center rounded-2xl border border-white/25 bg-white/10 backdrop-blur-sm [backface-visibility:hidden]">
           <span
             lang="zh-Hans"
-            className="font-hanzi leading-none text-slate-50"
+            className="font-hanzi leading-none text-white"
             style={{ fontSize: sizePx * 0.62 }}
           >
             {char}
           </span>
         </div>
-        <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-dashed border-white/15 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-dashed border-white/40 [backface-visibility:hidden] [transform:rotateY(180deg)]">
           <span
             aria-hidden
-            className="font-hanzi leading-none text-slate-700 select-none"
+            className="font-hanzi leading-none text-white/50 select-none"
             style={{ fontSize: sizePx * 0.55 }}
           >
             ?
@@ -302,28 +332,11 @@ function FlipCard({
   );
 }
 
-function ActionButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-lg bg-slate-100 px-8 py-3 font-semibold text-slate-900 hover:bg-white"
-    >
-      {children} <kbd className="ml-2 rounded bg-slate-300 px-1.5 text-xs">espaço</kbd>
-    </button>
-  );
-}
-
 function Empty({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center gap-4 text-center">
-      <p className="text-lg text-slate-300">{message}</p>
-      <Link to="/" className="text-sm text-accent-500 hover:underline">
+      <p className="text-lg text-white">{message}</p>
+      <Link to="/" className="text-sm text-white/80 underline hover:text-white">
         Voltar ao painel
       </Link>
     </div>
@@ -344,11 +357,11 @@ function Summary({
   accuracy: number;
 }) {
   return (
-    <div className="flex flex-col items-center gap-6 text-center">
-      <h1 className="text-2xl font-bold text-slate-100">
+    <div className="flex flex-col items-center gap-6 text-center text-white">
+      <h1 className="text-2xl font-bold">
         {mode === "lesson" ? "Lição concluída 🎉" : "Sessão concluída 🎉"}
       </h1>
-      <div className="flex gap-8 text-slate-300">
+      <div className="flex gap-8">
         <Metric label={mode === "lesson" ? "Aprendidos" : "Revisados"} value={done} />
         {mode === "review" && <Metric label="Acertos" value={correct} />}
         {mode === "review" && <Metric label="Precisão" value={`${accuracy}%`} />}
@@ -356,7 +369,7 @@ function Summary({
       </div>
       <Link
         to="/"
-        className="rounded-lg bg-accent-500 px-6 py-2.5 font-semibold text-white hover:bg-accent-600"
+        className="rounded-lg bg-white px-6 py-2.5 font-semibold text-slate-900 hover:bg-white/90"
       >
         Voltar ao painel
       </Link>
@@ -367,8 +380,8 @@ function Summary({
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div>
-      <div className="text-3xl font-bold tabular-nums text-slate-100">{value}</div>
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-3xl font-bold tabular-nums">{value}</div>
+      <div className="text-xs uppercase tracking-wide opacity-70">{label}</div>
     </div>
   );
 }
