@@ -11,12 +11,13 @@
   --color-accent-500: #e3116c; /* cerise — the "character" type colour */
   --color-accent-600: #c50f5f;
 
-  /* pinyin tone colours (standard scheme) */
-  --color-tone-1: #e11d48; /* ˉ  high    — red    */
-  --color-tone-2: #16a34a; /* ´  rising  — green  */
-  --color-tone-3: #2563eb; /* ˇ  low     — blue   */
-  --color-tone-4: #9333ea; /* `  falling — purple */
-  --color-tone-5: #6b7280; /* neutral    — grey   */
+  /* pinyin tone colours — standard hue scheme, brightened so it also reads on
+     the coloured quiz bands */
+  --color-tone-1: #fb7185; /* ˉ  high    — rose   */
+  --color-tone-2: #34d399; /* ´  rising  — emerald */
+  --color-tone-3: #38bdf8; /* ˇ  low     — sky    */
+  --color-tone-4: #c084fc; /* `  falling — purple */
+  --color-tone-5: #94a3b8; /* neutral    — slate  */
 
   /* SRS stage colours (WaniKani) */
   --color-srs-apprentice: #dd0093;

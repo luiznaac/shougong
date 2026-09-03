@@ -195,11 +195,12 @@ export function Quiz({
       >
         {topBar}
 
-        <Pinyin
-          value={current.entry.pinyin}
-          coloured={false}
-          className="text-2xl font-light text-white/90 sm:text-3xl"
-        />
+        <div className="rounded-full bg-slate-950/40 px-5 py-1.5 backdrop-blur-sm">
+          <Pinyin
+            value={current.entry.pinyin}
+            className="text-2xl font-medium sm:text-3xl"
+          />
+        </div>
 
         <div key={current.id} className="flex flex-wrap items-center justify-center gap-3">
           {chars.map((ch, i) => (
