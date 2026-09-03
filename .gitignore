@@ -15,3 +15,13 @@ build/
 /.mcp.json
 /.claude/
 .idea
+
+# Node / frontend (frontend/ also has its own .gitignore)
+node_modules/
+dist-ssr/
+*.local
+.env.*.local
+.vite/
+*.tsbuildinfo
+.DS_Store
+*.log

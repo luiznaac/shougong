@@ -1,0 +1,24 @@
+# CLAUDE.md — shougong monorepo
+
+Two projects, one repo:
+
+- **`backend/`** — the FastAPI hexagonal service. All backend commands run from
+  `backend/` (`cd backend && uv run poe <task>`). Its architecture, conventions and
+  the rules for evolving it are in [backend/CLAUDE.md](backend/CLAUDE.md) — read that
+  before touching `backend/`.
+- **`frontend/`** — the React/Vite SPA. Commands run from `frontend/`
+  (`npm --prefix frontend run <script>`). Details in
+  [frontend/README.md](frontend/README.md).
+
+## The one cross-cutting rule
+
+`frontend/src/api/types.ts` is a hand-maintained mirror of
+`backend/src/shougong/httpapi/schema.py`. Any change to a response/request DTO on
+one side must update the other in the same commit.
+
+## Tooling
+
+Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:build`,
+`npm run check`, `npm run db`). It has no dependencies and is not a real package.
+`.pre-commit-config.yaml` lives at the root and scopes hooks by path (`^backend/`,
+`^frontend/`).
