@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from shougong.usecase.commons.exceptions import ConflictError, ResourceNotFoundError
 from shougong.usecase.commons.logging import get_logger
@@ -49,6 +50,16 @@ def _batch_outcome(
 
 def _describe(entry: DictionaryEntry) -> str:
     return f"#{entry.id} ({'; '.join(entry.definitions) or '—'})"
+
+
+@dataclass(frozen=True, slots=True)
+class _NeedsAChoice:
+    """A row that can't be auto-resolved but has candidates the caller can pick
+    from anyway — either several entries matched exactly, or none did but the
+    hanzi exists under other readings."""
+
+    detail: str
+    candidates: tuple[DictionaryEntry, ...]
 
 
 class StudyService:
@@ -99,16 +110,15 @@ class StudyService:
                 pinyin = raw.pinyin.strip()
                 resolved = await self._resolve_batch_row(hanzi, pinyin)
 
-                if isinstance(resolved, tuple):
-                    listed = ", ".join(_describe(entry) for entry in resolved)
+                if isinstance(resolved, _NeedsAChoice):
                     outcomes.append(
                         _batch_outcome(
                             index,
                             hanzi,
                             pinyin,
                             BatchRowStatus.ERROR,
-                            detail=f"múltiplas entradas do dicionário casam: {listed}",
-                            candidates=resolved,
+                            detail=resolved.detail,
+                            candidates=resolved.candidates,
                         )
                     )
                     continue
@@ -133,9 +143,11 @@ class StudyService:
 
         return await self._tx.execute(_run)
 
-    async def _resolve_batch_row(self, hanzi: str, pinyin: str) -> DictionaryEntry | str | tuple[DictionaryEntry, ...]:
-        """The dictionary entry for one CSV row; an error message explaining why not;
-        or, when more than one entry matches, the tuple of candidates to choose from.
+    async def _resolve_batch_row(self, hanzi: str, pinyin: str) -> DictionaryEntry | str | _NeedsAChoice:
+        """The dictionary entry for one CSV row; a plain error message when there's
+        nothing to offer; or, when the row can't be auto-resolved but the hanzi has
+        candidates in the dictionary (several exact matches, or none but other
+        readings exist), a `_NeedsAChoice` the caller can resolve by hand.
 
         Stored `dictionary_entry.pinyin` is sanitised on import (lower-cased, ü as
         `v` — see `sanitize_pinyin`), so the row's pinyin is sanitised the same way
@@ -148,14 +160,19 @@ class StudyService:
             return "pinyin fora do formato esperado (use tons numéricos, ex.: xue2 xi2)"
 
         candidates = await self._dictionary.find_by_simplified(hanzi)
+        if not candidates:
+            return "hanzi não encontrado no dicionário"
+
         matches = [entry for entry in candidates if entry.pinyin == sanitize_pinyin(pinyin)]
         if not matches:
-            if not candidates:
-                return "hanzi não encontrado no dicionário"
-            readings = ", ".join(sorted(entry.pinyin for entry in candidates))
-            return f"sem correspondência exata; leituras no dicionário: {readings}"
+            listed = ", ".join(_describe(entry) for entry in candidates)
+            return _NeedsAChoice(
+                detail=f"sem correspondência exata; outras leituras no dicionário: {listed}",
+                candidates=tuple(candidates),
+            )
         if len(matches) > 1:
-            return tuple(matches)
+            listed = ", ".join(_describe(entry) for entry in matches)
+            return _NeedsAChoice(detail=f"múltiplas entradas do dicionário casam: {listed}", candidates=tuple(matches))
         return matches[0]
 
     async def list_items(self, *, due_only: bool, limit: int = 50, offset: int = 0) -> list[StudyItem]:

@@ -262,7 +262,10 @@ function ResultsPanel({
               const outcome = outcomes[i];
               const status: DisplayStatus = outcome ? outcome.status : i === currentIndex ? "loading" : "pending";
               const style = STATUS_STYLE[status];
-              const ambiguous = status === "error" && (outcome?.candidates.length ?? 0) > 1;
+              // an "error" row that still carries candidates: either several
+              // entries matched exactly, or none did but the hanzi has other
+              // readings — offer them so the user can add one by hand anyway.
+              const hasCandidates = status === "error" && (outcome?.candidates.length ?? 0) > 0;
               return (
                 <tr key={i} className="border-t border-white/5 align-top">
                   <td className="py-1.5 pr-3 tabular-nums text-slate-500">{i + 1}</td>
@@ -279,8 +282,9 @@ function ResultsPanel({
                     </span>
                   </td>
                   <td className="py-1.5 text-slate-400">
-                    {ambiguous ? (
+                    {hasCandidates ? (
                       <CandidatePicker
+                        detail={outcome!.detail}
                         candidates={outcome!.candidates}
                         resolving={resolvingRow === i}
                         onPick={(entryId) => onPickCandidate(i, entryId)}
@@ -300,17 +304,22 @@ function ResultsPanel({
 }
 
 function CandidatePicker({
+  detail,
   candidates,
   resolving,
   onPick,
 }: {
+  detail: string | null | undefined;
   candidates: DictionaryEntry[];
   resolving: boolean;
   onPick: (entryId: number) => void;
 }) {
   return (
     <div className="space-y-1">
-      <p>Mais de uma entrada casa — escolha qual usar:</p>
+      {detail && <p>{detail}</p>}
+      <p className="text-xs text-slate-500">
+        {candidates.length > 1 ? "Escolha qual usar:" : "Adicionar assim mesmo?"}
+      </p>
       <div className="flex flex-wrap gap-1.5">
         {candidates.map((c) => (
           <button
@@ -319,7 +328,7 @@ function CandidatePicker({
             onClick={() => onPick(c.id)}
             className="inline-flex items-center gap-1 rounded border border-white/10 bg-slate-800 px-2 py-1 text-xs text-slate-200 transition-colors hover:border-accent-500 hover:text-accent-400 disabled:opacity-50"
           >
-            {resolving && <Spinner />}#{c.id} — {c.definitions.slice(0, 2).join("; ") || "sem definição"}
+            {resolving && <Spinner />}#{c.id} {c.pinyin} — {c.definitions.slice(0, 2).join("; ") || "sem definição"}
           </button>
         ))}
       </div>

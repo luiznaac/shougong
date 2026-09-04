@@ -116,6 +116,22 @@ async def test_batch_import_reports_candidates_for_an_ambiguous_row(
     assert picked.json()["entry"]["id"] == id_b
 
 
+async def test_batch_import_offers_other_readings_when_pinyin_does_not_match(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    entry_id = await _seed_entry(container, simplified="葡萄", pinyin="pu2 tao5", definitions=["grape"])
+
+    response = await client.post("/study-items/batch", json={"rows": [{"hanzi": "葡萄", "pinyin": "pu2 tao2"}]})
+
+    outcome = response.json()["outcomes"][0]
+    assert outcome["status"] == "error"
+    assert [c["id"] for c in outcome["candidates"]] == [entry_id]
+
+    # confirmed manually anyway, despite the pinyin mismatch
+    picked = await client.post("/study-items", json={"dictionary_entry_id": entry_id})
+    assert picked.status_code == 201
+
+
 async def test_batch_import_rejects_an_empty_row_list(container: Container, client: httpx.AsyncClient) -> None:
     response = await client.post("/study-items/batch", json={"rows": []})
 

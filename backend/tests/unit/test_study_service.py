@@ -193,7 +193,9 @@ async def test_import_batch_reports_unknown_hanzi_and_wrong_reading() -> None:
     )
 
     assert report.outcomes[0].detail == "hanzi não encontrado no dicionário"
-    assert "xue2 xi2" in (report.outcomes[1].detail or "")
+    assert report.outcomes[0].candidates == ()
+    assert "to study" in (report.outcomes[1].detail or "")
+    assert [c.id for c in report.outcomes[1].candidates] == [1]  # offered so it can be added manually anyway
 
 
 async def test_import_batch_reports_ambiguous_match_with_candidates() -> None:
