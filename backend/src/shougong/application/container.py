@@ -96,6 +96,7 @@ class Container:
             self._srs_engine,
             self.clock,
             self.transaction_template,
+            self._stroke_service,
         )
         self._study_item_history_service = StudyItemHistoryService(
             self._study_item_history_repository,

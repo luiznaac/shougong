@@ -1,18 +1,24 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from shougong.usecase.commons.exceptions import ConflictError, ResourceNotFoundError
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.srs.model import SrsRating, SrsReviewLog
+from shougong.usecase.strokes.service import StrokeService
 from shougong.usecase.study.model import BatchImportRow, BatchRowStatus
 from shougong.usecase.study.service import StudyService
 from tests.fixtures import (
     FakeDictionaryRepository,
+    FakeHanziStrokeSource,
+    FakeStrokeRepository,
     FakeStudyItemRepository,
     FakeTransactionTemplate,
     StubSrsEngine,
+    make_character_strokes,
     make_dictionary_entry,
     make_srs_card,
     make_study_item,
@@ -25,6 +31,7 @@ def _service(
     *,
     dictionary: FakeDictionaryRepository | None = None,
     study: FakeStudyItemRepository | None = None,
+    strokes: StrokeService | None = None,
 ) -> StudyService:
     return StudyService(
         study or FakeStudyItemRepository(),
@@ -32,6 +39,7 @@ def _service(
         StubSrsEngine(),
         FixedClock(_NOW),
         FakeTransactionTemplate(),
+        strokes or StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource()),
     )
 
 
@@ -59,6 +67,22 @@ async def test_add_item_rejects_a_duplicate() -> None:
 
     with pytest.raises(ConflictError):
         await service.add_item(1)
+
+
+async def test_add_item_warms_the_stroke_cache_for_each_character() -> None:
+    stroke_repository = FakeStrokeRepository()
+    stroke_source = FakeHanziStrokeSource({"学": make_character_strokes(character="学")})
+    entry = make_dictionary_entry(entry_id=1, simplified="学")
+    service = _service(
+        dictionary=FakeDictionaryRepository([entry]),
+        strokes=StrokeService(stroke_repository, stroke_source),
+    )
+
+    await service.add_item(1)
+    await asyncio.sleep(0)  # let the fire-and-forget warm-up task run
+
+    assert "学" in stroke_repository.rows
+    assert stroke_source.fetch_calls == 1
 
 
 async def test_list_items_due_only_filters_by_the_clock() -> None:
@@ -196,6 +220,28 @@ async def test_import_batch_reports_unknown_hanzi_and_wrong_reading() -> None:
     assert report.outcomes[0].candidates == ()
     assert "to study" in (report.outcomes[1].detail or "")
     assert [c.id for c in report.outcomes[1].candidates] == [1]  # offered so it can be added manually anyway
+
+
+async def test_import_batch_warms_the_stroke_cache_for_created_rows_only() -> None:
+    stroke_repository = FakeStrokeRepository()
+    stroke_source = FakeHanziStrokeSource({c: make_character_strokes(character=c) for c in "学习你好"})
+    service = _service(
+        dictionary=FakeDictionaryRepository([_XUE_XI, _NI_HAO]),
+        strokes=StrokeService(stroke_repository, stroke_source),
+    )
+
+    report = await service.import_batch(
+        [
+            BatchImportRow(hanzi="学习", pinyin="xue2 xi2"),
+            BatchImportRow(hanzi="没有", pinyin="mei2 you3"),  # unresolved — must not warm
+        ]
+    )
+
+    await asyncio.sleep(0)  # let the fire-and-forget warm-up tasks run
+
+    assert report.outcomes[0].status is BatchRowStatus.CREATED
+    assert report.outcomes[1].status is BatchRowStatus.ERROR
+    assert set(stroke_repository.rows) == {"学", "习"}
 
 
 async def test_import_batch_reports_ambiguous_match_with_candidates() -> None:
