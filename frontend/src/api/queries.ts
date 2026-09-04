@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client.ts";
-import type { SrsRating } from "./types.ts";
+import type { BatchImportRowRequest, SrsRating } from "./types.ts";
 
 export const keys = {
   studyItems: (due?: boolean) => ["study-items", { due: due ?? false }] as const,
@@ -57,6 +57,14 @@ export function useAddStudyItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dictionaryEntryId: number) => api.addStudyItem(dictionaryEntryId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["study-items"] }),
+  });
+}
+
+export function useBatchImportStudyItems() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rows: BatchImportRowRequest[]) => api.batchImportStudyItems(rows),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["study-items"] }),
   });
 }

@@ -61,6 +61,46 @@ async def test_add_unknown_entry_is_404(container: Container, client: httpx.Asyn
     assert response.status_code == 404
 
 
+async def test_batch_import_reports_each_row(container: Container, client: httpx.AsyncClient) -> None:
+    await _seed_entry(container, simplified="学习", pinyin="xue2 xi2")
+    await _seed_entry(container, simplified="你好", pinyin="ni3 hao3")
+    # same hanzi, two readings -> an exact-pinyin row for it is ambiguous
+    await _seed_entry(container, simplified="行", pinyin="xing2")
+    await _seed_entry(container, simplified="行", pinyin="hang2")
+
+    response = await client.post(
+        "/study-items/batch",
+        json={
+            "rows": [
+                {"hanzi": "学习", "pinyin": "xue2 xi2"},  # created
+                {"hanzi": "你好", "pinyin": "ni3 hao3"},  # created
+                {"hanzi": "学习", "pinyin": "xue2 xi2"},  # skipped (dup in file)
+                {"hanzi": "谢谢", "pinyin": "xie4 xie5"},  # error: unknown hanzi
+                {"hanzi": "学习", "pinyin": "xuexi"},  # error: bad pinyin format
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["created"], body["skipped"], body["errors"]) == (2, 1, 2)
+    assert [o["status"] for o in body["outcomes"]] == ["created", "created", "skipped", "error", "error"]
+    assert body["outcomes"][0]["study_item_id"] is not None
+
+    listed = await client.get("/study-items")
+    assert {row["entry"]["simplified"] for row in listed.json()} == {"学习", "你好"}
+
+    # re-uploading the same rows now skips everything that resolves
+    again = (await client.post("/study-items/batch", json={"rows": [{"hanzi": "学习", "pinyin": "xue2 xi2"}]})).json()
+    assert again["skipped"] == 1
+
+
+async def test_batch_import_rejects_an_empty_row_list(container: Container, client: httpx.AsyncClient) -> None:
+    response = await client.post("/study-items/batch", json={"rows": []})
+
+    assert response.status_code == 422
+
+
 async def test_reviewing_an_item_reschedules_it(container: Container, client: httpx.AsyncClient) -> None:
     entry_id = await _seed_entry(container, simplified="木", pinyin="mu4")
     item_id = (await client.post("/study-items", json={"dictionary_entry_id": entry_id})).json()["id"]

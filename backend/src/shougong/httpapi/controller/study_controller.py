@@ -1,6 +1,7 @@
 """`StudyController` — manage the queue of items the learner is studying.
 
 `POST /study-items`              enqueue a dictionary entry (201 + Location).
+`POST /study-items/batch`        enqueue many from CSV rows (hanzi + pinyin); returns a per-row report.
 `GET  /study-items`              list items; `?due=true` filters to what's due now.
 `GET  /study-items/{id}`         a single item.
 `POST /study-items/{id}/reviews` grade an item and let FSRS reschedule it (201 + Location);
@@ -19,11 +20,14 @@ from fastapi import APIRouter, Query, Response
 from shougong.httpapi.controller.base import IController
 from shougong.httpapi.schema import (
     AddStudyItemRequest,
+    BatchImportRequest,
+    BatchImportResponse,
     ReviewLogResponse,
     ReviewRequest,
     ReviewResponse,
     StudyItemResponse,
 )
+from shougong.usecase.study.model import BatchImportRow
 from shougong.usecase.study.service import StudyService
 
 
@@ -39,6 +43,13 @@ class StudyController(IController):
             item = await self._service.add_item(body.dictionary_entry_id)
             response.headers["Location"] = f"/study-items/{item.id}"
             return StudyItemResponse.from_domain(item)
+
+        @router.post("/batch")
+        async def import_batch(body: BatchImportRequest) -> BatchImportResponse:
+            report = await self._service.import_batch(
+                [BatchImportRow(hanzi=row.hanzi, pinyin=row.pinyin) for row in body.rows]
+            )
+            return BatchImportResponse.from_domain(report)
 
         @router.get("")
         async def list_items(

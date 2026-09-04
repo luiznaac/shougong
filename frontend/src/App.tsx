@@ -5,6 +5,7 @@ import { Review } from "./pages/Review.tsx";
 import { Lesson } from "./pages/Lesson.tsx";
 import { StudyItemPage } from "./pages/StudyItemPage.tsx";
 import { AddItems } from "./pages/AddItems.tsx";
+import { BatchImport } from "./pages/BatchImport.tsx";
 
 export const routes: RouteObject[] = [
   {
@@ -13,6 +14,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Dashboard /> },
       { path: "add", element: <AddItems /> },
+      { path: "add/batch", element: <BatchImport /> },
       { path: "items/:id", element: <StudyItemPage /> },
     ],
   },

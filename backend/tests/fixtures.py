@@ -70,6 +70,9 @@ class FakeDictionaryRepository(IDictionaryRepository):
         matches = [e for e in self.entries if query in e.simplified or query in e.pinyin]
         return matches[:limit]
 
+    async def find_by_simplified(self, simplified: str) -> list[DictionaryEntry]:
+        return sorted((e for e in self.entries if e.simplified == simplified), key=lambda e: e.id)
+
     async def get(self, entry_id: int) -> DictionaryEntry | None:
         return next((e for e in self.entries if e.id == entry_id), None)
 
