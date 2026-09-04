@@ -1,4 +1,6 @@
 import type {
+  BatchImportResponse,
+  BatchImportRowRequest,
   DictionaryEntry,
   ReviewResult,
   ReviewLog,
@@ -73,6 +75,12 @@ export const api = {
     return request(`/study-items`, {
       method: "POST",
       body: JSON.stringify({ dictionary_entry_id: dictionaryEntryId }),
+    });
+  },
+  batchImportStudyItems(rows: BatchImportRowRequest[]): Promise<BatchImportResponse> {
+    return request(`/study-items/batch`, {
+      method: "POST",
+      body: JSON.stringify({ rows }),
     });
   },
   reviewStudyItem(id: number, rating: SrsRating): Promise<ReviewResult> {

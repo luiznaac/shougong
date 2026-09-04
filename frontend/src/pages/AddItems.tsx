@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAddStudyItem, useDictionarySearch, useStudyItems } from "../api/queries.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { Hanzi } from "../components/Hanzi.tsx";
@@ -50,6 +51,9 @@ export function AddItems() {
         <p className="mt-1 text-sm text-slate-400">
           Busque no dicionário por hanzi ou pinyin e adicione à sua fila.
         </p>
+        <Link to="/add/batch" className="mt-2 inline-block text-sm text-accent-500 hover:underline">
+          Importar de CSV →
+        </Link>
       </div>
 
       <input

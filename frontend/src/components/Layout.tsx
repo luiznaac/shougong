@@ -23,8 +23,11 @@ export function Layout() {
             <NavLink to="/" end className={linkClass}>
               Painel
             </NavLink>
-            <NavLink to="/add" className={linkClass}>
+            <NavLink to="/add" end className={linkClass}>
               Adicionar
+            </NavLink>
+            <NavLink to="/add/batch" className={linkClass}>
+              Importar CSV
             </NavLink>
           </nav>
         </div>

@@ -5,12 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
-from shougong.usecase.study.model import ReviewResult, StudyItem
+from shougong.usecase.study.model import BatchImportOutcome, BatchImportReport, ReviewResult, StudyItem
 from shougong.usecase.study_item_history.model import StudyItemHistory
 
 
@@ -80,6 +80,56 @@ class StudyItemResponse(BaseModel):
 
 class AddStudyItemRequest(BaseModel):
     dictionary_entry_id: int
+
+
+class BatchImportRowRequest(BaseModel):
+    hanzi: str
+    pinyin: str = ""
+
+
+class BatchImportRequest(BaseModel):
+    rows: list[BatchImportRowRequest] = Field(min_length=1, max_length=1000)
+
+
+class BatchImportOutcomeResponse(BaseModel):
+    row: int
+    hanzi: str
+    pinyin: str
+    status: str  # "created" | "skipped" | "error"
+    study_item_id: int | None
+    detail: str | None
+    # populated when `status` is "error" and more than one dictionary entry matched:
+    # pick one and POST it to /study-items to resolve the row.
+    candidates: list[DictionaryEntryResponse] = Field(default_factory=list)
+
+    @classmethod
+    def from_domain(cls, outcome: BatchImportOutcome) -> BatchImportOutcomeResponse:
+        return cls(
+            row=outcome.row,
+            hanzi=outcome.hanzi,
+            pinyin=outcome.pinyin,
+            status=outcome.status.value,
+            study_item_id=outcome.study_item_id,
+            detail=outcome.detail,
+            candidates=[DictionaryEntryResponse.from_domain(entry) for entry in outcome.candidates],
+        )
+
+
+class BatchImportResponse(BaseModel):
+    created: int
+    skipped: int
+    errors: int
+    outcomes: list[BatchImportOutcomeResponse]
+
+    @classmethod
+    def from_domain(cls, report: BatchImportReport) -> BatchImportResponse:
+        outcomes = [BatchImportOutcomeResponse.from_domain(o) for o in report.outcomes]
+        return cls(
+            created=sum(1 for o in outcomes if o.status == "created"),
+            skipped=sum(1 for o in outcomes if o.status == "skipped"),
+            errors=sum(1 for o in outcomes if o.status == "error"),
+            outcomes=outcomes,
+        )
 
 
 class ReviewRequest(BaseModel):

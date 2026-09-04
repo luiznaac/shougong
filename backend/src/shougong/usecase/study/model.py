@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.srs.model import SrsCard, SrsReviewLog
@@ -28,3 +29,37 @@ class ReviewResult:
 
     item: StudyItem
     log: SrsReviewLog
+
+
+class BatchRowStatus(StrEnum):
+    CREATED = "created"
+    SKIPPED = "skipped"
+    ERROR = "error"
+
+
+@dataclass(frozen=True, slots=True)
+class BatchImportRow:
+    """One CSV line: a hanzi + numbered-tone pinyin pair to enqueue."""
+
+    hanzi: str
+    pinyin: str
+
+
+@dataclass(frozen=True, slots=True)
+class BatchImportOutcome:
+    """What happened to one row of a batch import."""
+
+    row: int  # 1-based position in the submitted list
+    hanzi: str
+    pinyin: str
+    status: BatchRowStatus
+    study_item_id: int | None = None
+    detail: str | None = None  # reason a row was skipped or errored
+    # populated when `detail` is an ambiguous-match error: the entries the
+    # caller can choose between to resolve the row (e.g. via `POST /study-items`)
+    candidates: tuple[DictionaryEntry, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class BatchImportReport:
+    outcomes: tuple[BatchImportOutcome, ...]

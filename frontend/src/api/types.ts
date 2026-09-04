@@ -30,6 +30,32 @@ export interface ReviewLog {
   review_datetime: string;
 }
 
+export interface BatchImportRowRequest {
+  hanzi: string;
+  pinyin: string; // numbered tones, e.g. "xue2 xi2"
+}
+
+export type BatchRowStatus = "created" | "skipped" | "error";
+
+export interface BatchImportOutcome {
+  row: number; // 1-based position in the submitted list
+  hanzi: string;
+  pinyin: string;
+  status: BatchRowStatus;
+  study_item_id: number | null;
+  detail: string | null;
+  // populated when `status` is "error" and more than one dictionary entry
+  // matched: pick one and POST it to /study-items to resolve the row.
+  candidates: DictionaryEntry[];
+}
+
+export interface BatchImportResponse {
+  created: number;
+  skipped: number;
+  errors: number;
+  outcomes: BatchImportOutcome[];
+}
+
 export interface ReviewResult {
   item: StudyItem;
   review: ReviewLog;

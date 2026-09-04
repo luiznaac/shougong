@@ -4,7 +4,9 @@ import pytest
 
 from shougong.usecase.commons.exceptions import ConflictError, ResourceNotFoundError
 from shougong.usecase.commons.time import FixedClock
+from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.srs.model import SrsRating, SrsReviewLog
+from shougong.usecase.study.model import BatchImportRow, BatchRowStatus
 from shougong.usecase.study.service import StudyService
 from tests.fixtures import (
     FakeDictionaryRepository,
@@ -126,3 +128,104 @@ async def test_item_reviews_unknown_raises_not_found() -> None:
 
     with pytest.raises(ResourceNotFoundError):
         await service.item_reviews(999)
+
+
+# --- import_batch ---------------------------------------------------------
+
+_XUE_XI = DictionaryEntry(id=1, simplified="学习", pinyin="xue2 xi2", definitions=("to study",))
+_NI_HAO = DictionaryEntry(id=2, simplified="你好", pinyin="ni3 hao3", definitions=("hello",))
+
+
+def _batch_service(
+    entries: list[DictionaryEntry], study: FakeStudyItemRepository | None = None
+) -> tuple[StudyService, FakeStudyItemRepository]:
+    study = study or FakeStudyItemRepository()
+    service = _service(study=study, dictionary=FakeDictionaryRepository(entries))
+    return service, study
+
+
+async def test_import_batch_creates_items_for_matching_rows() -> None:
+    service, study = _batch_service([_XUE_XI, _NI_HAO])
+
+    report = await service.import_batch(
+        [BatchImportRow(hanzi="学习", pinyin="xue2 xi2"), BatchImportRow(hanzi=" 你好 ", pinyin=" ni3 hao3 ")]
+    )
+
+    assert [o.status for o in report.outcomes] == [BatchRowStatus.CREATED, BatchRowStatus.CREATED]
+    assert {i.entry.id for i in study.items} == {1, 2}
+    assert report.outcomes[0].study_item_id == study.items[0].id
+
+
+async def test_import_batch_reports_empty_hanzi_and_bad_pinyin_format() -> None:
+    service, study = _batch_service([_XUE_XI])
+
+    report = await service.import_batch(
+        [BatchImportRow(hanzi="", pinyin="xue2 xi2"), BatchImportRow(hanzi="学习", pinyin="xué xí")]
+    )
+
+    assert [o.status for o in report.outcomes] == [BatchRowStatus.ERROR, BatchRowStatus.ERROR]
+    assert report.outcomes[0].detail == "hanzi vazio"
+    assert "formato" in (report.outcomes[1].detail or "")
+    assert study.items == []
+
+
+async def test_import_batch_matches_regardless_of_case_and_u_spelling() -> None:
+    # stored pinyin is sanitised on import (lower-cased, u: -> v); the row is
+    # sanitised the same way before the exact match, so e.g. proper-noun
+    # capitalisation and the u:/ü digraphs still resolve.
+    beijing = DictionaryEntry(id=3, simplified="北京", pinyin="bei3 jing1", definitions=("Beijing",))
+    lu = DictionaryEntry(id=4, simplified="绿", pinyin="lv4", definitions=("green",))
+    service, study = _batch_service([beijing, lu])
+
+    report = await service.import_batch(
+        [BatchImportRow(hanzi="北京", pinyin="Bei3 jing1"), BatchImportRow(hanzi="绿", pinyin="lu:4")]
+    )
+
+    assert [o.status for o in report.outcomes] == [BatchRowStatus.CREATED, BatchRowStatus.CREATED]
+    assert {i.entry.id for i in study.items} == {3, 4}
+
+
+async def test_import_batch_reports_unknown_hanzi_and_wrong_reading() -> None:
+    service, _ = _batch_service([_XUE_XI])
+
+    report = await service.import_batch(
+        [BatchImportRow(hanzi="没有", pinyin="mei2 you3"), BatchImportRow(hanzi="学习", pinyin="xue2 xi5")]
+    )
+
+    assert report.outcomes[0].detail == "hanzi não encontrado no dicionário"
+    assert report.outcomes[0].candidates == ()
+    assert "to study" in (report.outcomes[1].detail or "")
+    assert [c.id for c in report.outcomes[1].candidates] == [1]  # offered so it can be added manually anyway
+
+
+async def test_import_batch_reports_ambiguous_match_with_candidates() -> None:
+    reading_a = DictionaryEntry(id=10, simplified="行", pinyin="xing2", definitions=("to walk",))
+    reading_b = DictionaryEntry(id=11, simplified="行", pinyin="xing2", definitions=("OK",))
+    service, study = _batch_service([reading_a, reading_b])
+
+    report = await service.import_batch([BatchImportRow(hanzi="行", pinyin="xing2")])
+
+    assert report.outcomes[0].status is BatchRowStatus.ERROR
+    assert "#10" in (report.outcomes[0].detail or "") and "#11" in (report.outcomes[0].detail or "")
+    assert [c.id for c in report.outcomes[0].candidates] == [10, 11]
+    assert study.items == []
+
+
+async def test_import_batch_skips_rows_already_queued_or_duplicated_in_file() -> None:
+    study = FakeStudyItemRepository([make_study_item(entry=_NI_HAO)])
+    service, study = _batch_service([_XUE_XI, _NI_HAO], study=study)
+
+    report = await service.import_batch(
+        [
+            BatchImportRow(hanzi="你好", pinyin="ni3 hao3"),  # already in the queue
+            BatchImportRow(hanzi="学习", pinyin="xue2 xi2"),  # new
+            BatchImportRow(hanzi="学习", pinyin="xue2 xi2"),  # duplicate within the file
+        ]
+    )
+
+    assert [o.status for o in report.outcomes] == [
+        BatchRowStatus.SKIPPED,
+        BatchRowStatus.CREATED,
+        BatchRowStatus.SKIPPED,
+    ]
+    assert sum(1 for i in study.items if i.entry.id == 1) == 1
