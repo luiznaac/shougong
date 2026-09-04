@@ -10,7 +10,7 @@ from shougong.usecase.commons.time import IClock
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
-from shougong.usecase.dictionary.pinyin import is_numbered_pinyin
+from shougong.usecase.dictionary.pinyin import is_numbered_pinyin, sanitize_pinyin
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsRating, SrsReviewLog
 from shougong.usecase.study.gateway import IStudyItemRepository
@@ -110,14 +110,20 @@ class StudyService:
         return await self._tx.execute(_run)
 
     async def _resolve_batch_row(self, hanzi: str, pinyin: str) -> DictionaryEntry | str:
-        """The dictionary entry for one CSV row, or an error message explaining why not."""
+        """The dictionary entry for one CSV row, or an error message explaining why not.
+
+        Stored `dictionary_entry.pinyin` is sanitised on import (lower-cased, ü as
+        `v` — see `sanitize_pinyin`), so the row's pinyin is sanitised the same way
+        before the exact match. This canonicalises case/ü-spelling only; it never
+        touches tones or syllables.
+        """
         if not hanzi:
             return "hanzi vazio"
         if not is_numbered_pinyin(pinyin):
             return "pinyin fora do formato esperado (use tons numéricos, ex.: xue2 xi2)"
 
         candidates = await self._dictionary.find_by_simplified(hanzi)
-        matches = [entry for entry in candidates if entry.pinyin == pinyin]
+        matches = [entry for entry in candidates if entry.pinyin == sanitize_pinyin(pinyin)]
         if not matches:
             if not candidates:
                 return "hanzi não encontrado no dicionário"

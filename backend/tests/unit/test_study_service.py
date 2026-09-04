@@ -169,6 +169,22 @@ async def test_import_batch_reports_empty_hanzi_and_bad_pinyin_format() -> None:
     assert study.items == []
 
 
+async def test_import_batch_matches_regardless_of_case_and_u_spelling() -> None:
+    # stored pinyin is sanitised on import (lower-cased, u: -> v); the row is
+    # sanitised the same way before the exact match, so e.g. proper-noun
+    # capitalisation and the u:/ü digraphs still resolve.
+    beijing = DictionaryEntry(id=3, simplified="北京", pinyin="bei3 jing1", definitions=("Beijing",))
+    lu = DictionaryEntry(id=4, simplified="绿", pinyin="lv4", definitions=("green",))
+    service, study = _batch_service([beijing, lu])
+
+    report = await service.import_batch(
+        [BatchImportRow(hanzi="北京", pinyin="Bei3 jing1"), BatchImportRow(hanzi="绿", pinyin="lu:4")]
+    )
+
+    assert [o.status for o in report.outcomes] == [BatchRowStatus.CREATED, BatchRowStatus.CREATED]
+    assert {i.entry.id for i in study.items} == {3, 4}
+
+
 async def test_import_batch_reports_unknown_hanzi_and_wrong_reading() -> None:
     service, _ = _batch_service([_XUE_XI])
 
