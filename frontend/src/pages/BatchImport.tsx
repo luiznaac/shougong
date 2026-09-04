@@ -1,34 +1,106 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useBatchImportStudyItems } from "../api/queries.ts";
-import { ApiError } from "../api/client.ts";
+import { useQueryClient } from "@tanstack/react-query";
+import { api, ApiError } from "../api/client.ts";
 import { parseStudyItemsCsv } from "../lib/csv.ts";
-import type { BatchImportOutcome, BatchRowStatus } from "../api/types.ts";
+import type { BatchImportOutcome, BatchImportRowRequest } from "../api/types.ts";
 
-const STATUS_STYLE: Record<BatchRowStatus, { label: string; className: string }> = {
+// Client-only states layered on top of the backend's row status: a row starts
+// "pending" (not sent yet), becomes "loading" while its request is in flight,
+// then settles into whatever the backend reported.
+type DisplayStatus = "pending" | "loading" | BatchImportOutcome["status"];
+
+const STATUS_STYLE: Record<DisplayStatus, { label: string; className: string }> = {
+  pending: { label: "na fila", className: "bg-slate-500/10 text-slate-500" },
+  loading: { label: "enviando", className: "bg-sky-500/15 text-sky-400" },
   created: { label: "criada", className: "bg-emerald-500/15 text-emerald-400" },
   skipped: { label: "pulada", className: "bg-slate-500/15 text-slate-400" },
   error: { label: "erro", className: "bg-rose-500/15 text-rose-400" },
 };
 
+function Spinner() {
+  return (
+    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
+  );
+}
+
 export function BatchImport() {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
-  const importMutation = useBatchImportStudyItems();
 
+  // One slot per row of the current run; undefined until that row's response
+  // arrives. `sentRows` is a snapshot of `parsed.rows` taken when the run
+  // started, so editing the input mid-run doesn't shift indices under it.
+  const [sentRows, setSentRows] = useState<BatchImportRowRequest[]>([]);
+  const [outcomes, setOutcomes] = useState<(BatchImportOutcome | undefined)[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const [running, setRunning] = useState(false);
+  const runIdRef = useRef(0); // bumped on every run so a stale loop stops updating state
+
+  const qc = useQueryClient();
   const parsed = useMemo(() => parseStudyItemsCsv(text), [text]);
-  const report = importMutation.data;
 
   const onFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file || running) return;
     setFileName(file.name);
     setText(await file.text());
-    importMutation.reset();
+    setOutcomes([]);
   };
 
-  const run = () => {
-    if (parsed.rows.length > 0) importMutation.mutate(parsed.rows);
+  const run = async () => {
+    const rows = parsed.rows;
+    if (rows.length === 0 || running) return;
+
+    const runId = ++runIdRef.current;
+    setSentRows(rows);
+    setOutcomes(new Array(rows.length).fill(undefined));
+    setRunning(true);
+
+    // Sent one row at a time (not all 300+ in a single request): each await
+    // yields to the browser between requests, so the UI stays responsive and
+    // the results table fills in live instead of freezing until everything
+    // is done.
+    for (let i = 0; i < rows.length; i++) {
+      if (runIdRef.current !== runId) return; // a newer run replaced this one
+      setCurrentIndex(i);
+      try {
+        const response = await api.batchImportStudyItems([rows[i]]);
+        const outcome = response.outcomes[0];
+        if (runIdRef.current !== runId) return;
+        setOutcomes((prev) => {
+          const next = [...prev];
+          next[i] = outcome ? { ...outcome, row: i + 1 } : undefined;
+          return next;
+        });
+      } catch (e) {
+        if (runIdRef.current !== runId) return;
+        const detail = e instanceof ApiError || e instanceof Error ? e.message : String(e);
+        setOutcomes((prev) => {
+          const next = [...prev];
+          next[i] = {
+            row: i + 1,
+            hanzi: rows[i].hanzi,
+            pinyin: rows[i].pinyin,
+            status: "error",
+            study_item_id: null,
+            detail: `falha ao enviar: ${detail}`,
+          };
+          return next;
+        });
+      }
+    }
+
+    if (runIdRef.current === runId) {
+      setCurrentIndex(-1);
+      setRunning(false);
+      qc.invalidateQueries({ queryKey: ["study-items"] });
+    }
   };
+
+  const sentCount = outcomes.filter(Boolean).length;
+  const created = outcomes.filter((o) => o?.status === "created").length;
+  const skipped = outcomes.filter((o) => o?.status === "skipped").length;
+  const errors = outcomes.filter((o) => o?.status === "error").length;
 
   return (
     <div className="space-y-6">
@@ -37,7 +109,8 @@ export function BatchImport() {
         <p className="mt-1 text-sm text-slate-400">
           Uma linha por item: <code className="text-slate-300">hanzi,pinyin</code>. O pinyin precisa
           usar tons numéricos (ex.: <code className="text-slate-300">xue2 xi2</code>). Cabeçalho é
-          opcional. Cada linha é casada com uma entrada existente do dicionário.
+          opcional. Cada linha é casada com uma entrada existente do dicionário e enviada
+          individualmente, para você acompanhar o progresso.
         </p>
         <Link to="/add" className="mt-2 inline-block text-sm text-accent-500 hover:underline">
           ← Adicionar item a item
@@ -49,8 +122,9 @@ export function BatchImport() {
         <input
           type="file"
           accept=".csv,text/csv"
+          disabled={running}
           onChange={(e) => onFile(e.target.files?.[0])}
-          className="mt-1 block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-200 hover:file:bg-slate-700"
+          className="mt-1 block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-200 hover:file:bg-slate-700 disabled:opacity-50"
         />
       </label>
 
@@ -58,24 +132,25 @@ export function BatchImport() {
         <span className="text-sm text-slate-400">…ou cole o conteúdo</span>
         <textarea
           value={text}
+          disabled={running}
           onChange={(e) => {
             setText(e.target.value);
             setFileName(null);
-            importMutation.reset();
+            setOutcomes([]);
           }}
           rows={6}
           placeholder={"学习,xue2 xi2\n你好,ni3 hao3"}
-          className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100 outline-none focus:border-accent-500"
+          className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100 outline-none focus:border-accent-500 disabled:opacity-50"
         />
       </label>
 
       <div className="flex items-center gap-3">
         <button
           onClick={run}
-          disabled={parsed.rows.length === 0 || importMutation.isPending}
+          disabled={parsed.rows.length === 0 || running}
           className="rounded-md bg-accent-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-40"
         >
-          {importMutation.isPending ? "Importando…" : "Importar"}
+          {running ? `Importando… (${sentCount}/${sentRows.length})` : "Importar"}
         </button>
         <span className="text-sm text-slate-500">
           {parsed.rows.length} linha{parsed.rows.length === 1 ? "" : "s"} reconhecida
@@ -84,27 +159,31 @@ export function BatchImport() {
         </span>
       </div>
 
-      {importMutation.error && (
-        <p className="text-sm text-rose-400">
-          Falha ao importar:{" "}
-          {importMutation.error instanceof ApiError
-            ? importMutation.error.message
-            : String(importMutation.error)}
-        </p>
+      {sentRows.length > 0 && (
+        <ResultsPanel
+          rows={sentRows}
+          outcomes={outcomes}
+          currentIndex={currentIndex}
+          created={created}
+          skipped={skipped}
+          errors={errors}
+        />
       )}
-
-      {report && <ResultsPanel outcomes={report.outcomes} created={report.created} skipped={report.skipped} errors={report.errors} />}
     </div>
   );
 }
 
 function ResultsPanel({
+  rows,
   outcomes,
+  currentIndex,
   created,
   skipped,
   errors,
 }: {
-  outcomes: BatchImportOutcome[];
+  rows: BatchImportRowRequest[];
+  outcomes: (BatchImportOutcome | undefined)[];
+  currentIndex: number;
   created: number;
   skipped: number;
   errors: number;
@@ -127,21 +206,26 @@ function ResultsPanel({
             </tr>
           </thead>
           <tbody>
-            {outcomes.map((o) => {
-              const style = STATUS_STYLE[o.status];
+            {rows.map((row, i) => {
+              const outcome = outcomes[i];
+              const status: DisplayStatus = outcome ? outcome.status : i === currentIndex ? "loading" : "pending";
+              const style = STATUS_STYLE[status];
               return (
-                <tr key={o.row} className="border-t border-white/5">
-                  <td className="py-1.5 pr-3 tabular-nums text-slate-500">{o.row}</td>
+                <tr key={i} className="border-t border-white/5">
+                  <td className="py-1.5 pr-3 tabular-nums text-slate-500">{i + 1}</td>
                   <td className="py-1.5 pr-3 font-hanzi text-slate-100" lang="zh-Hans">
-                    {o.hanzi || "—"}
+                    {row.hanzi || "—"}
                   </td>
-                  <td className="py-1.5 pr-3 text-slate-300">{o.pinyin || "—"}</td>
+                  <td className="py-1.5 pr-3 text-slate-300">{row.pinyin || "—"}</td>
                   <td className="py-1.5 pr-3">
-                    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${style.className}`}>
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs font-medium ${style.className}`}
+                    >
+                      {status === "loading" && <Spinner />}
                       {style.label}
                     </span>
                   </td>
-                  <td className="py-1.5 text-slate-400">{o.detail ?? ""}</td>
+                  <td className="py-1.5 text-slate-400">{outcome?.detail ?? ""}</td>
                 </tr>
               );
             })}
