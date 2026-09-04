@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
+from shougong.usecase.strokes.model import CharacterStrokes
 from shougong.usecase.study.model import BatchImportOutcome, BatchImportReport, ReviewResult, StudyItem
 from shougong.usecase.study_item_history.model import StudyItemHistory
 
@@ -41,6 +42,20 @@ class DictionaryEntryResponse(BaseModel):
             simplified=entry.simplified,
             pinyin=entry.pinyin,
             definitions=list(entry.definitions),
+        )
+
+
+class CharacterStrokesResponse(BaseModel):
+    character: str
+    strokes: list[str]
+    medians: list[list[list[float]]]
+
+    @classmethod
+    def from_domain(cls, strokes: CharacterStrokes) -> CharacterStrokesResponse:
+        return cls(
+            character=strokes.character,
+            strokes=list(strokes.strokes),
+            medians=[[list(pt) for pt in stroke] for stroke in strokes.medians],
         )
 
 

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
 import { Pinyin } from "./Pinyin.tsx";
+import { StrokeOrderPanel } from "./StrokeOrderPanel.tsx";
 
 export const RATINGS: {
   key: SrsRating;
@@ -222,9 +223,15 @@ export function Quiz({
       {/* grade selection */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-8">
         {phase === "info" && (
-          <p className="text-center text-sm text-slate-400">
-            Memorize o traçado — a seguir você escreve de memória.
-          </p>
+          <>
+            <p className="text-center text-sm text-slate-400">
+              Memorize o traçado — a seguir você escreve de memória.
+            </p>
+            <StrokeOrderPanel key={current.id} word={current.entry.simplified} sizePx={120} />
+          </>
+        )}
+        {phase === "revealed" && (
+          <StrokeOrderPanel key={current.id} word={current.entry.simplified} sizePx={120} />
         )}
         {phase === "revealed" && (
           <div className="grid w-full max-w-lg grid-cols-2 gap-3 sm:grid-cols-4">

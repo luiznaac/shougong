@@ -6,7 +6,9 @@ just calls `get_logger(__name__)`.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import sys
 
 import structlog
 from structlog.typing import FilteringBoundLogger
@@ -15,6 +17,14 @@ __all__ = ["configure_logging", "get_logger"]
 
 
 def configure_logging(level: str = "INFO", *, json: bool = True) -> None:
+    # The console renderer prints event fields (e.g. a hanzi character) as-is;
+    # on Windows, stdout otherwise defaults to the system codepage (cp1252),
+    # which can't encode CJK and crashes the log call. JSON output already
+    # escapes non-ASCII, so this only matters for the dev console renderer.
+    if not json:
+        with contextlib.suppress(AttributeError, ValueError):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+
     renderer: structlog.types.Processor = (
         structlog.processors.JSONRenderer() if json else structlog.dev.ConsoleRenderer()
     )

@@ -15,6 +15,8 @@ from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryReposi
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
+from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeRepository
+from shougong.usecase.strokes.model import CharacterStrokes, StrokeLookupResult
 from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import StudyItem
 from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
@@ -100,6 +102,36 @@ class FakeCedictSource(ICedictSource):
     async def fetch(self) -> list[CedictRecord]:
         self.fetch_calls += 1
         return list(self.records)
+
+
+def make_character_strokes(
+    *,
+    character: str = "学",
+    strokes: tuple[str, ...] = ("M 1 1 L 2 2",),
+    medians: tuple[tuple[tuple[float, float], ...], ...] = (((1.0, 1.0), (2.0, 2.0)),),
+) -> CharacterStrokes:
+    return CharacterStrokes(character=character, strokes=strokes, medians=medians)
+
+
+class FakeStrokeRepository(IStrokeRepository):
+    def __init__(self) -> None:
+        self.rows: dict[str, StrokeLookupResult] = {}
+
+    async def find(self, character: str) -> StrokeLookupResult | None:
+        return self.rows.get(character)
+
+    async def save(self, character: str, strokes: CharacterStrokes | None) -> None:
+        self.rows[character] = StrokeLookupResult(character=character, strokes=strokes)
+
+
+class FakeHanziStrokeSource(IHanziStrokeSource):
+    def __init__(self, data: dict[str, CharacterStrokes | None] | None = None) -> None:
+        self.data: dict[str, CharacterStrokes | None] = dict(data or {})
+        self.fetch_calls = 0
+
+    async def fetch(self, character: str) -> CharacterStrokes | None:
+        self.fetch_calls += 1
+        return self.data.get(character)
 
 
 class StubSrsEngine(ISrsEngine):

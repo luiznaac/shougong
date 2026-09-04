@@ -12,6 +12,20 @@ CREATE TABLE IF NOT EXISTS dictionary_entry (
     KEY ix_dictionary_entry_pinyin (pinyin)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Per-character stroke order data (SVG paths + medians), from the hanzi-writer-data
+-- npm package (built from the open "Make Me a Hanzi" dataset). Fetched lazily and
+-- cached one row per character on first lookup. has_data=0 rows are a negative
+-- cache (e.g. punctuation with no stroke data) so we don't re-fetch every time.
+-- `character` is quoted throughout: it's a reserved word in MySQL 8, so an
+-- unquoted column definition fails at table-creation time.
+CREATE TABLE IF NOT EXISTS character_strokes (
+    `character` VARCHAR(8)  NOT NULL,
+    has_data    TINYINT(1)  NOT NULL,
+    strokes     JSON        NULL,
+    medians     JSON        NULL,
+    PRIMARY KEY (`character`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Dictionary entries the learner is studying, with their flattened FSRS card.
 CREATE TABLE IF NOT EXISTS study_item (
     id               BIGINT      NOT NULL AUTO_INCREMENT,

@@ -4,6 +4,7 @@ import { Pinyin } from "../components/Pinyin.tsx";
 import { Hanzi } from "../components/Hanzi.tsx";
 import { ItemMetricChart } from "../components/ItemMetricChart.tsx";
 import { RelatedEntries } from "../components/RelatedEntries.tsx";
+import { StrokeOrderPanel } from "../components/StrokeOrderPanel.tsx";
 import { formatDate, formatDateTime } from "../lib/format.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
 import type { SrsState } from "../api/types.ts";
@@ -47,6 +48,13 @@ export function StudyItemPage() {
           {levelLabel(level)}
         </span>
       </header>
+
+      <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Ordem dos traços
+        </h2>
+        <StrokeOrderPanel word={item.entry.simplified} />
+      </section>
 
       <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">

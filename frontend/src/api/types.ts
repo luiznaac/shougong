@@ -10,6 +10,13 @@ export interface DictionaryEntry {
   definitions: string[];
 }
 
+export interface CharacterStrokes {
+  character: string;
+  strokes: string[]; // SVG path 'd' strings, in drawing order
+  medians: number[][][]; // per stroke: [x, y] points, raw hanzi-writer-data
+  // coordinate space (1024x1024 box, Y-axis flipped — see StrokeOrder.tsx)
+}
+
 export interface SrsCard {
   state: SrsState;
   due: string; // ISO

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from shougong.usecase.commons.asyncx import fire_and_forget
 from shougong.usecase.commons.exceptions import ConflictError, ResourceNotFoundError
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock
@@ -14,6 +15,7 @@ from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.dictionary.pinyin import is_numbered_pinyin, sanitize_pinyin
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsRating, SrsReviewLog
+from shougong.usecase.strokes.service import StrokeService
 from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import (
     BatchImportOutcome,
@@ -70,12 +72,14 @@ class StudyService:
         engine: ISrsEngine,
         clock: IClock,
         transaction_template: ITransactionTemplate,
+        stroke_service: StrokeService,
     ) -> None:
         self._study = study_repository
         self._dictionary = dictionary_repository
         self._engine = engine
         self._clock = clock
         self._tx = transaction_template
+        self._strokes = stroke_service
 
     async def add_item(self, entry_id: int) -> StudyItem:
         async def _run() -> StudyItem:
@@ -89,7 +93,20 @@ class StudyService:
             _log.info("study.item.added", item_id=item.id, entry_id=entry_id)
             return item
 
-        return await self._tx.execute(_run)
+        item = await self._tx.execute(_run)
+        self._warm_strokes(item.entry.simplified)
+        return item
+
+    def _warm_strokes(self, word: str) -> None:
+        """Fire off a background cache warm-up for each distinct character in
+        `word`, so its stroke data is ready by the time the learner looks at
+        it. Scheduled *after* the enclosing transaction has committed and
+        closed — the warm-up runs its own separate transaction, and firing it
+        from inside `_run()` would hand the background task a session that's
+        about to be closed out from under it.
+        """
+        for char in set(word):
+            fire_and_forget(self._strokes.warm(char))
 
     async def import_batch(self, rows: Sequence[BatchImportRow]) -> BatchImportReport:
         """Enqueue many items at once, one CSV row per item.
@@ -141,7 +158,11 @@ class StudyService:
             _log.info("study.batch.imported", rows=len(rows), created=created, skipped=skipped, errors=errored)
             return BatchImportReport(outcomes=tuple(outcomes))
 
-        return await self._tx.execute(_run)
+        report = await self._tx.execute(_run)
+        for outcome in report.outcomes:
+            if outcome.status is BatchRowStatus.CREATED:
+                self._warm_strokes(outcome.hanzi)
+        return report
 
     async def _resolve_batch_row(self, hanzi: str, pinyin: str) -> DictionaryEntry | str | _NeedsAChoice:
         """The dictionary entry for one CSV row; a plain error message when there's
