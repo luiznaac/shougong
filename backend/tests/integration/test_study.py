@@ -8,11 +8,13 @@ from sqlalchemy import text
 from shougong.application.container import Container
 
 
-async def _seed_entry(container: Container, *, simplified: str = "学", pinyin: str = "xue2") -> int:
+async def _seed_entry(
+    container: Container, *, simplified: str = "学", pinyin: str = "xue2", definitions: list[str] | None = None
+) -> int:
     async with container.engine.begin() as conn:
         result = await conn.execute(
             text("INSERT INTO dictionary_entry (simplified, pinyin, definitions) VALUES (:s, :p, :d)"),
-            {"s": simplified, "p": pinyin, "d": json.dumps(["to learn"])},
+            {"s": simplified, "p": pinyin, "d": json.dumps(definitions or ["to learn"])},
         )
         return int(result.lastrowid)
 
@@ -93,6 +95,25 @@ async def test_batch_import_reports_each_row(container: Container, client: httpx
     # re-uploading the same rows now skips everything that resolves
     again = (await client.post("/study-items/batch", json={"rows": [{"hanzi": "学习", "pinyin": "xue2 xi2"}]})).json()
     assert again["skipped"] == 1
+
+
+async def test_batch_import_reports_candidates_for_an_ambiguous_row(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    id_a = await _seed_entry(container, simplified="行", pinyin="xing2", definitions=["to walk"])
+    id_b = await _seed_entry(container, simplified="行", pinyin="xing2", definitions=["OK"])
+
+    response = await client.post("/study-items/batch", json={"rows": [{"hanzi": "行", "pinyin": "xing2"}]})
+
+    body = response.json()
+    outcome = body["outcomes"][0]
+    assert outcome["status"] == "error"
+    assert {c["id"] for c in outcome["candidates"]} == {id_a, id_b}
+
+    # resolve the ambiguity by adding one of the offered candidates directly
+    picked = await client.post("/study-items", json={"dictionary_entry_id": id_b})
+    assert picked.status_code == 201
+    assert picked.json()["entry"]["id"] == id_b
 
 
 async def test_batch_import_rejects_an_empty_row_list(container: Container, client: httpx.AsyncClient) -> None:

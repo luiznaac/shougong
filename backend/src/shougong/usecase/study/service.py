@@ -34,10 +34,21 @@ def _batch_outcome(
     *,
     study_item_id: int | None = None,
     detail: str | None = None,
+    candidates: tuple[DictionaryEntry, ...] = (),
 ) -> BatchImportOutcome:
     return BatchImportOutcome(
-        row=row, hanzi=hanzi, pinyin=pinyin, status=status, study_item_id=study_item_id, detail=detail
+        row=row,
+        hanzi=hanzi,
+        pinyin=pinyin,
+        status=status,
+        study_item_id=study_item_id,
+        detail=detail,
+        candidates=candidates,
     )
+
+
+def _describe(entry: DictionaryEntry) -> str:
+    return f"#{entry.id} ({'; '.join(entry.definitions) or '—'})"
 
 
 class StudyService:
@@ -88,6 +99,19 @@ class StudyService:
                 pinyin = raw.pinyin.strip()
                 resolved = await self._resolve_batch_row(hanzi, pinyin)
 
+                if isinstance(resolved, tuple):
+                    listed = ", ".join(_describe(entry) for entry in resolved)
+                    outcomes.append(
+                        _batch_outcome(
+                            index,
+                            hanzi,
+                            pinyin,
+                            BatchRowStatus.ERROR,
+                            detail=f"múltiplas entradas do dicionário casam: {listed}",
+                            candidates=resolved,
+                        )
+                    )
+                    continue
                 if isinstance(resolved, str):
                     outcomes.append(_batch_outcome(index, hanzi, pinyin, BatchRowStatus.ERROR, detail=resolved))
                     continue
@@ -109,8 +133,9 @@ class StudyService:
 
         return await self._tx.execute(_run)
 
-    async def _resolve_batch_row(self, hanzi: str, pinyin: str) -> DictionaryEntry | str:
-        """The dictionary entry for one CSV row, or an error message explaining why not.
+    async def _resolve_batch_row(self, hanzi: str, pinyin: str) -> DictionaryEntry | str | tuple[DictionaryEntry, ...]:
+        """The dictionary entry for one CSV row; an error message explaining why not;
+        or, when more than one entry matches, the tuple of candidates to choose from.
 
         Stored `dictionary_entry.pinyin` is sanitised on import (lower-cased, ü as
         `v` — see `sanitize_pinyin`), so the row's pinyin is sanitised the same way
@@ -130,8 +155,7 @@ class StudyService:
             readings = ", ".join(sorted(entry.pinyin for entry in candidates))
             return f"sem correspondência exata; leituras no dicionário: {readings}"
         if len(matches) > 1:
-            listed = ", ".join(f"#{entry.id} ({'; '.join(entry.definitions) or '—'})" for entry in matches)
-            return f"múltiplas entradas do dicionário casam: {listed}"
+            return tuple(matches)
         return matches[0]
 
     async def list_items(self, *, due_only: bool, limit: int = 50, offset: int = 0) -> list[StudyItem]:

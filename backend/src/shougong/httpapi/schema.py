@@ -98,6 +98,9 @@ class BatchImportOutcomeResponse(BaseModel):
     status: str  # "created" | "skipped" | "error"
     study_item_id: int | None
     detail: str | None
+    # populated when `status` is "error" and more than one dictionary entry matched:
+    # pick one and POST it to /study-items to resolve the row.
+    candidates: list[DictionaryEntryResponse] = Field(default_factory=list)
 
     @classmethod
     def from_domain(cls, outcome: BatchImportOutcome) -> BatchImportOutcomeResponse:
@@ -108,6 +111,7 @@ class BatchImportOutcomeResponse(BaseModel):
             status=outcome.status.value,
             study_item_id=outcome.study_item_id,
             detail=outcome.detail,
+            candidates=[DictionaryEntryResponse.from_domain(entry) for entry in outcome.candidates],
         )
 
 

@@ -44,6 +44,9 @@ export interface BatchImportOutcome {
   status: BatchRowStatus;
   study_item_id: number | null;
   detail: string | null;
+  // populated when `status` is "error" and more than one dictionary entry
+  // matched: pick one and POST it to /study-items to resolve the row.
+  candidates: DictionaryEntry[];
 }
 
 export interface BatchImportResponse {

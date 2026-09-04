@@ -55,6 +55,9 @@ class BatchImportOutcome:
     status: BatchRowStatus
     study_item_id: int | None = None
     detail: str | None = None  # reason a row was skipped or errored
+    # populated when `detail` is an ambiguous-match error: the entries the
+    # caller can choose between to resolve the row (e.g. via `POST /study-items`)
+    candidates: tuple[DictionaryEntry, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

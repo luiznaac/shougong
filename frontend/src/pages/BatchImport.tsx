@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client.ts";
 import { parseStudyItemsCsv } from "../lib/csv.ts";
-import type { BatchImportOutcome, BatchImportRowRequest } from "../api/types.ts";
+import type { BatchImportOutcome, BatchImportRowRequest, DictionaryEntry } from "../api/types.ts";
 
 // Client-only states layered on top of the backend's row status: a row starts
 // "pending" (not sent yet), becomes "loading" while its request is in flight,
@@ -35,6 +35,7 @@ export function BatchImport() {
   const [outcomes, setOutcomes] = useState<(BatchImportOutcome | undefined)[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [running, setRunning] = useState(false);
+  const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const runIdRef = useRef(0); // bumped on every run so a stale loop stops updating state
 
   const qc = useQueryClient();
@@ -84,6 +85,7 @@ export function BatchImport() {
             status: "error",
             study_item_id: null,
             detail: `falha ao enviar: ${detail}`,
+            candidates: [],
           };
           return next;
         });
@@ -94,6 +96,50 @@ export function BatchImport() {
       setCurrentIndex(-1);
       setRunning(false);
       qc.invalidateQueries({ queryKey: ["study-items"] });
+    }
+  };
+
+  // Resolve an ambiguous row by adding the candidate the user picked. Reuses
+  // the single-item endpoint, which already checks first and only inserts if
+  // the entry isn't queued yet — same 409 "already there" handling as /add.
+  const pickCandidate = async (rowIndex: number, entryId: number) => {
+    setResolvingRow(rowIndex);
+    try {
+      const item = await api.addStudyItem(entryId);
+      setOutcomes((prev) => {
+        const next = [...prev];
+        const current = next[rowIndex];
+        if (current) {
+          next[rowIndex] = {
+            ...current,
+            status: "created",
+            study_item_id: item.id,
+            detail: null,
+            candidates: [],
+          };
+        }
+        return next;
+      });
+      qc.invalidateQueries({ queryKey: ["study-items"] });
+    } catch (e) {
+      const alreadyQueued = e instanceof ApiError && e.status === 409;
+      setOutcomes((prev) => {
+        const next = [...prev];
+        const current = next[rowIndex];
+        if (current) {
+          next[rowIndex] = {
+            ...current,
+            status: alreadyQueued ? "skipped" : "error",
+            detail: alreadyQueued
+              ? "já está na fila"
+              : `falha ao confirmar: ${e instanceof Error ? e.message : String(e)}`,
+            candidates: alreadyQueued ? [] : current.candidates,
+          };
+        }
+        return next;
+      });
+    } finally {
+      setResolvingRow(null);
     }
   };
 
@@ -164,6 +210,8 @@ export function BatchImport() {
           rows={sentRows}
           outcomes={outcomes}
           currentIndex={currentIndex}
+          resolvingRow={resolvingRow}
+          onPickCandidate={pickCandidate}
           created={created}
           skipped={skipped}
           errors={errors}
@@ -177,6 +225,8 @@ function ResultsPanel({
   rows,
   outcomes,
   currentIndex,
+  resolvingRow,
+  onPickCandidate,
   created,
   skipped,
   errors,
@@ -184,6 +234,8 @@ function ResultsPanel({
   rows: BatchImportRowRequest[];
   outcomes: (BatchImportOutcome | undefined)[];
   currentIndex: number;
+  resolvingRow: number | null;
+  onPickCandidate: (rowIndex: number, entryId: number) => void;
   created: number;
   skipped: number;
   errors: number;
@@ -210,8 +262,9 @@ function ResultsPanel({
               const outcome = outcomes[i];
               const status: DisplayStatus = outcome ? outcome.status : i === currentIndex ? "loading" : "pending";
               const style = STATUS_STYLE[status];
+              const ambiguous = status === "error" && (outcome?.candidates.length ?? 0) > 1;
               return (
-                <tr key={i} className="border-t border-white/5">
+                <tr key={i} className="border-t border-white/5 align-top">
                   <td className="py-1.5 pr-3 tabular-nums text-slate-500">{i + 1}</td>
                   <td className="py-1.5 pr-3 font-hanzi text-slate-100" lang="zh-Hans">
                     {row.hanzi || "—"}
@@ -225,7 +278,17 @@ function ResultsPanel({
                       {style.label}
                     </span>
                   </td>
-                  <td className="py-1.5 text-slate-400">{outcome?.detail ?? ""}</td>
+                  <td className="py-1.5 text-slate-400">
+                    {ambiguous ? (
+                      <CandidatePicker
+                        candidates={outcome!.candidates}
+                        resolving={resolvingRow === i}
+                        onPick={(entryId) => onPickCandidate(i, entryId)}
+                      />
+                    ) : (
+                      outcome?.detail ?? ""
+                    )}
+                  </td>
                 </tr>
               );
             })}
@@ -233,5 +296,33 @@ function ResultsPanel({
         </table>
       </div>
     </section>
+  );
+}
+
+function CandidatePicker({
+  candidates,
+  resolving,
+  onPick,
+}: {
+  candidates: DictionaryEntry[];
+  resolving: boolean;
+  onPick: (entryId: number) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <p>Mais de uma entrada casa — escolha qual usar:</p>
+      <div className="flex flex-wrap gap-1.5">
+        {candidates.map((c) => (
+          <button
+            key={c.id}
+            disabled={resolving}
+            onClick={() => onPick(c.id)}
+            className="inline-flex items-center gap-1 rounded border border-white/10 bg-slate-800 px-2 py-1 text-xs text-slate-200 transition-colors hover:border-accent-500 hover:text-accent-400 disabled:opacity-50"
+          >
+            {resolving && <Spinner />}#{c.id} — {c.definitions.slice(0, 2).join("; ") || "sem definição"}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -205,6 +205,7 @@ async def test_import_batch_reports_ambiguous_match_with_candidates() -> None:
 
     assert report.outcomes[0].status is BatchRowStatus.ERROR
     assert "#10" in (report.outcomes[0].detail or "") and "#11" in (report.outcomes[0].detail or "")
+    assert [c.id for c in report.outcomes[0].candidates] == [10, 11]
     assert study.items == []
 
 
