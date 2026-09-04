@@ -1,6 +1,7 @@
 import type {
   BatchImportResponse,
   BatchImportRowRequest,
+  CharacterStrokes,
   DictionaryEntry,
   ReviewResult,
   ReviewLog,
@@ -47,6 +48,11 @@ export const api = {
   },
   getDictionaryEntry(id: number): Promise<DictionaryEntry> {
     return request(`/dictionary-entries/${id}`);
+  },
+
+  // --- strokes ---
+  getCharacterStrokes(character: string): Promise<CharacterStrokes> {
+    return request(`/characters/${encodeURIComponent(character)}/strokes`);
   },
 
   // --- study items ---

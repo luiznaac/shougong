@@ -27,16 +27,19 @@ from shougong.gateway.configuration.http_client import build_http_client
 from shougong.gateway.dictionary.cedict_source import CedictSource
 from shougong.gateway.health.app_health_gateway import AppHealthGateway
 from shougong.gateway.health.http_client_health_check import HttpClientHealthCheck
+from shougong.gateway.strokes.hanzi_writer_source import HanziWriterSource
 from shougong.httpapi.configuration.server import build_app
 from shougong.httpapi.controller.base import IController
 from shougong.httpapi.controller.dictionary_controller import DictionaryController
 from shougong.httpapi.controller.health_controller import HealthController
+from shougong.httpapi.controller.strokes_controller import StrokesController
 from shougong.httpapi.controller.study_controller import StudyController
 from shougong.httpapi.controller.study_item_history_controller import StudyItemHistoryController
 from shougong.persistence.configuration.database import build_engine, build_session_factory
 from shougong.persistence.configuration.transaction import SqlAlchemyTransactionTemplate
 from shougong.persistence.dictionary.repository import DictionaryRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
+from shougong.persistence.strokes.repository import StrokeRepository
 from shougong.persistence.study.repository import StudyItemRepository
 from shougong.persistence.study_item_history.repository import StudyItemHistoryRepository
 from shougong.srs.fsrs_engine import FsrsEngine
@@ -45,6 +48,7 @@ from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
 from shougong.usecase.srs.day_boundary import DayBoundaryEngine
+from shougong.usecase.strokes.service import StrokeService
 from shougong.usecase.study.service import StudyService
 from shougong.usecase.study_item_history.service import StudyItemHistoryService
 
@@ -74,6 +78,11 @@ class Container:
         self._dictionary_service = DictionaryService(self._dictionary_repository)
         self._cedict_source = CedictSource(self.http_client)
 
+        # --- strokes slice -------------------------------------------------
+        self._stroke_repository = StrokeRepository(self.transaction_template)
+        self._stroke_source = HanziWriterSource(self.http_client)
+        self._stroke_service = StrokeService(self._stroke_repository, self._stroke_source)
+
         # --- study slice ----------------------------------------------
         self._srs_engine = DayBoundaryEngine(FsrsEngine(), ZoneInfo(settings.study_timezone))
         self._study_item_history_repository = StudyItemHistoryRepository(self.transaction_template)
@@ -98,6 +107,7 @@ class Container:
         self.controllers: list[IController] = [
             HealthController(self.health_checkers),
             DictionaryController(self._dictionary_service),
+            StrokesController(self._stroke_service),
             StudyController(self._study_service),
             StudyItemHistoryController(self._study_item_history_service),
         ]

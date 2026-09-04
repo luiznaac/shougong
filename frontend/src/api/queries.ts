@@ -53,6 +53,16 @@ export function useDictionarySearch(q: string, limit = 20) {
   });
 }
 
+export function useCharacterStrokes(character: string) {
+  return useQuery({
+    queryKey: ["strokes", character],
+    queryFn: () => api.getCharacterStrokes(character),
+    enabled: character.length > 0,
+    retry: false, // a 404 means "no stroke data for this char" — a permanent, expected outcome
+    staleTime: Infinity, // stroke data for a given character never changes
+  });
+}
+
 export function useAddStudyItem() {
   const qc = useQueryClient();
   return useMutation({
