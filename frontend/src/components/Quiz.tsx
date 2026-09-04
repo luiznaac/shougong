@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
+import { HandwritingQuiz } from "./HandwritingQuiz.tsx";
 import { Pinyin } from "./Pinyin.tsx";
 import { StrokeOrderPanel } from "./StrokeOrderPanel.tsx";
+import { TOLERANCE_PRESETS, useHandwritingEnabled, useHandwritingTolerance } from "../lib/localSettings.ts";
 
 export const RATINGS: {
   key: SrsRating;
@@ -56,8 +58,13 @@ export function Quiz({
   const [skipped, setSkipped] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [handwritingEnabled, setHandwritingEnabled] = useHandwritingEnabled();
+  const [tolerancePercent, setTolerancePercent] = useHandwritingTolerance();
+  const [drawIdx, setDrawIdx] = useState(0);
+  const drawFailedRef = useRef(false);
 
   const current = items[idx];
+  const chars = current ? [...current.entry.simplified] : [];
   const remaining = items.length - idx;
   const accuracy = done > 0 ? Math.round((correct / done) * 100) : 100;
   const finished = idx >= items.length;
@@ -110,6 +117,23 @@ export function Quiz({
     if (phase === "prompt" && mode === "lesson") return setPhase("info");
   }, [phase, selected, submitting, mode]);
 
+  // Handwriting quiz: one character at a time. A failing character pre-selects
+  // "Errei" — same as if the user had clicked it themselves, so the existing
+  // rating grid / rollback / submit flow handles the rest with no new logic.
+  const handleCharResult = useCallback(
+    (passed: boolean) => {
+      if (!passed) drawFailedRef.current = true;
+      const next = drawIdx + 1;
+      if (next >= chars.length) {
+        setPhase("revealed");
+        setSelected(drawFailedRef.current ? "again" : null);
+      } else {
+        setDrawIdx(next);
+      }
+    },
+    [drawIdx, chars.length],
+  );
+
   const canRollback =
     phase === "revealed" || (phase === "prompt" && mode === "lesson");
   const canGoNext = phase !== "revealed" || selected != null;
@@ -142,6 +166,15 @@ export function Quiz({
     return () => window.removeEventListener("keydown", onKey);
   }, [goNext, rollback, navigate]);
 
+  // Reset the drawing sequence every time a "write from memory" step begins
+  // (a new item, or rolling back into "prompt") so it always starts fresh.
+  useEffect(() => {
+    if (phase === "prompt") {
+      setDrawIdx(0);
+      drawFailedRef.current = false;
+    }
+  }, [phase, current?.id]);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2500);
@@ -156,6 +189,29 @@ export function Quiz({
       <span className="text-xs uppercase tracking-widest text-white/60">
         {mode === "lesson" ? "Lição" : "Review"}
       </span>
+      <label className="flex items-center gap-1.5 text-xs text-white/80">
+        <input
+          type="checkbox"
+          checked={handwritingEnabled}
+          onChange={(e) => setHandwritingEnabled(e.target.checked)}
+          className="h-3.5 w-3.5 accent-accent-500"
+        />
+        Escrever à mão
+      </label>
+      {handwritingEnabled && (
+        <select
+          value={tolerancePercent}
+          onChange={(e) => setTolerancePercent(Number(e.target.value))}
+          title="Tolerância de erros"
+          className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/90"
+        >
+          {TOLERANCE_PRESETS.map((p) => (
+            <option key={p} value={p} className="text-slate-900">
+              {p}%
+            </option>
+          ))}
+        </select>
+      )}
       <div className="ml-auto flex items-center gap-4 tabular-nums">
         <span title="Concluídos">✓ {done}</span>
         <span title="Restantes">☰ {Math.max(0, remaining)}</span>
@@ -185,7 +241,6 @@ export function Quiz({
     );
   }
 
-  const chars = [...current.entry.simplified];
   const sizePx = Math.min(180, Math.round((520 - (chars.length - 1) * 12) / chars.length));
 
   return (
@@ -228,6 +283,21 @@ export function Quiz({
               Memorize o traçado — a seguir você escreve de memória.
             </p>
             <StrokeOrderPanel key={current.id} word={current.entry.simplified} sizePx={120} />
+          </>
+        )}
+        {phase === "prompt" && handwritingEnabled && (
+          <>
+            {chars.length > 1 && (
+              <p className="text-xs text-slate-400">
+                caractere {drawIdx + 1}/{chars.length}
+              </p>
+            )}
+            <HandwritingQuiz
+              key={`${current.id}-${drawIdx}`}
+              character={chars[drawIdx]}
+              tolerancePercent={tolerancePercent}
+              onResult={handleCharResult}
+            />
           </>
         )}
         {phase === "revealed" && (
