@@ -113,6 +113,5 @@ export interface SavedReadingText {
   extra_char_count: number;
   known_word_count: number;
   known_words_char_count: number;
-  attempts: number;
   created_at: string;
 }

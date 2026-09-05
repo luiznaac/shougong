@@ -246,11 +246,11 @@ class FakeStudyItemRepository(IStudyItemRepository):
 
 
 class FakeReadingTextGateway(IReadingTextGateway):
-    """Returns canned texts in call order; records what it was called with so a
-    test can assert `avoid_words` grows correctly across retries."""
+    """Returns a canned text; records what it was called with (a single shot,
+    never retried)."""
 
-    def __init__(self, responses: list[str]) -> None:
-        self.responses: list[str] = list(responses)
+    def __init__(self, response: str) -> None:
+        self.response = response
         self.calls: list[dict[str, object]] = []
 
     async def generate(
@@ -260,19 +260,16 @@ class FakeReadingTextGateway(IReadingTextGateway):
         text_format: ReadingFormat,
         max_extra_words: int,
         topic: str | None,
-        avoid_words: frozenset[str],
     ) -> str:
-        index = len(self.calls)
         self.calls.append(
             {
                 "known_words": known_words,
                 "text_format": text_format,
                 "max_extra_words": max_extra_words,
                 "topic": topic,
-                "avoid_words": avoid_words,
             }
         )
-        return self.responses[min(index, len(self.responses) - 1)]
+        return self.response
 
 
 def make_segmented_token(text: str, *, pos_tag: str | None = "n") -> SegmentedToken:

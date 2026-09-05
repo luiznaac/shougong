@@ -28,6 +28,5 @@ class ReadingTextEntity(Base):
     extra_char_count: Mapped[int] = mapped_column(Integer)
     known_word_count: Mapped[int] = mapped_column(Integer)
     known_words_char_count: Mapped[int] = mapped_column(Integer)
-    attempts: Mapped[int] = mapped_column(Integer)
     tokens: Mapped[list[dict[str, object]]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)

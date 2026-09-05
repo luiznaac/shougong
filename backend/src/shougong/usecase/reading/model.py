@@ -61,7 +61,6 @@ class GeneratedReading:
     extra_char_count: int  # total characters across every extra-word occurrence
     known_word_count: int  # size of the known-vocabulary set sent to the model
     known_words_char_count: int  # total characters across that vocabulary
-    attempts: int  # how many attempts the AI gateway needed to converge
 
 
 @dataclass(frozen=True, slots=True)

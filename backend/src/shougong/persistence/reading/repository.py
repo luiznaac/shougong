@@ -74,7 +74,6 @@ def to_domain(row: ReadingTextEntity) -> SavedReadingText:
         extra_char_count=row.extra_char_count,
         known_word_count=row.known_word_count,
         known_words_char_count=row.known_words_char_count,
-        attempts=row.attempts,
     )
     return SavedReadingText(id=row.id, request=request, reading=reading, created_at=_as_utc(row.created_at))
 
@@ -94,7 +93,6 @@ class ReadingHistoryRepository(IReadingHistoryRepository):
                 extra_char_count=reading.extra_char_count,
                 known_word_count=reading.known_word_count,
                 known_words_char_count=reading.known_words_char_count,
-                attempts=reading.attempts,
                 tokens=[_token_to_json(t) for t in reading.tokens],
                 created_at=_naive_utc(created_at),
             )

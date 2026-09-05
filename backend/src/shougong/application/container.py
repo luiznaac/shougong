@@ -127,7 +127,6 @@ class Container:
             self._dictionary_repository,
             self._reading_history_repository,
             self.clock,
-            max_retries=settings.reading_max_retries,
         )
 
         # --- http layer ------------------------------------------------

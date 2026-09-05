@@ -16,9 +16,7 @@ class SegmentedToken:
 
 
 class IReadingTextGateway(Protocol):
-    """Generates one candidate text. Every call is a fresh, self-contained
-    prompt — no conversation state is kept across retries; `avoid_words` grows
-    on the caller's side and is passed back in on the next attempt."""
+    """Generates one text — a single shot, never retried."""
 
     async def generate(
         self,
@@ -27,7 +25,6 @@ class IReadingTextGateway(Protocol):
         text_format: ReadingFormat,
         max_extra_words: int,
         topic: str | None,
-        avoid_words: frozenset[str],
     ) -> str: ...
 
 

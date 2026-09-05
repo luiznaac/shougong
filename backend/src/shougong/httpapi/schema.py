@@ -253,7 +253,6 @@ class SavedReadingTextResponse(BaseModel):
     extra_char_count: int
     known_word_count: int
     known_words_char_count: int
-    attempts: int
     created_at: datetime
 
     @classmethod
@@ -268,6 +267,5 @@ class SavedReadingTextResponse(BaseModel):
             extra_char_count=saved.reading.extra_char_count,
             known_word_count=saved.reading.known_word_count,
             known_words_char_count=saved.reading.known_words_char_count,
-            attempts=saved.reading.attempts,
             created_at=saved.created_at,
         )

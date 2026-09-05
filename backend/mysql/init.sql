@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS study_item_history (
 -- definitions, part of speech, is_extra, dictionary_entry_id) — stored as
 -- shown, not recomputed against the dictionary/vocabulary on every read.
 -- `known_word_count`/`known_words_char_count` describe the vocabulary sent to
--- the model; `extra_char_count`/`attempts` describe how the generation went.
+-- the model; `extra_word_count`/`extra_char_count` describe how it went (a
+-- single shot — never retried).
 CREATE TABLE IF NOT EXISTS reading_text (
     id                       BIGINT       NOT NULL AUTO_INCREMENT,
     format                   VARCHAR(16)  NOT NULL,
@@ -91,7 +92,6 @@ CREATE TABLE IF NOT EXISTS reading_text (
     extra_char_count         INT          NOT NULL,
     known_word_count         INT          NOT NULL,
     known_words_char_count   INT          NOT NULL,
-    attempts                 INT          NOT NULL,
     tokens                   JSON         NOT NULL,
     created_at               DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),

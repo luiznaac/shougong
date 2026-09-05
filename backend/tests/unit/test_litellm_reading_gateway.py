@@ -41,7 +41,6 @@ async def test_generate_extracts_text_from_the_tool_call(httpserver: HTTPServer)
             text_format=ReadingFormat.SENTENCES,
             max_extra_words=2,
             topic=None,
-            avoid_words=frozenset(),
         )
 
     assert text == "我是学生。"
@@ -60,7 +59,6 @@ async def test_generate_sends_the_prototype_prompt_as_json(httpserver: HTTPServe
             text_format=ReadingFormat.PARAGRAPH,
             max_extra_words=2,
             topic="viagem",
-            avoid_words=frozenset({"猫"}),
         )
 
     messages = _last_request_json(httpserver)["messages"]
@@ -73,7 +71,6 @@ async def test_generate_sends_the_prototype_prompt_as_json(httpserver: HTTPServe
     assert user_payload["format"] == "paragraph"
     assert user_payload["max_extra_words"] == 2
     assert user_payload["topic"] == "viagem"
-    assert user_payload["avoid_words"] == ["猫"]
 
 
 async def test_generate_defaults_the_topic_when_none_given(httpserver: HTTPServer) -> None:
@@ -86,13 +83,11 @@ async def test_generate_defaults_the_topic_when_none_given(httpserver: HTTPServe
             text_format=ReadingFormat.SENTENCES,
             max_extra_words=0,
             topic=None,
-            avoid_words=frozenset(),
         )
 
     messages = _last_request_json(httpserver)["messages"]
     user_payload = json.loads(messages[1]["content"].split("(em JSON):\n", 1)[1])
     assert user_payload["topic"] == "livre, algo do dia a dia"
-    assert "avoid_words" not in user_payload
 
 
 async def test_generate_wraps_a_malformed_response_in_a_domain_error(httpserver: HTTPServer) -> None:
@@ -106,7 +101,6 @@ async def test_generate_wraps_a_malformed_response_in_a_domain_error(httpserver:
                 text_format=ReadingFormat.PARAGRAPH,
                 max_extra_words=2,
                 topic=None,
-                avoid_words=frozenset(),
             )
 
 
@@ -121,5 +115,4 @@ async def test_generate_wraps_an_http_error_in_a_domain_error(httpserver: HTTPSe
                 text_format=ReadingFormat.PARAGRAPH,
                 max_extra_words=2,
                 topic=None,
-                avoid_words=frozenset(),
             )

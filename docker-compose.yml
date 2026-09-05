@@ -49,7 +49,7 @@ services:
       - GATEWAYS__APP__HOST=http://localhost:8080
       - GATEWAYS__AI__BASE_URL=${GATEWAYS_AI_BASE_URL:-http://localhost:4000}
       - GATEWAYS__AI__API_KEY=${GATEWAYS_AI_API_KEY:-}
-      - GATEWAYS__AI__MODEL=${GATEWAYS_AI_MODEL:-claude-haiku-4-5-20251001}
+      - GATEWAYS__AI__MODEL=${GATEWAYS_AI_MODEL:-}
     ports:
       - "8080:8080"   # API      (uvicorn)
       - "8081:8081"   # web / UI  (nginx: SPA + /api proxy)

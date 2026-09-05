@@ -1,14 +1,15 @@
 """`ReadingService` — generate a vocabulary-restricted reading text, validate it
 locally against the learner's known words, and persist the result.
 
-The LLM is only ever responsible for the running text. Segmentation, word-level
-vocabulary validation, and pinyin/definitions all happen locally — the model
-never sees or returns a translation, and never decides what counts as "known".
+The LLM is only ever responsible for the running text, generated once (no
+retry if it exceeds the requested extra-word budget — the actual extras are
+just reported back, flagged per word). Segmentation, word-level vocabulary
+validation, and pinyin/definitions all happen locally — the model never sees
+or returns a translation, and never decides what counts as "known".
 """
 
 from __future__ import annotations
 
-from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
@@ -25,8 +26,6 @@ from shougong.usecase.reading.model import (
 from shougong.usecase.reading.validation import distinct_extra_words, is_chinese_word
 from shougong.usecase.study.gateway import IStudyItemRepository
 
-_log = get_logger(__name__)
-
 
 class ReadingService:
     def __init__(
@@ -37,8 +36,6 @@ class ReadingService:
         dictionary_repository: IDictionaryRepository,
         history_repository: IReadingHistoryRepository,
         clock: IClock,
-        *,
-        max_retries: int = 2,
     ) -> None:
         self._gateway = gateway
         self._segmenter = segmenter
@@ -46,34 +43,19 @@ class ReadingService:
         self._dictionary = dictionary_repository
         self._history = history_repository
         self._clock = clock
-        self._max_retries = max_retries
 
     async def generate(self, request: ReadingRequest) -> SavedReadingText:
         known_index = await self._known_word_index()
         known_words = frozenset(known_index)
-        avoid: set[str] = set()
 
-        segmented: tuple[SegmentedToken, ...] = ()
-        extras: tuple[str, ...] = ()
-        attempts = 0
-        for attempt in range(self._max_retries + 1):
-            text = await self._gateway.generate(
-                known_words=known_words,
-                text_format=request.format,
-                max_extra_words=request.max_extra_words,
-                topic=request.topic,
-                avoid_words=frozenset(avoid),
-            )
-            attempts += 1
-            segmented = self._segmenter.segment(text)
-            extras = distinct_extra_words((t.text for t in segmented), known_words)
-
-            if len(extras) <= request.max_extra_words:
-                break
-            if attempt == self._max_retries:
-                _log.warning("reading.generate.retries_exhausted", extra_words=len(extras))
-                break
-            avoid |= set(extras)
+        text = await self._gateway.generate(
+            known_words=known_words,
+            text_format=request.format,
+            max_extra_words=request.max_extra_words,
+            topic=request.topic,
+        )
+        segmented = self._segmenter.segment(text)
+        extras = distinct_extra_words((t.text for t in segmented), known_words)
 
         reading = await self._resolve(
             request,
@@ -82,7 +64,6 @@ class ReadingService:
             extra_word_count=len(extras),
             known_word_count=len(known_words),
             known_words_char_count=sum(len(w) for w in known_words),
-            attempts=attempts,
         )
         return await self._history.save(request, reading, self._clock.now())
 
@@ -102,7 +83,6 @@ class ReadingService:
         extra_word_count: int,
         known_word_count: int,
         known_words_char_count: int,
-        attempts: int,
     ) -> GeneratedReading:
         resolved_cache: dict[str, DictionaryEntry | None] = {}
         tokens: list[ReadingToken] = []
@@ -140,5 +120,4 @@ class ReadingService:
             extra_char_count=extra_char_count,
             known_word_count=known_word_count,
             known_words_char_count=known_words_char_count,
-            attempts=attempts,
         )

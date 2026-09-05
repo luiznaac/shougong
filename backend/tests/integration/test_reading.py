@@ -25,9 +25,9 @@ async def _seed(container: Container, *, created_at: str, topic: str | None = No
             text(
                 "INSERT INTO reading_text "
                 "(format, max_extra_words, topic, extra_word_count, extra_char_count, known_word_count, "
-                "known_words_char_count, attempts, tokens, created_at) "
+                "known_words_char_count, tokens, created_at) "
                 "VALUES (:format, :max_extra_words, :topic, :extra_word_count, :extra_char_count, "
-                ":known_word_count, :known_words_char_count, :attempts, :tokens, :created_at)"
+                ":known_word_count, :known_words_char_count, :tokens, :created_at)"
             ),
             {
                 "format": "paragraph",
@@ -37,7 +37,6 @@ async def _seed(container: Container, *, created_at: str, topic: str | None = No
                 "extra_char_count": 0,
                 "known_word_count": 12,
                 "known_words_char_count": 18,
-                "attempts": 1,
                 "tokens": json.dumps([_WORD_TOKEN, _PUNCT_TOKEN]),
                 "created_at": created_at,
             },
@@ -58,7 +57,6 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
     assert first["extra_word_count"] == 0
     assert first["known_word_count"] == 12
     assert first["known_words_char_count"] == 18
-    assert first["attempts"] == 1
     word, punct = first["tokens"]
     assert word == {
         "text": "学生",

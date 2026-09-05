@@ -30,10 +30,11 @@ class AppGatewayConfig(BaseModel):
 
 class AiGatewayConfig(BaseModel):
     # Points at the self-hosted LiteLLM proxy (OpenAI-compatible), already
-    # running elsewhere — this service never deploys it.
+    # running elsewhere — this service never deploys it. No default `model`:
+    # which model actually backs this deliberately isn't baked into the repo.
     base_url: str = "http://localhost:4000"
     api_key: str = ""
-    model: str = "claude-haiku-4-5-20251001"
+    model: str = ""
 
 
 class GatewaysConfig(BaseModel):
@@ -59,10 +60,6 @@ class Settings(BaseSettings):
     # IANA timezone whose midnight is the SRS "day boundary": a day's cards all
     # become due at once (local midnight) rather than through the day.
     study_timezone: str = "UTC"
-
-    # How many times to retry generating a reading text when it exceeds the
-    # requested extra-word budget before giving up and returning best-effort.
-    reading_max_retries: int = 2
 
     mysql: MySqlConfig = Field(default_factory=MySqlConfig)
     gateways: GatewaysConfig = Field(default_factory=GatewaysConfig)
