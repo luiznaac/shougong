@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.reading.gateway import SegmentedToken
-from shougong.usecase.reading.model import ReadingFormat, ReadingPunctuation, ReadingRequest, ReadingWord
+from shougong.usecase.reading.model import (
+    GeneratedReading,
+    PartOfSpeech,
+    ReadingFormat,
+    ReadingPunctuation,
+    ReadingRequest,
+    ReadingWord,
+    SavedReadingText,
+)
 from shougong.usecase.reading.service import ReadingService
 from shougong.usecase.study.model import StudyItem
 from tests.fixtures import (
@@ -43,8 +51,8 @@ def _service(
     return service, gateway, history
 
 
-def _tok(text: str, pos: str | None = "n") -> SegmentedToken:
-    return make_segmented_token(text, pos_tag=pos)
+def _tok(text: str, pos: PartOfSpeech | None = PartOfSpeech.NOUN) -> SegmentedToken:
+    return make_segmented_token(text, part_of_speech=pos)
 
 
 async def test_generate_calls_the_gateway_exactly_once() -> None:
@@ -60,7 +68,12 @@ async def test_generate_calls_the_gateway_exactly_once() -> None:
     service, gateway, history = _service(
         response="我是学生。",
         segments={
-            "我是学生。": (_tok("我", "r"), _tok("是", "v"), _tok("学生", "n"), _tok("。", None)),
+            "我是学生。": (
+                _tok("我", PartOfSpeech.PRONOUN),
+                _tok("是", PartOfSpeech.VERB),
+                _tok("学生", PartOfSpeech.NOUN),
+                _tok("。", None),
+            ),
         },
         known=known,
     )
@@ -82,7 +95,14 @@ async def test_extras_over_budget_are_reported_not_retried() -> None:
 
     service, gateway, _ = _service(
         response="我是猫。",
-        segments={"我是猫。": (_tok("我", "r"), _tok("是", "v"), _tok("猫", "n"), _tok("。", None))},
+        segments={
+            "我是猫。": (
+                _tok("我", PartOfSpeech.PRONOUN),
+                _tok("是", PartOfSpeech.VERB),
+                _tok("猫", PartOfSpeech.NOUN),
+                _tok("。", None),
+            )
+        },
         known=known,
     )
 
@@ -99,7 +119,7 @@ async def test_a_word_with_no_dictionary_entry_at_all_resolves_with_no_pinyin() 
 
     service, _, _ = _service(
         response="我叽。",
-        segments={"我叽。": (_tok("我", "r"), _tok("叽", "n"), _tok("。", None))},
+        segments={"我叽。": (_tok("我", PartOfSpeech.PRONOUN), _tok("叽", PartOfSpeech.NOUN), _tok("。", None))},
         known=known,
         dictionary=FakeDictionaryRepository(),  # empty — "叽" has no entry anywhere
     )
@@ -123,7 +143,7 @@ async def test_a_repeated_known_word_is_resolved_using_the_studied_entry_not_ano
 
     service, _, _ = _service(
         response="行行。",
-        segments={"行行。": (_tok("行", "v"), _tok("行", "v"), _tok("。", None))},
+        segments={"行行。": (_tok("行", PartOfSpeech.VERB), _tok("行", PartOfSpeech.VERB), _tok("。", None))},
         known=known,
         dictionary=FakeDictionaryRepository([other_reading, studied]),
     )
@@ -138,11 +158,12 @@ async def test_a_repeated_known_word_is_resolved_using_the_studied_entry_not_ano
 
 async def test_list_history_delegates_to_the_repository() -> None:
     history = FakeReadingHistoryRepository()
-    entry = make_dictionary_entry(entry_id=1, simplified="我")
+    entry = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
     service, _, _ = _service(
         response="我。",
-        segments={"我。": (_tok("我", "r"), _tok("。", None))},
+        segments={"我。": (_tok("我", PartOfSpeech.PRONOUN), _tok("。", None))},
         known=[make_study_item(item_id=1, entry=entry)],
+        dictionary=FakeDictionaryRepository([entry]),
         history=history,
     )
     await service.generate(ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=5))
@@ -150,3 +171,43 @@ async def test_list_history_delegates_to_the_repository() -> None:
     listed = await service.list_history(limit=10, offset=0)
 
     assert listed == history.saved
+
+
+async def test_list_history_hydrates_pinyin_and_definitions_from_the_dictionary() -> None:
+    # Simulates a row that already round-tripped through the DB: pinyin,
+    # definitions, and the dictionary id are never stored, so a freshly-read
+    # row always has them blank until the service re-resolves them by word
+    # text via find_by_simplified_many.
+    entry = make_dictionary_entry(entry_id=7, simplified="水果", pinyin="shui3 guo3", definitions=("fruit",))
+    stripped_word = ReadingWord(
+        text="水果",
+        pinyin=None,
+        definitions=(),
+        part_of_speech=PartOfSpeech.NOUN,
+        is_extra=False,
+        dictionary_entry_id=None,
+    )
+    history = FakeReadingHistoryRepository()
+    history.saved.append(
+        SavedReadingText(
+            id=1,
+            request=ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=0),
+            reading=GeneratedReading(format=ReadingFormat.PARAGRAPH, tokens=(stripped_word,), known_word_count=1),
+            created_at=_NOW,
+        )
+    )
+
+    service, _, _ = _service(
+        response="unused",
+        segments={},
+        dictionary=FakeDictionaryRepository([entry]),
+        history=history,
+    )
+
+    listed = await service.list_history(limit=10, offset=0)
+
+    hydrated = listed[0].reading.tokens[0]
+    assert isinstance(hydrated, ReadingWord)
+    assert hydrated.pinyin == "shui3 guo3"
+    assert hydrated.definitions == ("fruit",)
+    assert hydrated.dictionary_entry_id == 7  # recovered by word text, not by a stored id

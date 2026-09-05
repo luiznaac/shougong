@@ -6,13 +6,21 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from shougong.usecase.reading.model import GeneratedReading, ReadingFormat, ReadingRequest, SavedReadingText
+from shougong.usecase.reading.model import (
+    GeneratedReading,
+    PartOfSpeech,
+    ReadingFormat,
+    ReadingRequest,
+    SavedReadingText,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class SegmentedToken:
     text: str
-    pos_tag: str | None  # raw tagger tag (e.g. "v", "ns"); None for punctuation
+    # Already translated to this app's own PartOfSpeech by the segmenter
+    # implementation — this port never carries a raw tagger-specific tag.
+    part_of_speech: PartOfSpeech | None
 
 
 class IReadingTextGateway(Protocol):

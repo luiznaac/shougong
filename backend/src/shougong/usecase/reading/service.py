@@ -10,10 +10,11 @@ or returns a translation, and never decides what counts as "known".
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
-from shougong.usecase.reading import pos_labels
 from shougong.usecase.reading.gateway import IReadingHistoryRepository, IReadingTextGateway, ISegmenter, SegmentedToken
 from shougong.usecase.reading.model import (
     GeneratedReading,
@@ -60,11 +61,47 @@ class ReadingService:
         return await self._history.save(request, reading, self._clock.now())
 
     async def list_history(self, *, limit: int, offset: int) -> list[SavedReadingText]:
-        return await self._history.list(limit=limit, offset=offset)
+        items = await self._history.list(limit=limit, offset=offset)
+        return await self._hydrate(items)
 
     async def _known_word_index(self) -> dict[str, DictionaryEntry]:
         entries = await self._study.list_known_entries()
         return {entry.simplified: entry for entry in entries}
+
+    async def _hydrate(self, items: list[SavedReadingText]) -> list[SavedReadingText]:
+        """Fill in pinyin/definitions/`dictionary_entry_id` from the
+        dictionary — history never stores them, only the segmented word text
+        and whether it was extra, so a listed reading always reflects the
+        dictionary's (and the study queue's) current content. Resolved the
+        same way as generation — prefer the studied reading, else the
+        dictionary's first match — from one batched lookup regardless of how
+        many readings/words there are.
+        """
+        known_index = await self._known_word_index()
+        words = {token.text for item in items for token in item.reading.tokens if isinstance(token, ReadingWord)}
+
+        candidates_by_word: dict[str, list[DictionaryEntry]] = {}
+        for entry in await self._dictionary.find_by_simplified_many(tuple(words)):
+            candidates_by_word.setdefault(entry.simplified, []).append(entry)
+
+        def hydrate_token(token: ReadingToken) -> ReadingToken:
+            if not isinstance(token, ReadingWord):
+                return token
+            entry = known_index.get(token.text)
+            if entry is None:
+                candidates = candidates_by_word.get(token.text, [])
+                entry = candidates[0] if candidates else None
+            return replace(
+                token,
+                pinyin=entry.pinyin if entry else None,
+                definitions=entry.definitions if entry else (),
+                dictionary_entry_id=entry.id if entry else None,
+            )
+
+        return [
+            replace(item, reading=replace(item.reading, tokens=tuple(hydrate_token(t) for t in item.reading.tokens)))
+            for item in items
+        ]
 
     async def _resolve(
         self,
@@ -95,7 +132,7 @@ class ReadingService:
                     text=token.text,
                     pinyin=entry.pinyin if entry else None,
                     definitions=entry.definitions if entry else (),
-                    part_of_speech=pos_labels.label_for_tag(token.pos_tag),
+                    part_of_speech=token.part_of_speech,
                     is_extra=is_extra,
                     dictionary_entry_id=entry.id if entry else None,
                 )

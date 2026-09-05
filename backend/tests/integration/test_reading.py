@@ -7,19 +7,25 @@ from sqlalchemy import text
 
 from shougong.application.container import Container
 
-_WORD_TOKEN = {
-    "is_word": True,
-    "text": "学生",
-    "pinyin": "xue2 sheng5",
-    "definitions": ["student"],
-    "part_of_speech": "substantivo",
-    "is_extra": False,
-    "dictionary_entry_id": 42,
-}
 _PUNCT_TOKEN = {"is_word": False, "text": "。"}
 
 
-async def _seed(container: Container, *, created_at: str, topic: str | None = None) -> None:
+async def _seed_entry(container: Container) -> int:
+    async with container.engine.begin() as conn:
+        result = await conn.execute(
+            text("INSERT INTO dictionary_entry (simplified, pinyin, definitions) VALUES (:s, :p, :d)"),
+            {"s": "学生", "p": "xue2 sheng5", "d": json.dumps(["student"])},
+        )
+        return int(result.lastrowid)
+
+
+async def _seed_reading(container: Container, *, created_at: str, topic: str | None = None) -> None:
+    word_token = {
+        "is_word": True,
+        "text": "学生",
+        "part_of_speech": "substantivo",
+        "is_extra": False,
+    }
     async with container.engine.begin() as conn:
         await conn.execute(
             text(
@@ -32,15 +38,16 @@ async def _seed(container: Container, *, created_at: str, topic: str | None = No
                 "max_extra_words": 2,
                 "topic": topic,
                 "known_word_count": 12,
-                "tokens": json.dumps([_WORD_TOKEN, _PUNCT_TOKEN]),
+                "tokens": json.dumps([word_token, _PUNCT_TOKEN]),
                 "created_at": created_at,
             },
         )
 
 
 async def test_list_history_returns_saved_texts_newest_first(container: Container, client: httpx.AsyncClient) -> None:
-    await _seed(container, created_at="2026-01-01 00:00:00", topic="older")
-    await _seed(container, created_at="2026-01-02 00:00:00", topic="newer")
+    entry_id = await _seed_entry(container)
+    await _seed_reading(container, created_at="2026-01-01 00:00:00", topic="older")
+    await _seed_reading(container, created_at="2026-01-02 00:00:00", topic="newer")
 
     response = await client.get("/reading-texts")
 
@@ -51,6 +58,8 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
     first = body[0]
     assert first["known_word_count"] == 12
     word, punct = first["tokens"]
+    # pinyin/definitions/dictionary_entry_id are never stored — they come back
+    # hydrated from the dictionary_entry row seeded above, keyed by word text.
     assert word == {
         "text": "学生",
         "is_word": True,
@@ -58,7 +67,7 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
         "definitions": ["student"],
         "part_of_speech": "substantivo",
         "is_extra": False,
-        "dictionary_entry_id": 42,
+        "dictionary_entry_id": entry_id,
     }
     assert punct == {
         "text": "。",
@@ -72,9 +81,10 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
 
 
 async def test_list_history_respects_limit_and_offset(container: Container, client: httpx.AsyncClient) -> None:
-    await _seed(container, created_at="2026-01-01 00:00:00", topic="a")
-    await _seed(container, created_at="2026-01-02 00:00:00", topic="b")
-    await _seed(container, created_at="2026-01-03 00:00:00", topic="c")
+    await _seed_entry(container)
+    await _seed_reading(container, created_at="2026-01-01 00:00:00", topic="a")
+    await _seed_reading(container, created_at="2026-01-02 00:00:00", topic="b")
+    await _seed_reading(container, created_at="2026-01-03 00:00:00", topic="c")
 
     response = await client.get("/reading-texts", params={"limit": 1, "offset": 1})
 

@@ -6,8 +6,9 @@ third-party algorithmic dependency stays out of `usecase` and is wrapped at the
 boundary instead.
 
 `jieba.posseg` segments and POS-tags in one pass, so a single call gives us
-both the token stream and its grammatical-class tag (mapped to a human-readable
-label in `shougong.usecase.reading.pos_labels`).
+both the token stream and its grammatical-class tag — translated to this app's
+own `PartOfSpeech` via `jieba_pos.part_of_speech_for_tag` before it ever
+leaves this module; nothing outside `segmentation` sees jieba's raw tag.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import logging
 import jieba
 import jieba.posseg as pseg
 
+from shougong.segmentation.jieba_pos import part_of_speech_for_tag
 from shougong.usecase.reading.gateway import ISegmenter, SegmentedToken
 
 
@@ -33,4 +35,6 @@ def warm_up() -> None:
 
 class JiebaSegmenter(ISegmenter):
     def segment(self, text: str) -> tuple[SegmentedToken, ...]:
-        return tuple(SegmentedToken(text=word, pos_tag=flag) for word, flag in pseg.cut(text))
+        return tuple(
+            SegmentedToken(text=word, part_of_speech=part_of_speech_for_tag(flag)) for word, flag in pseg.cut(text)
+        )

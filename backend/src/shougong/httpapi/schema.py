@@ -228,7 +228,7 @@ class ReadingTokenResponse(BaseModel):
                 is_word=True,
                 pinyin=token.pinyin,
                 definitions=list(token.definitions),
-                part_of_speech=token.part_of_speech,
+                part_of_speech=token.part_of_speech.value if token.part_of_speech is not None else None,
                 is_extra=token.is_extra,
                 dictionary_entry_id=token.dictionary_entry_id,
             )

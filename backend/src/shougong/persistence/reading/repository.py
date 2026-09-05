@@ -1,9 +1,13 @@
 """`ReadingHistoryRepository` — implements `IReadingHistoryRepository` against MySQL.
 
 Each resolved token is serialised to a small JSON dict (word and punctuation
-tokens share a shape, discriminated by `is_word`) so a saved reading can be
-listed back without ever re-touching the dictionary or the learner's current
-vocabulary.
+tokens share a shape, discriminated by `is_word`). Only the segmented word
+text, its part of speech, and whether it was extra are stored — no pinyin,
+definitions, or dictionary id. `ReadingService` re-resolves those (batched, by
+word text via `IDictionaryRepository.find_by_simplified_many`) whenever
+history is read, so a listed reading always reflects the dictionary's (and
+the study queue's) current content rather than a frozen copy from generation
+time.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ from shougong.persistence.reading.entity import ReadingTextEntity
 from shougong.usecase.reading.gateway import IReadingHistoryRepository
 from shougong.usecase.reading.model import (
     GeneratedReading,
+    PartOfSpeech,
     ReadingFormat,
     ReadingPunctuation,
     ReadingRequest,
@@ -43,11 +48,8 @@ def _token_to_json(token: ReadingToken) -> dict[str, Any]:
         return {
             "is_word": True,
             "text": token.text,
-            "pinyin": token.pinyin,
-            "definitions": list(token.definitions),
-            "part_of_speech": token.part_of_speech,
+            "part_of_speech": token.part_of_speech.value if token.part_of_speech is not None else None,
             "is_extra": token.is_extra,
-            "dictionary_entry_id": token.dictionary_entry_id,
         }
     return {"is_word": False, "text": token.text}
 
@@ -57,11 +59,13 @@ def _token_from_json(row: dict[str, Any]) -> ReadingToken:
         return ReadingPunctuation(text=row["text"])
     return ReadingWord(
         text=row["text"],
-        pinyin=row["pinyin"],
-        definitions=tuple(row["definitions"]),
-        part_of_speech=row["part_of_speech"],
+        # Not stored — ReadingService re-resolves these from the dictionary
+        # (batched, by word text) whenever history is read; see the module docstring.
+        pinyin=None,
+        definitions=(),
+        part_of_speech=PartOfSpeech(row["part_of_speech"]) if row["part_of_speech"] is not None else None,
         is_extra=row["is_extra"],
-        dictionary_entry_id=row.get("dictionary_entry_id"),
+        dictionary_entry_id=None,
     )
 
 

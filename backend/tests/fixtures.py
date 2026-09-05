@@ -19,7 +19,13 @@ from shougong.usecase.reading.gateway import (
     ISegmenter,
     SegmentedToken,
 )
-from shougong.usecase.reading.model import GeneratedReading, ReadingFormat, ReadingRequest, SavedReadingText
+from shougong.usecase.reading.model import (
+    GeneratedReading,
+    PartOfSpeech,
+    ReadingFormat,
+    ReadingRequest,
+    SavedReadingText,
+)
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeRepository
@@ -81,6 +87,10 @@ class FakeDictionaryRepository(IDictionaryRepository):
 
     async def find_by_simplified(self, simplified: str) -> list[DictionaryEntry]:
         return sorted((e for e in self.entries if e.simplified == simplified), key=lambda e: e.id)
+
+    async def find_by_simplified_many(self, simplified_words: Sequence[str]) -> list[DictionaryEntry]:
+        wanted = set(simplified_words)
+        return sorted((e for e in self.entries if e.simplified in wanted), key=lambda e: e.id)
 
     async def get(self, entry_id: int) -> DictionaryEntry | None:
         return next((e for e in self.entries if e.id == entry_id), None)
@@ -272,8 +282,8 @@ class FakeReadingTextGateway(IReadingTextGateway):
         return self.response
 
 
-def make_segmented_token(text: str, *, pos_tag: str | None = "n") -> SegmentedToken:
-    return SegmentedToken(text=text, pos_tag=pos_tag)
+def make_segmented_token(text: str, *, part_of_speech: PartOfSpeech | None = PartOfSpeech.NOUN) -> SegmentedToken:
+    return SegmentedToken(text=text, part_of_speech=part_of_speech)
 
 
 class FakeSegmenter(ISegmenter):

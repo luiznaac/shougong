@@ -24,6 +24,23 @@ class ReadingFormat(StrEnum):
     SENTENCES = "sentences"
 
 
+class PartOfSpeech(StrEnum):
+    """Grammatical class of a word, in this app's own vocabulary — never a raw
+    tag from whatever segmentation library resolves it (see `ISegmenter`)."""
+
+    NOUN = "substantivo"
+    VERB = "verbo"
+    ADJECTIVE = "adjetivo"
+    ADVERB = "advérbio"
+    PRONOUN = "pronome"
+    NUMERAL = "numeral"
+    QUANTIFIER = "quantificador"
+    PREPOSITION = "preposição"
+    CONJUNCTION = "conjunção"
+    PARTICLE = "partícula"
+    OTHER = "outro"
+
+
 @dataclass(frozen=True, slots=True)
 class ReadingRequest:
     format: ReadingFormat
@@ -36,7 +53,7 @@ class ReadingWord:
     text: str
     pinyin: str | None  # None only when no dictionary entry exists at all
     definitions: tuple[str, ...]
-    part_of_speech: str | None  # human-readable label, see pos_labels.label_for_tag
+    part_of_speech: PartOfSpeech | None  # None for punctuation or an unresolved tag
     is_extra: bool  # not in the learner's known vocabulary
     # None only when no dictionary entry exists at all; lets an extra word be
     # added straight to the study queue (`POST /study-items`) from the reading.

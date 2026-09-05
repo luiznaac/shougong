@@ -77,10 +77,11 @@ CREATE TABLE IF NOT EXISTS study_item_history (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Generated reading-practice texts, kept as a revisitable history. `tokens` is
--- the fully resolved word/punctuation breakdown at generation time (pinyin,
--- definitions, part of speech, is_extra, dictionary_entry_id) — stored as
--- shown, not recomputed against the dictionary/vocabulary on every read.
--- `known_word_count` is the size of the known-vocabulary set sent to the model.
+-- the word/punctuation breakdown (text, part of speech, is_extra) —
+-- deliberately WITHOUT pinyin, definitions, or a dictionary id, which the app
+-- re-resolves by word text (batched) from dictionary_entry on every read
+-- instead of freezing a copy here. `known_word_count` is the size of the
+-- known-vocabulary set sent to the model.
 CREATE TABLE IF NOT EXISTS reading_text (
     id                       BIGINT       NOT NULL AUTO_INCREMENT,
     format                   VARCHAR(16)  NOT NULL,
