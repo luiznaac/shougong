@@ -249,10 +249,7 @@ class SavedReadingTextResponse(BaseModel):
     max_extra_words: int
     topic: str | None
     tokens: list[ReadingTokenResponse]
-    extra_word_count: int
-    extra_char_count: int
     known_word_count: int
-    known_words_char_count: int
     created_at: datetime
 
     @classmethod
@@ -263,9 +260,6 @@ class SavedReadingTextResponse(BaseModel):
             max_extra_words=saved.request.max_extra_words,
             topic=saved.request.topic,
             tokens=[ReadingTokenResponse.from_domain(t) for t in saved.reading.tokens],
-            extra_word_count=saved.reading.extra_word_count,
-            extra_char_count=saved.reading.extra_char_count,
             known_word_count=saved.reading.known_word_count,
-            known_words_char_count=saved.reading.known_words_char_count,
             created_at=saved.created_at,
         )

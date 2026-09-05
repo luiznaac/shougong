@@ -23,7 +23,7 @@ from shougong.usecase.reading.model import (
     ReadingWord,
     SavedReadingText,
 )
-from shougong.usecase.reading.validation import distinct_extra_words, is_chinese_word
+from shougong.usecase.reading.validation import is_chinese_word
 from shougong.usecase.study.gateway import IStudyItemRepository
 
 
@@ -55,16 +55,8 @@ class ReadingService:
             topic=request.topic,
         )
         segmented = self._segmenter.segment(text)
-        extras = distinct_extra_words((t.text for t in segmented), known_words)
 
-        reading = await self._resolve(
-            request,
-            segmented,
-            known_index,
-            extra_word_count=len(extras),
-            known_word_count=len(known_words),
-            known_words_char_count=sum(len(w) for w in known_words),
-        )
+        reading = await self._resolve(request, segmented, known_index, known_word_count=len(known_words))
         return await self._history.save(request, reading, self._clock.now())
 
     async def list_history(self, *, limit: int, offset: int) -> list[SavedReadingText]:
@@ -80,13 +72,10 @@ class ReadingService:
         segmented: tuple[SegmentedToken, ...],
         known_index: dict[str, DictionaryEntry],
         *,
-        extra_word_count: int,
         known_word_count: int,
-        known_words_char_count: int,
     ) -> GeneratedReading:
         resolved_cache: dict[str, DictionaryEntry | None] = {}
         tokens: list[ReadingToken] = []
-        extra_char_count = 0
 
         for token in segmented:
             if not is_chinese_word(token.text):
@@ -96,7 +85,6 @@ class ReadingService:
             entry = known_index.get(token.text)
             is_extra = entry is None
             if is_extra:
-                extra_char_count += len(token.text)
                 if token.text not in resolved_cache:
                     candidates = await self._dictionary.find_by_simplified(token.text)
                     resolved_cache[token.text] = candidates[0] if candidates else None
@@ -113,11 +101,4 @@ class ReadingService:
                 )
             )
 
-        return GeneratedReading(
-            format=request.format,
-            tokens=tuple(tokens),
-            extra_word_count=extra_word_count,
-            extra_char_count=extra_char_count,
-            known_word_count=known_word_count,
-            known_words_char_count=known_words_char_count,
-        )
+        return GeneratedReading(format=request.format, tokens=tuple(tokens), known_word_count=known_word_count)

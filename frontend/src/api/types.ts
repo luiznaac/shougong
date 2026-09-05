@@ -109,9 +109,7 @@ export interface SavedReadingText {
   max_extra_words: number;
   topic: string | null;
   tokens: ReadingToken[];
-  extra_word_count: number;
-  extra_char_count: number;
+  // Size of the known-vocabulary set (the study queue) sent to the model.
   known_word_count: number;
-  known_words_char_count: number;
   created_at: string;
 }

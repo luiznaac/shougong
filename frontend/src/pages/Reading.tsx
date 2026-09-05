@@ -10,6 +10,10 @@ const FORMAT_LABELS: Record<ReadingFormat, string> = {
   sentences: "Frases soltas",
 };
 
+function countExtraWords(tokens: ReadingToken[]): number {
+  return new Set(tokens.filter((t) => t.is_word && t.is_extra).map((t) => t.text)).size;
+}
+
 export function Reading() {
   const [format, setFormat] = useState<ReadingFormat>("paragraph");
   const [maxExtraWords, setMaxExtraWords] = useState(2);
@@ -109,9 +113,9 @@ export function Reading() {
           <div className="mt-3">
             <ReadingTokens tokens={current.tokens} />
           </div>
-          {current.extra_word_count > 0 && (
+          {countExtraWords(current.tokens) > 0 && (
             <p className="mt-4 text-xs text-amber-400">
-              {current.extra_word_count} palavra(s) fora do vocabulário conhecido.
+              {countExtraWords(current.tokens)} palavra(s) fora do vocabulário conhecido.
             </p>
           )}
         </div>
@@ -139,10 +143,10 @@ export function Reading() {
                       <span className="truncate">{item.topic}</span>
                     </>
                   )}
-                  {item.extra_word_count > 0 && (
+                  {countExtraWords(item.tokens) > 0 && (
                     <>
                       <span>&middot;</span>
-                      <span className="text-amber-400">{item.extra_word_count} extra(s)</span>
+                      <span className="text-amber-400">{countExtraWords(item.tokens)} extra(s)</span>
                     </>
                   )}
                   <span className="ml-auto shrink-0">{new Date(item.created_at).toLocaleString()}</span>

@@ -68,10 +68,7 @@ async def test_generate_calls_the_gateway_exactly_once() -> None:
     saved = await service.generate(ReadingRequest(format=ReadingFormat.SENTENCES, max_extra_words=0))
 
     assert len(gateway.calls) == 1
-    assert saved.reading.extra_word_count == 0
-    assert saved.reading.extra_char_count == 0
     assert saved.reading.known_word_count == 3
-    assert saved.reading.known_words_char_count == len("我") + len("是") + len("学生")
     words = [t for t in saved.reading.tokens if isinstance(t, ReadingWord)]
     assert all(not w.is_extra for w in words)
     assert any(isinstance(t, ReadingPunctuation) for t in saved.reading.tokens)
@@ -92,8 +89,6 @@ async def test_extras_over_budget_are_reported_not_retried() -> None:
     saved = await service.generate(ReadingRequest(format=ReadingFormat.SENTENCES, max_extra_words=0))
 
     assert len(gateway.calls) == 1  # exceeding the budget never triggers a second call
-    assert saved.reading.extra_word_count == 1
-    assert saved.reading.extra_char_count == len("猫")
     extra_words = [t.text for t in saved.reading.tokens if isinstance(t, ReadingWord) and t.is_extra]
     assert extra_words == ["猫"]
 

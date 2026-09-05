@@ -80,18 +80,13 @@ CREATE TABLE IF NOT EXISTS study_item_history (
 -- the fully resolved word/punctuation breakdown at generation time (pinyin,
 -- definitions, part of speech, is_extra, dictionary_entry_id) — stored as
 -- shown, not recomputed against the dictionary/vocabulary on every read.
--- `known_word_count`/`known_words_char_count` describe the vocabulary sent to
--- the model; `extra_word_count`/`extra_char_count` describe how it went (a
--- single shot — never retried).
+-- `known_word_count` is the size of the known-vocabulary set sent to the model.
 CREATE TABLE IF NOT EXISTS reading_text (
     id                       BIGINT       NOT NULL AUTO_INCREMENT,
     format                   VARCHAR(16)  NOT NULL,
     max_extra_words          INT          NOT NULL,
     topic                    VARCHAR(255) NULL,
-    extra_word_count         INT          NOT NULL,
-    extra_char_count         INT          NOT NULL,
     known_word_count         INT          NOT NULL,
-    known_words_char_count   INT          NOT NULL,
     tokens                   JSON         NOT NULL,
     created_at               DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),

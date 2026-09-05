@@ -57,10 +57,7 @@ type ReadingToken = ReadingWord | ReadingPunctuation
 class GeneratedReading:
     format: ReadingFormat
     tokens: tuple[ReadingToken, ...]
-    extra_word_count: int  # count of distinct extra words
-    extra_char_count: int  # total characters across every extra-word occurrence
     known_word_count: int  # size of the known-vocabulary set sent to the model
-    known_words_char_count: int  # total characters across that vocabulary
 
 
 @dataclass(frozen=True, slots=True)
