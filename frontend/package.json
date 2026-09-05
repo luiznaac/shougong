@@ -10,6 +10,7 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@radix-ui/react-popover": "^1.1.23",
     "@tanstack/react-query": "^5.62.7",
     "hanzi-writer": "^3.7.3",
     "react": "^19.0.0",

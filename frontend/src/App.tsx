@@ -6,6 +6,7 @@ import { Lesson } from "./pages/Lesson.tsx";
 import { StudyItemPage } from "./pages/StudyItemPage.tsx";
 import { AddItems } from "./pages/AddItems.tsx";
 import { BatchImport } from "./pages/BatchImport.tsx";
+import { Reading } from "./pages/Reading.tsx";
 
 export const routes: RouteObject[] = [
   {
@@ -16,6 +17,7 @@ export const routes: RouteObject[] = [
       { path: "add", element: <AddItems /> },
       { path: "add/batch", element: <BatchImport /> },
       { path: "items/:id", element: <StudyItemPage /> },
+      { path: "reading", element: <Reading /> },
     ],
   },
   // Lesson and Review run full-screen, outside the chrome.

@@ -13,6 +13,13 @@ from typing import TypeVar
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
+from shougong.usecase.reading.gateway import (
+    IReadingHistoryRepository,
+    IReadingTextGateway,
+    ISegmenter,
+    SegmentedToken,
+)
+from shougong.usecase.reading.model import GeneratedReading, ReadingFormat, ReadingRequest, SavedReadingText
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeRepository
@@ -210,6 +217,9 @@ class FakeStudyItemRepository(IStudyItemRepository):
     async def exists_for_entry(self, entry_id: int) -> bool:
         return any(i.entry.id == entry_id for i in self.items)
 
+    async def list_known_entries(self) -> list[DictionaryEntry]:
+        return [item.entry for item in self.items]
+
     async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]:
         rows = sorted(self.items, key=lambda i: (i.card.due, i.id))
         if due_before is not None:
@@ -233,3 +243,63 @@ class FakeStudyItemRepository(IStudyItemRepository):
         # newest first; ties broken by later insertion first, mirroring the repo's id DESC
         order = sorted(range(len(logs)), key=lambda i: (logs[i].review_datetime, i), reverse=True)
         return [logs[i] for i in order][offset : offset + limit]
+
+
+class FakeReadingTextGateway(IReadingTextGateway):
+    """Returns canned texts in call order; records what it was called with so a
+    test can assert `avoid_words` grows correctly across retries."""
+
+    def __init__(self, responses: list[str]) -> None:
+        self.responses: list[str] = list(responses)
+        self.calls: list[dict[str, object]] = []
+
+    async def generate(
+        self,
+        *,
+        known_words: frozenset[str],
+        text_format: ReadingFormat,
+        max_extra_words: int,
+        topic: str | None,
+        avoid_words: frozenset[str],
+    ) -> str:
+        index = len(self.calls)
+        self.calls.append(
+            {
+                "known_words": known_words,
+                "text_format": text_format,
+                "max_extra_words": max_extra_words,
+                "topic": topic,
+                "avoid_words": avoid_words,
+            }
+        )
+        return self.responses[min(index, len(self.responses) - 1)]
+
+
+def make_segmented_token(text: str, *, pos_tag: str | None = "n") -> SegmentedToken:
+    return SegmentedToken(text=text, pos_tag=pos_tag)
+
+
+class FakeSegmenter(ISegmenter):
+    """Maps exact input text to a canned token tuple set up by the test —
+    decoupled from real jieba behaviour."""
+
+    def __init__(self, mapping: dict[str, tuple[SegmentedToken, ...]]) -> None:
+        self.mapping: dict[str, tuple[SegmentedToken, ...]] = dict(mapping)
+
+    def segment(self, text: str) -> tuple[SegmentedToken, ...]:
+        return self.mapping[text]
+
+
+class FakeReadingHistoryRepository(IReadingHistoryRepository):
+    def __init__(self) -> None:
+        self.saved: list[SavedReadingText] = []
+        self._ids = count(1)
+
+    async def save(self, request: ReadingRequest, reading: GeneratedReading, created_at: datetime) -> SavedReadingText:
+        saved = SavedReadingText(id=next(self._ids), request=request, reading=reading, created_at=created_at)
+        self.saved.append(saved)
+        return saved
+
+    async def list(self, *, limit: int, offset: int) -> list[SavedReadingText]:
+        newest_first = sorted(self.saved, key=lambda s: s.id, reverse=True)
+        return newest_first[offset : offset + limit]

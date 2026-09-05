@@ -29,6 +29,9 @@ export function Layout() {
             <NavLink to="/add/batch" className={linkClass}>
               Importar CSV
             </NavLink>
+            <NavLink to="/reading" className={linkClass}>
+              Leitura
+            </NavLink>
           </nav>
         </div>
       </header>

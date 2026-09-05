@@ -152,6 +152,20 @@ class StudyItemRepository(IStudyItemRepository):
 
         return await self._tx.execute(_run)
 
+    async def list_known_entries(self) -> list[DictionaryEntry]:
+        async def _run() -> list[DictionaryEntry]:
+            session = current_session()
+            stmt = select(DictionaryEntryEntity).join(
+                StudyItemEntity, StudyItemEntity.entry_id == DictionaryEntryEntity.id
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+            return [_entry_to_domain(row) for row in rows]
+
+        return await self._tx.execute(_run)
+
+    # NOTE: keep this method last — see the matching note on the port in
+    # usecase/study/gateway.py (its name shadows the builtin `list` for any
+    # annotation written after it in this class body).
     async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]:
         async def _run() -> list[StudyItem]:
             session = current_session()

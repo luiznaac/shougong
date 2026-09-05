@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
+from shougong.usecase.reading.model import ReadingFormat, ReadingRequest, ReadingToken, ReadingWord, SavedReadingText
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
 from shougong.usecase.strokes.model import CharacterStrokes
 from shougong.usecase.study.model import BatchImportOutcome, BatchImportReport, ReviewResult, StudyItem
@@ -188,4 +189,85 @@ class ReviewResponse(BaseModel):
         return cls(
             item=StudyItemResponse.from_domain(result.item),
             review=ReviewLogResponse.from_domain(result.log),
+        )
+
+
+class GenerateReadingRequest(BaseModel):
+    format: Literal["paragraph", "sentences"] = "paragraph"
+    max_extra_words: int = Field(default=2, ge=0, le=20)
+    # Free text sent verbatim to the LLM prompt — bounded to keep injected
+    # instructions short; the system prompt also tells the model to treat this
+    # field as a literal topic, never as instructions (see LiteLlmReadingGateway).
+    topic: str | None = Field(default=None, max_length=200)
+
+    def to_domain(self) -> ReadingRequest:
+        return ReadingRequest(
+            format=ReadingFormat(self.format),
+            max_extra_words=self.max_extra_words,
+            topic=self.topic,
+        )
+
+
+class ReadingTokenResponse(BaseModel):
+    text: str
+    is_word: bool
+    pinyin: str | None
+    definitions: list[str]
+    part_of_speech: str | None
+    is_extra: bool
+    # Populated whenever a dictionary entry was resolved (including for extra
+    # words) — lets the frontend add an extra word to the study queue directly
+    # from the reading (`POST /study-items`).
+    dictionary_entry_id: int | None
+
+    @classmethod
+    def from_domain(cls, token: ReadingToken) -> ReadingTokenResponse:
+        if isinstance(token, ReadingWord):
+            return cls(
+                text=token.text,
+                is_word=True,
+                pinyin=token.pinyin,
+                definitions=list(token.definitions),
+                part_of_speech=token.part_of_speech,
+                is_extra=token.is_extra,
+                dictionary_entry_id=token.dictionary_entry_id,
+            )
+        return cls(
+            text=token.text,
+            is_word=False,
+            pinyin=None,
+            definitions=[],
+            part_of_speech=None,
+            is_extra=False,
+            dictionary_entry_id=None,
+        )
+
+
+class SavedReadingTextResponse(BaseModel):
+    id: int
+    format: str
+    max_extra_words: int
+    topic: str | None
+    tokens: list[ReadingTokenResponse]
+    extra_word_count: int
+    extra_char_count: int
+    known_word_count: int
+    known_words_char_count: int
+    attempts: int
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, saved: SavedReadingText) -> SavedReadingTextResponse:
+        return cls(
+            id=saved.id,
+            format=saved.request.format.value,
+            max_extra_words=saved.request.max_extra_words,
+            topic=saved.request.topic,
+            tokens=[ReadingTokenResponse.from_domain(t) for t in saved.reading.tokens],
+            extra_word_count=saved.reading.extra_word_count,
+            extra_char_count=saved.reading.extra_char_count,
+            known_word_count=saved.reading.known_word_count,
+            known_words_char_count=saved.reading.known_words_char_count,
+            attempts=saved.reading.attempts,
+            created_at=saved.created_at,
         )

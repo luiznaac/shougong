@@ -75,3 +75,25 @@ CREATE TABLE IF NOT EXISTS study_item_history (
     CONSTRAINT fk_study_item_history_entry FOREIGN KEY (entry_id)
         REFERENCES dictionary_entry (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Generated reading-practice texts, kept as a revisitable history. `tokens` is
+-- the fully resolved word/punctuation breakdown at generation time (pinyin,
+-- definitions, part of speech, is_extra, dictionary_entry_id) — stored as
+-- shown, not recomputed against the dictionary/vocabulary on every read.
+-- `known_word_count`/`known_words_char_count` describe the vocabulary sent to
+-- the model; `extra_char_count`/`attempts` describe how the generation went.
+CREATE TABLE IF NOT EXISTS reading_text (
+    id                       BIGINT       NOT NULL AUTO_INCREMENT,
+    format                   VARCHAR(16)  NOT NULL,
+    max_extra_words          INT          NOT NULL,
+    topic                    VARCHAR(255) NULL,
+    extra_word_count         INT          NOT NULL,
+    extra_char_count         INT          NOT NULL,
+    known_word_count         INT          NOT NULL,
+    known_words_char_count   INT          NOT NULL,
+    attempts                 INT          NOT NULL,
+    tokens                   JSON         NOT NULL,
+    created_at               DATETIME(6)  NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_reading_text_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
