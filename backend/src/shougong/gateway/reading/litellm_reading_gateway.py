@@ -5,10 +5,11 @@ Structured output is forced via tool calling instead of a "respond in JSON"
 instruction: the model is required to call `return_reading_text`, which only
 has a `text` property — no overall translation is ever requested or returned.
 
-The system prompt lives in `system_prompt.md`, next to this file, rather than
+The system prompt lives in `system_prompt.txt`, next to this file, rather than
 as a Python string literal — content a non-engineer might want to tune (or
 that simply reads better as prose) shouldn't be buried inside request-building
-logic.
+logic. Plain `.txt`, not `.md`: `.dockerignore` strips `**/*.md` from the build
+context (docs aren't needed in the image), and this isn't documentation.
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ _TOOL_SCHEMA = {
     },
 }
 
-_SYSTEM_PROMPT = Path(__file__).with_name("system_prompt.md").read_text(encoding="utf-8").strip()
+_SYSTEM_PROMPT = Path(__file__).with_name("system_prompt.txt").read_text(encoding="utf-8").strip()
 
 
 def _build_messages(
