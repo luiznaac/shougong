@@ -26,12 +26,17 @@ class SegmentedToken:
 class IReadingTextGateway(Protocol):
     """Generates one text — a single shot, never retried."""
 
+    async def list_models(self) -> tuple[str, ...]:
+        """Model ids the backing proxy currently exposes, sorted."""
+        ...
+
     async def generate(
         self,
         *,
         known_words: frozenset[str],
         text_format: ReadingFormat,
         max_extra_words: int,
+        model: str,
         topic: str | None,
     ) -> str: ...
 

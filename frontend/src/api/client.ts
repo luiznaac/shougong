@@ -123,4 +123,7 @@ export const api = {
   listReadingHistory(limit = 20, offset = 0): Promise<SavedReadingText[]> {
     return request(`/reading-texts?limit=${limit}&offset=${offset}`);
   },
+  listReadingModels(): Promise<string[]> {
+    return request(`/reading-texts/models`);
+  },
 };

@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 
 import httpx
+from pytest_httpserver import HTTPServer
 from sqlalchemy import text
 
 from shougong.application.container import Container
+from shougong.application.settings import AiGatewayConfig, GatewaysConfig, Settings
 
 _PUNCT_TOKEN = {"is_word": False, "text": "。"}
 
@@ -19,7 +21,9 @@ async def _seed_entry(container: Container) -> int:
         return int(result.lastrowid)
 
 
-async def _seed_reading(container: Container, *, created_at: str, topic: str | None = None) -> None:
+async def _seed_reading(
+    container: Container, *, created_at: str, topic: str | None = None, model: str = "claude-haiku-4-5"
+) -> None:
     word_token = {
         "is_word": True,
         "text": "学生",
@@ -30,13 +34,14 @@ async def _seed_reading(container: Container, *, created_at: str, topic: str | N
         await conn.execute(
             text(
                 "INSERT INTO reading_text "
-                "(format, max_extra_words, topic, known_word_count, tokens, created_at) "
-                "VALUES (:format, :max_extra_words, :topic, :known_word_count, :tokens, :created_at)"
+                "(format, max_extra_words, topic, model, known_word_count, tokens, created_at) "
+                "VALUES (:format, :max_extra_words, :topic, :model, :known_word_count, :tokens, :created_at)"
             ),
             {
                 "format": "paragraph",
                 "max_extra_words": 2,
                 "topic": topic,
+                "model": model,
                 "known_word_count": 12,
                 "tokens": json.dumps([word_token, _PUNCT_TOKEN]),
                 "created_at": created_at,
@@ -46,14 +51,15 @@ async def _seed_reading(container: Container, *, created_at: str, topic: str | N
 
 async def test_list_history_returns_saved_texts_newest_first(container: Container, client: httpx.AsyncClient) -> None:
     entry_id = await _seed_entry(container)
-    await _seed_reading(container, created_at="2026-01-01 00:00:00", topic="older")
-    await _seed_reading(container, created_at="2026-01-02 00:00:00", topic="newer")
+    await _seed_reading(container, created_at="2026-01-01 00:00:00", topic="older", model="claude-haiku-4-5")
+    await _seed_reading(container, created_at="2026-01-02 00:00:00", topic="newer", model="claude-sonnet-4-5")
 
     response = await client.get("/reading-texts")
 
     assert response.status_code == 200
     body = response.json()
     assert [row["topic"] for row in body] == ["newer", "older"]
+    assert [row["model"] for row in body] == ["claude-sonnet-4-5", "claude-haiku-4-5"]
 
     first = body[0]
     assert first["known_word_count"] == 12
@@ -97,6 +103,25 @@ async def test_list_history_tolerates_a_part_of_speech_from_before_the_enum_chan
 
     assert response.status_code == 200
     assert response.json()[0]["tokens"][0]["part_of_speech"] is None
+
+
+async def test_list_models_proxies_the_ai_gateway(settings: Settings, httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/models", method="GET").respond_with_json(
+        {"data": [{"id": "claude-sonnet-4-5"}, {"id": "claude-haiku-4-5"}]}
+    )
+    ai_settings = settings.model_copy(
+        update={"gateways": GatewaysConfig(ai=AiGatewayConfig(base_url=httpserver.url_for("/"), api_key="sk-test"))}
+    )
+    instance = Container(ai_settings)
+    try:
+        transport = httpx.ASGITransport(app=instance.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ai_client:
+            response = await ai_client.get("/reading-texts/models")
+    finally:
+        await instance.aclose()
+
+    assert response.status_code == 200
+    assert response.json() == ["claude-haiku-4-5", "claude-sonnet-4-5"]
 
 
 async def test_list_history_respects_limit_and_offset(container: Container, client: httpx.AsyncClient) -> None:

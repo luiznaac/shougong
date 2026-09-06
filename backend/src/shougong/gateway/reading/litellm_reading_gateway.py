@@ -71,11 +71,23 @@ def _build_messages(
 
 
 class LiteLlmReadingGateway(IReadingTextGateway):
-    def __init__(self, client: httpx.AsyncClient, base_url: str, api_key: str, model: str) -> None:
+    def __init__(self, client: httpx.AsyncClient, base_url: str, api_key: str) -> None:
         self._client = client
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
-        self._model = model
+
+    @property
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
+
+    async def list_models(self) -> tuple[str, ...]:
+        try:
+            response = await self._client.get(f"{self._base_url}/models", headers=self._headers)
+            response.raise_for_status()
+            body = response.json()
+            return tuple(sorted(str(entry["id"]) for entry in body["data"]))
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            raise ReadingGenerationError(f"ai gateway request failed: {exc}") from exc
 
     async def generate(
         self,
@@ -83,10 +95,11 @@ class LiteLlmReadingGateway(IReadingTextGateway):
         known_words: frozenset[str],
         text_format: ReadingFormat,
         max_extra_words: int,
+        model: str,
         topic: str | None,
     ) -> str:
         payload: dict[str, Any] = {
-            "model": self._model,
+            "model": model,
             "messages": _build_messages(
                 known_words=known_words,
                 text_format=text_format,
@@ -96,10 +109,11 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             "tools": [_TOOL_SCHEMA],
             "tool_choice": {"type": "function", "function": {"name": _TOOL_NAME}},
         }
-        headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
         try:
-            response = await self._client.post(f"{self._base_url}/chat/completions", json=payload, headers=headers)
+            response = await self._client.post(
+                f"{self._base_url}/chat/completions", json=payload, headers=self._headers
+            )
             response.raise_for_status()
             body = response.json()
             arguments = json.loads(body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])

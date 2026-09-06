@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, DateTime, Integer, String
+from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shougong.persistence.configuration.base import Base
@@ -24,6 +24,9 @@ class ReadingTextEntity(Base):
     format: Mapped[str] = mapped_column(String(16))
     max_extra_words: Mapped[int] = mapped_column(Integer)
     topic: Mapped[str | None] = mapped_column(String(255))
+    # Empty string on rows written before per-request model choice existed
+    # (matches the `DEFAULT ''` in mysql/init.sql).
+    model: Mapped[str] = mapped_column(String(128), server_default=text("''"))
     known_word_count: Mapped[int] = mapped_column(Integer)
     tokens: Mapped[list[dict[str, object]]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)

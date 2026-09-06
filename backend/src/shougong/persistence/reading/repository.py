@@ -81,7 +81,12 @@ def _token_from_json(row: dict[str, Any]) -> ReadingToken:
 
 
 def to_domain(row: ReadingTextEntity) -> SavedReadingText:
-    request = ReadingRequest(format=ReadingFormat(row.format), max_extra_words=row.max_extra_words, topic=row.topic)
+    request = ReadingRequest(
+        format=ReadingFormat(row.format),
+        max_extra_words=row.max_extra_words,
+        model=row.model,
+        topic=row.topic,
+    )
     reading = GeneratedReading(
         format=ReadingFormat(row.format),
         tokens=tuple(_token_from_json(t) for t in row.tokens),
@@ -101,6 +106,7 @@ class ReadingHistoryRepository(IReadingHistoryRepository):
                 format=request.format.value,
                 max_extra_words=request.max_extra_words,
                 topic=request.topic,
+                model=request.model,
                 known_word_count=reading.known_word_count,
                 tokens=[_token_to_json(t) for t in reading.tokens],
                 created_at=_naive_utc(created_at),

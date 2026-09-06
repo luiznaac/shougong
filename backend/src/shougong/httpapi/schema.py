@@ -195,6 +195,9 @@ class ReviewResponse(BaseModel):
 class GenerateReadingRequest(BaseModel):
     format: Literal["paragraph", "sentences"] = "paragraph"
     max_extra_words: int = Field(default=2, ge=0, le=20)
+    # LiteLLM model id chosen on the reading screen from GET /reading-texts/models;
+    # always sent by the client — there is no server-side default model.
+    model: str = Field(min_length=1, max_length=128)
     # Free text sent verbatim to the LLM prompt — bounded to keep injected
     # instructions short; the system prompt also tells the model to treat this
     # field as a literal topic, never as instructions (see LiteLlmReadingGateway).
@@ -204,6 +207,7 @@ class GenerateReadingRequest(BaseModel):
         return ReadingRequest(
             format=ReadingFormat(self.format),
             max_extra_words=self.max_extra_words,
+            model=self.model,
             topic=self.topic,
         )
 
@@ -247,6 +251,7 @@ class SavedReadingTextResponse(BaseModel):
     id: int
     format: str
     max_extra_words: int
+    model: str  # LiteLLM model that generated this text ("" for rows saved before model choice existed)
     topic: str | None
     tokens: list[ReadingTokenResponse]
     known_word_count: int
@@ -258,6 +263,7 @@ class SavedReadingTextResponse(BaseModel):
             id=saved.id,
             format=saved.request.format.value,
             max_extra_words=saved.request.max_extra_words,
+            model=saved.request.model,
             topic=saved.request.topic,
             tokens=[ReadingTokenResponse.from_domain(t) for t in saved.reading.tokens],
             known_word_count=saved.reading.known_word_count,

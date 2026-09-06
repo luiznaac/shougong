@@ -1,7 +1,8 @@
 """`ReadingController` — generate vocabulary-restricted reading texts.
 
-`POST /reading-texts` generate a new text, persist it, return it.
-`GET  /reading-texts`  list previously generated texts, newest first.
+`POST /reading-texts`        generate a new text, persist it, return it.
+`GET  /reading-texts`        list previously generated texts, newest first.
+`GET  /reading-texts/models` model ids the backing AI proxy currently exposes.
 """
 
 from __future__ import annotations
@@ -34,5 +35,9 @@ class ReadingController(IController):
         ) -> list[SavedReadingTextResponse]:
             items = await self._service.list_history(limit=limit, offset=offset)
             return [SavedReadingTextResponse.from_domain(item) for item in items]
+
+        @router.get("/models")
+        async def list_models() -> list[str]:
+            return list(await self._service.list_models())
 
         return router

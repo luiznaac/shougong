@@ -55,6 +55,10 @@ def _tok(text: str, pos: PartOfSpeech | None = PartOfSpeech.NOUN) -> SegmentedTo
     return make_segmented_token(text, part_of_speech=pos)
 
 
+def _req(fmt: ReadingFormat, max_extra_words: int, *, model: str = "test-model") -> ReadingRequest:
+    return ReadingRequest(format=fmt, max_extra_words=max_extra_words, model=model)
+
+
 async def test_generate_calls_the_gateway_exactly_once() -> None:
     wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
     shi = make_dictionary_entry(entry_id=2, simplified="是", pinyin="shi4", definitions=("to be",))
@@ -78,9 +82,11 @@ async def test_generate_calls_the_gateway_exactly_once() -> None:
         known=known,
     )
 
-    saved = await service.generate(ReadingRequest(format=ReadingFormat.SENTENCES, max_extra_words=0))
+    saved = await service.generate(_req(ReadingFormat.SENTENCES, 0, model="haiku-x"))
 
     assert len(gateway.calls) == 1
+    assert gateway.calls[0]["model"] == "haiku-x"  # the caller's model choice reaches the gateway
+    assert saved.request.model == "haiku-x"  # and is persisted with the reading
     assert saved.reading.known_word_count == 3
     words = [t for t in saved.reading.tokens if isinstance(t, ReadingWord)]
     assert all(not w.is_extra for w in words)
@@ -106,7 +112,7 @@ async def test_extras_over_budget_are_reported_not_retried() -> None:
         known=known,
     )
 
-    saved = await service.generate(ReadingRequest(format=ReadingFormat.SENTENCES, max_extra_words=0))
+    saved = await service.generate(_req(ReadingFormat.SENTENCES, 0))
 
     assert len(gateway.calls) == 1  # exceeding the budget never triggers a second call
     extra_words = [t.text for t in saved.reading.tokens if isinstance(t, ReadingWord) and t.is_extra]
@@ -124,7 +130,7 @@ async def test_a_word_with_no_dictionary_entry_at_all_resolves_with_no_pinyin() 
         dictionary=FakeDictionaryRepository(),  # empty — "叽" has no entry anywhere
     )
 
-    saved = await service.generate(ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=5))
+    saved = await service.generate(_req(ReadingFormat.PARAGRAPH, 5))
 
     extra = next(t for t in saved.reading.tokens if isinstance(t, ReadingWord) and t.text == "叽")
     assert extra.is_extra is True
@@ -148,12 +154,19 @@ async def test_a_repeated_known_word_is_resolved_using_the_studied_entry_not_ano
         dictionary=FakeDictionaryRepository([other_reading, studied]),
     )
 
-    saved = await service.generate(ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=5))
+    saved = await service.generate(_req(ReadingFormat.PARAGRAPH, 5))
 
     words = [t for t in saved.reading.tokens if isinstance(t, ReadingWord)]
     assert len(words) == 2  # both occurrences resolved
     assert all(w.pinyin == "xing2" and not w.is_extra for w in words)
     assert all(w.dictionary_entry_id == studied.id for w in words)  # the studied entry, not the other reading
+
+
+async def test_list_models_delegates_to_the_gateway() -> None:
+    service, gateway, _ = _service(response="unused", segments={})
+    gateway.models = ("claude-haiku-4-5", "claude-sonnet-4-5")
+
+    assert await service.list_models() == ("claude-haiku-4-5", "claude-sonnet-4-5")
 
 
 async def test_list_history_delegates_to_the_repository() -> None:
@@ -166,7 +179,7 @@ async def test_list_history_delegates_to_the_repository() -> None:
         dictionary=FakeDictionaryRepository([entry]),
         history=history,
     )
-    await service.generate(ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=5))
+    await service.generate(_req(ReadingFormat.PARAGRAPH, 5))
 
     listed = await service.list_history(limit=10, offset=0)
 
@@ -191,7 +204,7 @@ async def test_list_history_hydrates_pinyin_and_definitions_from_the_dictionary(
     history.saved.append(
         SavedReadingText(
             id=1,
-            request=ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=0),
+            request=ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=0, model="test-model"),
             reading=GeneratedReading(format=ReadingFormat.PARAGRAPH, tokens=(stripped_word,), known_word_count=1),
             created_at=_NOW,
         )

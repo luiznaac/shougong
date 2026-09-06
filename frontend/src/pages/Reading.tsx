@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ApiError } from "../api/client.ts";
-import { useAddStudyItem, useGenerateReading, useReadingHistory, useStudyItems } from "../api/queries.ts";
+import {
+  useAddStudyItem,
+  useGenerateReading,
+  useReadingHistory,
+  useReadingModels,
+  useStudyItems,
+} from "../api/queries.ts";
 import type { ReadingFormat, ReadingToken, SavedReadingText } from "../api/types.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
@@ -11,6 +17,8 @@ const FORMAT_LABELS: Record<ReadingFormat, string> = {
   sentences: "Frases soltas",
 };
 
+const MODEL_STORAGE_KEY = "reading.model";
+
 function countExtraWords(tokens: ReadingToken[]): number {
   return new Set(tokens.filter((t) => t.is_word && t.is_extra).map((t) => t.text)).size;
 }
@@ -19,18 +27,44 @@ export function Reading() {
   const [format, setFormat] = useState<ReadingFormat>("paragraph");
   const [maxExtraWords, setMaxExtraWords] = useState(2);
   const [topic, setTopic] = useState("");
+  const [model, setModel] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(MODEL_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
   const [current, setCurrent] = useState<SavedReadingText | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const generateMutation = useGenerateReading();
   const { data: history, isLoading: historyLoading } = useReadingHistory();
+  const { data: models, isLoading: modelsLoading, error: modelsError } = useReadingModels();
+
+  // Fall back to the first available model until the user picks one (or if the
+  // remembered choice is no longer offered by the proxy).
+  useEffect(() => {
+    if (!models || models.length === 0) return;
+    if (model === null || !models.includes(model)) setModel(models[0]);
+  }, [models, model]);
+
+  const selectModel = (value: string) => {
+    setModel(value);
+    try {
+      localStorage.setItem(MODEL_STORAGE_KEY, value);
+    } catch {
+      /* private mode / storage disabled — selection still works for this session */
+    }
+  };
 
   const generate = async () => {
+    if (!model) return;
     setError(null);
     try {
       const saved = await generateMutation.mutateAsync({
         format,
         max_extra_words: maxExtraWords,
+        model,
         topic: topic.trim() || null,
       });
       setCurrent(saved);
@@ -63,6 +97,25 @@ export function Reading() {
         </label>
 
         <label className="flex flex-col gap-1 text-sm text-slate-400">
+          Modelo de IA
+          <select
+            value={model ?? ""}
+            onChange={(e) => selectModel(e.target.value)}
+            disabled={modelsLoading || !!modelsError || !models?.length}
+            className="rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 disabled:opacity-50"
+          >
+            {modelsLoading && <option value="">Carregando…</option>}
+            {modelsError && <option value="">Erro ao carregar modelos</option>}
+            {!modelsLoading && !modelsError && !models?.length && <option value="">Nenhum modelo disponível</option>}
+            {(models ?? []).map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-slate-400">
           Palavras extras (máx.)
           <input
             type="number"
@@ -88,7 +141,7 @@ export function Reading() {
 
         <button
           onClick={generate}
-          disabled={generateMutation.isPending}
+          disabled={generateMutation.isPending || !model}
           className="rounded-md bg-accent-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
         >
           {generateMutation.isPending ? "Gerando…" : "Gerar"}
@@ -103,6 +156,12 @@ export function Reading() {
             <span>#{current.id}</span>
             <span>&middot;</span>
             <span>{FORMAT_LABELS[current.format]}</span>
+            {current.model && (
+              <>
+                <span>&middot;</span>
+                <span className="font-mono">{current.model}</span>
+              </>
+            )}
             {current.topic && (
               <>
                 <span>&middot;</span>
@@ -138,6 +197,12 @@ export function Reading() {
                   <span>#{item.id}</span>
                   <span>&middot;</span>
                   <span>{FORMAT_LABELS[item.format]}</span>
+                  {item.model && (
+                    <>
+                      <span>&middot;</span>
+                      <span className="truncate font-mono">{item.model}</span>
+                    </>
+                  )}
                   {item.topic && (
                     <>
                       <span>&middot;</span>
