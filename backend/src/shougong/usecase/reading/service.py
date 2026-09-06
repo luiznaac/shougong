@@ -21,6 +21,7 @@ from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.reading.gateway import (
     IReadingHistoryRepository,
     IReadingTextGateway,
+    IReadingTopicRepository,
     IReadingWordUsageRepository,
     ISegmenter,
     IVocabularyProfileRepository,
@@ -36,11 +37,13 @@ from shougong.usecase.reading.model import (
     ReadingWord,
     SavedReadingText,
 )
+from shougong.usecase.reading.topics import resolve_topic
 from shougong.usecase.reading.validation import is_chinese_word, out_of_vocabulary
 from shougong.usecase.reading.working_set import WorkingSet, build_working_set
 from shougong.usecase.study.gateway import IStudyItemRepository
 
 _MAX_GENERATION_ATTEMPTS = 3
+_RECENT_TOPICS = 12
 
 
 class ReadingService:
@@ -53,6 +56,7 @@ class ReadingService:
         history_repository: IReadingHistoryRepository,
         vocabulary_profile_repository: IVocabularyProfileRepository,
         word_usage_repository: IReadingWordUsageRepository,
+        topic_repository: IReadingTopicRepository,
         clock: IClock,
         rng: random.Random | None = None,
     ) -> None:
@@ -63,6 +67,7 @@ class ReadingService:
         self._history = history_repository
         self._profiles = vocabulary_profile_repository
         self._word_usage = word_usage_repository
+        self._topics = topic_repository
         self._clock = clock
         self._rng = rng or random.Random()
 
@@ -70,6 +75,7 @@ class ReadingService:
         known_index = await self._known_word_index()
         known_words = frozenset(known_index)
         working_set = await self._build_working_set(known_words)
+        request = await self._resolve_topic(request)
 
         attempts: list[GenerationAttempt] = []
         segmentations: list[tuple[SegmentedToken, ...]] = []
@@ -117,6 +123,19 @@ class ReadingService:
         )
         await self._record_word_usage(segmentations[chosen], known_words)
         return await self._history.save(request, reading, self._clock.now())
+
+    async def _resolve_topic(self, request: ReadingRequest) -> ReadingRequest:
+        if request.topic and request.topic.strip():
+            return replace(request, topic=request.topic.strip())
+        scenarios = await self._topics.list_active()
+        recent = await self._history.list(limit=_RECENT_TOPICS, offset=0)
+        resolved = resolve_topic(
+            request.topic,
+            scenarios,
+            [r.request.topic for r in recent if r.request.topic],
+            self._rng,
+        )
+        return replace(request, topic=resolved.text, topic_generated=resolved.generated)
 
     async def _build_working_set(self, known_words: frozenset[str]) -> WorkingSet:
         profiles = await self._profiles.list_all()

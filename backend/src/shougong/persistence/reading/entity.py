@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, text
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shougong.persistence.configuration.base import Base
@@ -24,6 +24,8 @@ class ReadingTextEntity(Base):
     format: Mapped[str] = mapped_column(String(16))
     max_extra_words: Mapped[int] = mapped_column(Integer)
     topic: Mapped[str | None] = mapped_column(String(255))
+    # True when the service drew the topic from `reading_topic` (blank free text).
+    topic_generated: Mapped[bool] = mapped_column(Boolean, server_default=text("0"))
     # Empty string on rows written before per-request model choice existed
     # (matches the `DEFAULT ''` in mysql/init.sql).
     model: Mapped[str] = mapped_column(String(128), server_default=text("''"))

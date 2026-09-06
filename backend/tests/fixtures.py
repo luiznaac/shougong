@@ -17,6 +17,7 @@ from shougong.usecase.reading.gateway import (
     IHskVocabularySource,
     IReadingHistoryRepository,
     IReadingTextGateway,
+    IReadingTopicRepository,
     IReadingWordUsageRepository,
     ISegmenter,
     IVocabularyProfileRepository,
@@ -29,6 +30,7 @@ from shougong.usecase.reading.model import (
     PartOfSpeech,
     ReadingFormat,
     ReadingRequest,
+    ReadingTopic,
     SavedReadingText,
 )
 from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
@@ -353,6 +355,35 @@ class FakeVocabularyProfileRepository(IVocabularyProfileRepository):
 
     async def get(self, simplified: str) -> VocabularyProfile | None:
         return self.profiles.get(simplified)
+
+
+class FakeReadingTopicRepository(IReadingTopicRepository):
+    def __init__(self, scenarios: list[str] | None = None) -> None:
+        self._ids = count(1)
+        self.topics: list[ReadingTopic] = [
+            ReadingTopic(id=next(self._ids), scenario=s, active=True) for s in (scenarios or [])
+        ]
+
+    async def list_active(self) -> list[str]:
+        return [t.scenario for t in self.topics if t.active]
+
+    async def list_all(self) -> list[ReadingTopic]:
+        return list(self.topics)
+
+    async def add(self, scenario: str, created_at: datetime) -> ReadingTopic:
+        topic = ReadingTopic(id=next(self._ids), scenario=scenario, active=True)
+        self.topics.append(topic)
+        return topic
+
+    async def set_active(self, topic_id: int, active: bool) -> ReadingTopic | None:
+        for i, topic in enumerate(self.topics):
+            if topic.id == topic_id:
+                self.topics[i] = ReadingTopic(id=topic.id, scenario=topic.scenario, active=active)
+                return self.topics[i]
+        return None
+
+    async def delete(self, topic_id: int) -> None:
+        self.topics = [t for t in self.topics if t.id != topic_id]
 
 
 class FakeReadingWordUsageRepository(IReadingWordUsageRepository):

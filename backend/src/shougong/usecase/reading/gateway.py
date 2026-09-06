@@ -12,6 +12,7 @@ from shougong.usecase.reading.model import (
     PartOfSpeech,
     ReadingFormat,
     ReadingRequest,
+    ReadingTopic,
     SavedReadingText,
 )
 from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
@@ -100,3 +101,17 @@ class IReadingWordUsageRepository(Protocol):
     async def record(self, words: Sequence[str], at: datetime) -> None:
         """Bump the use count and set last_used_at for each word."""
         ...
+
+
+class IReadingTopicRepository(Protocol):
+    """The editable list of scenarios drawn from when the free-text topic is blank."""
+
+    async def list_active(self) -> list[str]: ...
+
+    async def list_all(self) -> list[ReadingTopic]: ...
+
+    async def add(self, scenario: str, created_at: datetime) -> ReadingTopic: ...
+
+    async def set_active(self, topic_id: int, active: bool) -> ReadingTopic | None: ...
+
+    async def delete(self, topic_id: int) -> None: ...

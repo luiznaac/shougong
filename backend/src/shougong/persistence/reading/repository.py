@@ -110,6 +110,7 @@ def to_domain(row: ReadingTextEntity) -> SavedReadingText:
         max_extra_words=row.max_extra_words,
         model=row.model,
         topic=row.topic,
+        topic_generated=row.topic_generated,
     )
     reading = GeneratedReading(
         format=ReadingFormat(row.format),
@@ -133,6 +134,7 @@ class ReadingHistoryRepository(IReadingHistoryRepository):
                 format=request.format.value,
                 max_extra_words=request.max_extra_words,
                 topic=request.topic,
+                topic_generated=request.topic_generated,
                 model=request.model,
                 known_word_count=reading.known_word_count,
                 tokens=[_token_to_json(t) for t in reading.tokens],

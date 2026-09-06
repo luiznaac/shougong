@@ -132,3 +132,33 @@ export function useOverrideVocabulary() {
     onSuccess: () => qc.invalidateQueries({ queryKey: vocabularyKey }),
   });
 }
+
+const readingTopicsKey = ["reading-topics"] as const;
+
+export function useReadingTopics() {
+  return useQuery({ queryKey: readingTopicsKey, queryFn: () => api.listReadingTopics() });
+}
+
+export function useAddReadingTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (scenario: string) => api.addReadingTopic(scenario),
+    onSuccess: () => qc.invalidateQueries({ queryKey: readingTopicsKey }),
+  });
+}
+
+export function useSetReadingTopicActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: number; active: boolean }) => api.setReadingTopicActive(args.id, args.active),
+    onSuccess: () => qc.invalidateQueries({ queryKey: readingTopicsKey }),
+  });
+}
+
+export function useDeleteReadingTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteReadingTopic(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: readingTopicsKey }),
+  });
+}

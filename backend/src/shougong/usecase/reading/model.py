@@ -43,11 +43,19 @@ class PartOfSpeech(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class ReadingTopic:
+    id: int
+    scenario: str
+    active: bool  # only active scenarios are drawn when the free-text topic is blank
+
+
+@dataclass(frozen=True, slots=True)
 class ReadingRequest:
     format: ReadingFormat
     max_extra_words: int
     model: str  # LiteLLM model id the caller picked; always supplied by the client
     topic: str | None = None
+    topic_generated: bool = False  # True when the service drew the topic from the scenario list
 
 
 @dataclass(frozen=True, slots=True)

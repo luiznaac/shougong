@@ -7,6 +7,7 @@ import type {
   ReviewResult,
   ReviewLog,
   SavedReadingText,
+  ReadingTopic,
   SrsRating,
   StudyItem,
   StudyItemHistory,
@@ -146,5 +147,19 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     });
+  },
+
+  // --- reading topic scenarios ---
+  listReadingTopics(): Promise<ReadingTopic[]> {
+    return request(`/reading-topics`);
+  },
+  addReadingTopic(scenario: string): Promise<ReadingTopic> {
+    return request(`/reading-topics`, { method: "POST", body: JSON.stringify({ scenario }) });
+  },
+  setReadingTopicActive(id: number, active: boolean): Promise<ReadingTopic> {
+    return request(`/reading-topics/${id}`, { method: "PATCH", body: JSON.stringify({ active }) });
+  },
+  deleteReadingTopic(id: number): Promise<void> {
+    return request(`/reading-topics/${id}`, { method: "DELETE" });
   },
 };

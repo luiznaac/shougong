@@ -14,6 +14,7 @@ from shougong.usecase.reading.model import (
     ReadingFormat,
     ReadingRequest,
     ReadingToken,
+    ReadingTopic,
     ReadingWord,
     SavedReadingText,
 )
@@ -287,6 +288,7 @@ class SavedReadingTextResponse(BaseModel):
     max_extra_words: int
     model: str  # LiteLLM model that generated this text ("" for rows saved before model choice existed)
     topic: str | None
+    topic_generated: bool  # True when the code drew the topic from the scenario list
     tokens: list[ReadingTokenResponse]
     known_word_count: int
     # Generation outcome: the full trail of drafts, plus figures derived from it.
@@ -313,6 +315,7 @@ class SavedReadingTextResponse(BaseModel):
             max_extra_words=saved.request.max_extra_words,
             model=saved.request.model,
             topic=saved.request.topic,
+            topic_generated=saved.request.topic_generated,
             tokens=[ReadingTokenResponse.from_domain(t) for t in reading.tokens],
             known_word_count=reading.known_word_count,
             attempts=[ReadingAttemptResponse.from_domain(i, a) for i, a in enumerate(reading.attempts)],
@@ -390,3 +393,21 @@ class OverrideVocabularyRequest(BaseModel):
 
     def category(self) -> VocabularyCategory:
         return VocabularyCategory(self.pos_category)
+
+
+class ReadingTopicResponse(BaseModel):
+    id: int
+    scenario: str
+    active: bool
+
+    @classmethod
+    def from_domain(cls, topic: ReadingTopic) -> ReadingTopicResponse:
+        return cls(id=topic.id, scenario=topic.scenario, active=topic.active)
+
+
+class AddReadingTopicRequest(BaseModel):
+    scenario: str = Field(min_length=1, max_length=255)
+
+
+class SetReadingTopicActiveRequest(BaseModel):
+    active: bool
