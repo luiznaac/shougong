@@ -26,19 +26,20 @@ class ReadingFormat(StrEnum):
 
 class PartOfSpeech(StrEnum):
     """Grammatical class of a word, in this app's own vocabulary — never a raw
-    tag from whatever segmentation library resolves it (see `ISegmenter`)."""
+    tag from whatever segmentation library resolves it (see `ISegmenter`).
+    Backend stays English-only; the frontend translates this for display."""
 
-    NOUN = "substantivo"
-    VERB = "verbo"
-    ADJECTIVE = "adjetivo"
-    ADVERB = "advérbio"
-    PRONOUN = "pronome"
+    NOUN = "noun"
+    VERB = "verb"
+    ADJECTIVE = "adjective"
+    ADVERB = "adverb"
+    PRONOUN = "pronoun"
     NUMERAL = "numeral"
-    QUANTIFIER = "quantificador"
-    PREPOSITION = "preposição"
-    CONJUNCTION = "conjunção"
-    PARTICLE = "partícula"
-    OTHER = "outro"
+    QUANTIFIER = "quantifier"
+    PREPOSITION = "preposition"
+    CONJUNCTION = "conjunction"
+    PARTICLE = "particle"
+    OTHER = "other"
 
 
 @dataclass(frozen=True, slots=True)

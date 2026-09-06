@@ -4,6 +4,7 @@ import { ApiError } from "../api/client.ts";
 import { useAddStudyItem, useGenerateReading, useReadingHistory, useStudyItems } from "../api/queries.ts";
 import type { ReadingFormat, ReadingToken, SavedReadingText } from "../api/types.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
+import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
 
 const FORMAT_LABELS: Record<ReadingFormat, string> = {
   paragraph: "Parágrafo",
@@ -223,7 +224,7 @@ function WordToken({ token }: { token: ReadingToken }) {
           )}
           {token.part_of_speech && (
             <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-              {token.part_of_speech}
+              {partOfSpeechLabel(token.part_of_speech)}
             </p>
           )}
           {token.definitions.length > 0 && (

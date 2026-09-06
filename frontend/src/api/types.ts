@@ -82,6 +82,21 @@ export interface StudyItemHistory {
 
 export type ReadingFormat = "paragraph" | "sentences";
 
+// Grammatical class of a word, from the backend's own vocabulary (English) —
+// translate for display via ../i18n/partOfSpeech.ts, never show this raw.
+export type PartOfSpeech =
+  | "noun"
+  | "verb"
+  | "adjective"
+  | "adverb"
+  | "pronoun"
+  | "numeral"
+  | "quantifier"
+  | "preposition"
+  | "conjunction"
+  | "particle"
+  | "other";
+
 export interface GenerateReadingRequest {
   format: ReadingFormat;
   max_extra_words: number;
@@ -96,7 +111,7 @@ export interface ReadingToken {
   is_word: boolean;
   pinyin: string | null;
   definitions: string[];
-  part_of_speech: string | null;
+  part_of_speech: PartOfSpeech | null;
   is_extra: boolean;
   // Populated whenever a dictionary entry was resolved (including for extra
   // words) — lets an extra word be added straight to the study queue.

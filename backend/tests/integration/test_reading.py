@@ -23,7 +23,7 @@ async def _seed_reading(container: Container, *, created_at: str, topic: str | N
     word_token = {
         "is_word": True,
         "text": "学生",
-        "part_of_speech": "substantivo",
+        "part_of_speech": "noun",
         "is_extra": False,
     }
     async with container.engine.begin() as conn:
@@ -65,7 +65,7 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
         "is_word": True,
         "pinyin": "xue2 sheng5",
         "definitions": ["student"],
-        "part_of_speech": "substantivo",
+        "part_of_speech": "noun",
         "is_extra": False,
         "dictionary_entry_id": entry_id,
     }
@@ -78,6 +78,25 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
         "is_extra": False,
         "dictionary_entry_id": None,
     }
+
+
+async def test_list_history_tolerates_a_part_of_speech_from_before_the_enum_changed(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    word_token = {"is_word": True, "text": "学生", "part_of_speech": "outro", "is_extra": False}
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO reading_text (format, max_extra_words, topic, known_word_count, tokens, created_at) "
+                "VALUES ('paragraph', 2, NULL, 0, :tokens, '2026-01-01 00:00:00')"
+            ),
+            {"tokens": json.dumps([word_token])},
+        )
+
+    response = await client.get("/reading-texts")
+
+    assert response.status_code == 200
+    assert response.json()[0]["tokens"][0]["part_of_speech"] is None
 
 
 async def test_list_history_respects_limit_and_offset(container: Container, client: httpx.AsyncClient) -> None:
