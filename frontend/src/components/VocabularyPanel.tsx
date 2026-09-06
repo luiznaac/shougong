@@ -51,6 +51,21 @@ export function VocabularyPanel() {
                 ))}
             </div>
 
+            <div className="text-xs text-slate-400">
+              Nível estimado:{" "}
+              <span className="text-slate-200">
+                {summary.proficiency.estimated_level > 0 ? `HSK ${summary.proficiency.estimated_level}` : "iniciante"}
+              </span>
+              {Object.keys(summary.proficiency.coverage_by_level).length > 0 && (
+                <span className="ml-3 text-slate-500">
+                  {Object.entries(summary.proficiency.coverage_by_level)
+                    .sort((a, b) => Number(a[0]) - Number(b[0]))
+                    .map(([level, cov]) => `HSK ${level} ${Math.round(cov * 100)}%`)
+                    .join(" · ")}
+                </span>
+              )}
+            </div>
+
             {summary.qualifier_shortage && (
               <p className="rounded-md bg-amber-400/10 px-3 py-2 text-xs text-amber-400">
                 Poucos adjetivos no seu vocabulário — os textos vão sair descritivamente pobres. Vale estudar mais

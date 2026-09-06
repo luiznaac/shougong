@@ -18,7 +18,8 @@ import httpx
 
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.reading.gateway import IHskVocabularySource
-from shougong.usecase.reading.vocabulary import HskEntry
+from shougong.usecase.reading.proficiency import HskLevelStats
+from shougong.usecase.reading.vocabulary import HskEntry, VocabularyCategory, category_for
 
 _DATASET_URL = "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/main/complete.min.json"
 _DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
@@ -48,11 +49,27 @@ def parse_dataset(entries: list[dict[str, Any]]) -> dict[str, HskEntry]:
     return result
 
 
+def _level_stats(dataset: dict[str, HskEntry]) -> HskLevelStats:
+    total_by_level: dict[int, int] = {}
+    functional_by_level: dict[int, set[str]] = {}
+    for word, entry in dataset.items():
+        if entry.hsk_level is None:
+            continue
+        total_by_level[entry.hsk_level] = total_by_level.get(entry.hsk_level, 0) + 1
+        if category_for(word, entry.pos_tags) is VocabularyCategory.FUNCTIONAL:
+            functional_by_level.setdefault(entry.hsk_level, set()).add(word)
+    return HskLevelStats(
+        total_by_level=total_by_level,
+        functional_by_level={level: frozenset(words) for level, words in functional_by_level.items()},
+    )
+
+
 class HskVocabularySource(IHskVocabularySource):
     def __init__(self, client: httpx.AsyncClient, url: str = _DATASET_URL) -> None:
         self._client = client
         self._url = url
         self._cache: dict[str, HskEntry] | None = None
+        self._level_stats_cache: HskLevelStats | None = None
 
     async def fetch(self) -> dict[str, HskEntry]:
         if self._cache is not None:
@@ -63,3 +80,8 @@ class HskVocabularySource(IHskVocabularySource):
         self._cache = parse_dataset(response.json())
         _log.info("hsk.download.finished", words=len(self._cache))
         return self._cache
+
+    async def level_stats(self) -> HskLevelStats:
+        if self._level_stats_cache is None:
+            self._level_stats_cache = _level_stats(await self.fetch())
+        return self._level_stats_cache

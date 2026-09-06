@@ -44,6 +44,8 @@ async def test_overview_returns_profiles_with_pinyin_and_a_summary(
     assert body["summary"]["total"] == 2
     assert body["summary"]["by_category"] == {"noun": 1, "verb": 1}
     assert body["summary"]["qualifier_shortage"] is True
+    # HSK dataset is unreachable in tests → proficiency degrades to "pure beginner"
+    assert body["summary"]["proficiency"] == {"coverage_by_level": {}, "estimated_level": 0}
 
 
 async def test_override_persists_through_the_real_db(container: Container, client: httpx.AsyncClient) -> None:
