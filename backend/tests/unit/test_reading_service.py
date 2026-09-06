@@ -20,6 +20,7 @@ from tests.fixtures import (
     FakeDictionaryRepository,
     FakeReadingHistoryRepository,
     FakeReadingTextGateway,
+    FakeReadingTopicRepository,
     FakeReadingWordUsageRepository,
     FakeSegmenter,
     FakeStudyItemRepository,
@@ -41,6 +42,7 @@ def _service(
     dictionary: FakeDictionaryRepository | None = None,
     history: FakeReadingHistoryRepository | None = None,
     usage: FakeReadingWordUsageRepository | None = None,
+    topics: FakeReadingTopicRepository | None = None,
 ) -> tuple[ReadingService, FakeReadingTextGateway, FakeReadingHistoryRepository]:
     gateway = FakeReadingTextGateway(response)
     segmenter = FakeSegmenter(segments)
@@ -54,6 +56,7 @@ def _service(
         history,
         FakeVocabularyProfileRepository(),
         usage or FakeReadingWordUsageRepository(),
+        topics or FakeReadingTopicRepository(),
         FixedClock(_NOW),
         rng=random.Random(0),
     )
@@ -241,6 +244,43 @@ async def test_the_working_set_is_offered_to_the_gateway_and_word_usage_is_recor
     assert saved.reading.working_set == {"words": ("我", "是")}
     assert usage.recorded == [(("我", "是"), _NOW)]  # distinct known words of the chosen draft
     assert usage.usage["我"].uses == 1
+
+
+async def test_a_blank_topic_is_filled_from_the_scenario_list_and_flagged() -> None:
+    wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
+    topics = FakeReadingTopicRepository(["a lost umbrella on a rainy day"])
+
+    service, gateway, _ = _service(
+        response="我。",
+        segments={"我。": (_tok("我", PartOfSpeech.PRONOUN), _tok("。", None))},
+        known=[make_study_item(item_id=1, entry=wo)],
+        topics=topics,
+    )
+
+    saved = await service.generate(ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=5, model="m"))
+
+    assert saved.request.topic == "a lost umbrella on a rainy day"
+    assert saved.request.topic_generated is True
+    assert gateway.calls[0]["topic"] == "a lost umbrella on a rainy day"  # the resolved topic reaches the gateway
+
+
+async def test_a_typed_topic_is_passed_through_untouched() -> None:
+    wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
+    topics = FakeReadingTopicRepository(["a lost umbrella"])
+
+    service, _, _ = _service(
+        response="我。",
+        segments={"我。": (_tok("我", PartOfSpeech.PRONOUN), _tok("。", None))},
+        known=[make_study_item(item_id=1, entry=wo)],
+        topics=topics,
+    )
+
+    saved = await service.generate(
+        ReadingRequest(format=ReadingFormat.PARAGRAPH, max_extra_words=5, model="m", topic="  comida  ")
+    )
+
+    assert saved.request.topic == "comida"
+    assert saved.request.topic_generated is False
 
 
 async def test_list_models_delegates_to_the_gateway() -> None:

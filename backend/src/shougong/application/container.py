@@ -36,6 +36,7 @@ from shougong.httpapi.controller.base import IController
 from shougong.httpapi.controller.dictionary_controller import DictionaryController
 from shougong.httpapi.controller.health_controller import HealthController
 from shougong.httpapi.controller.reading_controller import ReadingController
+from shougong.httpapi.controller.reading_topic_controller import ReadingTopicController
 from shougong.httpapi.controller.strokes_controller import StrokesController
 from shougong.httpapi.controller.study_controller import StudyController
 from shougong.httpapi.controller.study_item_history_controller import StudyItemHistoryController
@@ -45,6 +46,7 @@ from shougong.persistence.configuration.transaction import SqlAlchemyTransaction
 from shougong.persistence.dictionary.repository import DictionaryRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
 from shougong.persistence.reading.repository import ReadingHistoryRepository
+from shougong.persistence.reading.topic_repository import ReadingTopicRepository
 from shougong.persistence.reading.vocabulary_profile_repository import VocabularyProfileRepository
 from shougong.persistence.reading.word_usage_repository import ReadingWordUsageRepository
 from shougong.persistence.strokes.repository import StrokeRepository
@@ -58,6 +60,7 @@ from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
 from shougong.usecase.reading.service import ReadingService
+from shougong.usecase.reading.topic_service import ReadingTopicService
 from shougong.usecase.reading.vocabulary_service import VocabularyProfileService
 from shougong.usecase.srs.day_boundary import DayBoundaryEngine
 from shougong.usecase.strokes.service import StrokeService
@@ -127,6 +130,7 @@ class Container:
         self._hsk_vocabulary_source = HskVocabularySource(self.http_client)
         self._vocabulary_profile_repository = VocabularyProfileRepository(self.transaction_template)
         self._reading_word_usage_repository = ReadingWordUsageRepository(self.transaction_template)
+        self._reading_topic_repository = ReadingTopicRepository(self.transaction_template)
         self._reading_service = ReadingService(
             self._reading_gateway,
             self._segmenter,
@@ -135,6 +139,7 @@ class Container:
             self._reading_history_repository,
             self._vocabulary_profile_repository,
             self._reading_word_usage_repository,
+            self._reading_topic_repository,
             self.clock,
         )
         self._vocabulary_profile_service = VocabularyProfileService(
@@ -144,6 +149,7 @@ class Container:
             self._vocabulary_profile_repository,
             self.clock,
         )
+        self._reading_topic_service = ReadingTopicService(self._reading_topic_repository, self.clock)
 
         # --- http layer ------------------------------------------------
         self.controllers: list[IController] = [
@@ -154,6 +160,7 @@ class Container:
             StudyItemHistoryController(self._study_item_history_service),
             ReadingController(self._reading_service),
             VocabularyController(self._vocabulary_profile_service),
+            ReadingTopicController(self._reading_topic_service),
         ]
 
         @asynccontextmanager

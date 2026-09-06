@@ -22,7 +22,12 @@ async def _seed_entry(container: Container) -> int:
 
 
 async def _seed_reading(
-    container: Container, *, created_at: str, topic: str | None = None, model: str = "claude-haiku-4-5"
+    container: Container,
+    *,
+    created_at: str,
+    topic: str | None = None,
+    topic_generated: bool = False,
+    model: str = "claude-haiku-4-5",
 ) -> None:
     word_token = {
         "is_word": True,
@@ -34,13 +39,15 @@ async def _seed_reading(
         await conn.execute(
             text(
                 "INSERT INTO reading_text "
-                "(format, max_extra_words, topic, model, known_word_count, tokens, created_at) "
-                "VALUES (:format, :max_extra_words, :topic, :model, :known_word_count, :tokens, :created_at)"
+                "(format, max_extra_words, topic, topic_generated, model, known_word_count, tokens, created_at) "
+                "VALUES (:format, :max_extra_words, :topic, :topic_generated, :model, :known_word_count, "
+                ":tokens, :created_at)"
             ),
             {
                 "format": "paragraph",
                 "max_extra_words": 2,
                 "topic": topic,
+                "topic_generated": topic_generated,
                 "model": model,
                 "known_word_count": 12,
                 "tokens": json.dumps([word_token, _PUNCT_TOKEN]),
@@ -52,14 +59,21 @@ async def _seed_reading(
 async def test_list_history_returns_saved_texts_newest_first(container: Container, client: httpx.AsyncClient) -> None:
     entry_id = await _seed_entry(container)
     await _seed_reading(container, created_at="2026-01-01 00:00:00", topic="older", model="claude-haiku-4-5")
-    await _seed_reading(container, created_at="2026-01-02 00:00:00", topic="newer", model="claude-sonnet-4-5")
+    await _seed_reading(
+        container,
+        created_at="2026-01-02 00:00:00",
+        topic="a wrong package",
+        topic_generated=True,
+        model="claude-sonnet-4-5",
+    )
 
     response = await client.get("/reading-texts")
 
     assert response.status_code == 200
     body = response.json()
-    assert [row["topic"] for row in body] == ["newer", "older"]
+    assert [row["topic"] for row in body] == ["a wrong package", "older"]
     assert [row["model"] for row in body] == ["claude-sonnet-4-5", "claude-haiku-4-5"]
+    assert [row["topic_generated"] for row in body] == [True, False]
 
     first = body[0]
     assert first["known_word_count"] == 12

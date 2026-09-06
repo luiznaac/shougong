@@ -10,6 +10,7 @@ import {
 } from "../api/queries.ts";
 import type { ReadingAttempt, ReadingFormat, ReadingToken, SavedReadingText } from "../api/types.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
+import { ReadingTopicsPanel } from "../components/ReadingTopicsPanel.tsx";
 import { VocabularyPanel } from "../components/VocabularyPanel.tsx";
 import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
 
@@ -134,7 +135,7 @@ export function Reading() {
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            placeholder="ex.: viagem, comida…"
+            placeholder="em branco = tema sorteado"
             maxLength={200}
             className="rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100"
           />
@@ -150,6 +151,7 @@ export function Reading() {
       </div>
 
       <VocabularyPanel />
+      <ReadingTopicsPanel />
 
       {error && <p className="text-sm text-rose-400">{error}</p>}
 
@@ -168,7 +170,10 @@ export function Reading() {
             {current.topic && (
               <>
                 <span>&middot;</span>
-                <span>{current.topic}</span>
+                <span className={current.topic_generated ? "italic" : ""}>
+                  {current.topic}
+                  {current.topic_generated && " (sorteado)"}
+                </span>
               </>
             )}
             {current.attempt_count > 1 && (
@@ -225,7 +230,9 @@ export function Reading() {
                   {item.topic && (
                     <>
                       <span>&middot;</span>
-                      <span className="truncate">{item.topic}</span>
+                      <span className={`truncate ${item.topic_generated ? "italic" : ""}`}>
+                        {item.topic}
+                      </span>
                     </>
                   )}
                   {item.attempt_count > 1 && (

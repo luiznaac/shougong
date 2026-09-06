@@ -171,6 +171,12 @@ export interface VocabularyOverview {
   summary: VocabularySummary;
 }
 
+export interface ReadingTopic {
+  id: number;
+  scenario: string;
+  active: boolean; // inactive scenarios stay in the list but are not drawn
+}
+
 export interface SavedReadingText {
   id: number;
   format: ReadingFormat;
@@ -178,6 +184,7 @@ export interface SavedReadingText {
   // LiteLLM model that generated this text ("" for rows saved before model choice existed).
   model: string;
   topic: string | null;
+  topic_generated: boolean; // true → the code drew the topic from the scenario list
   tokens: ReadingToken[];
   // Size of the known-vocabulary set (the study queue) sent to the model.
   known_word_count: number;
