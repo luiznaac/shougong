@@ -29,13 +29,13 @@ _TOOL_SCHEMA = {
     "type": "function",
     "function": {
         "name": _TOOL_NAME,
-        "description": "Retorna o texto de leitura gerado em mandarim.",
+        "description": "Returns the generated Mandarin reading text.",
         "parameters": {
             "type": "object",
             "properties": {
                 "text": {
                     "type": "string",
-                    "description": "O texto completo em mandarim (hanzi), sem pinyin nem tradução misturados.",
+                    "description": "The complete Mandarin text (hanzi), with no pinyin or translation mixed in.",
                 },
             },
             "required": ["text"],
@@ -58,13 +58,13 @@ def _build_messages(
         "known_words": sorted(known_words),
         "format": text_format.value,
         "max_extra_words": max_extra_words,
-        "topic": topic or "livre, algo do dia a dia",
+        "topic": topic or "free choice, something everyday",
     }
     return [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": "Gere um texto de leitura com estes parâmetros (em JSON):\n"
+            "content": "Generate a reading text with these parameters (as JSON):\n"
             + json.dumps(user_payload, ensure_ascii=False),
         },
     ]

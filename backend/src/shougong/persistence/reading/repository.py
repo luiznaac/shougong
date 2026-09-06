@@ -54,6 +54,17 @@ def _token_to_json(token: ReadingToken) -> dict[str, Any]:
     return {"is_word": False, "text": token.text}
 
 
+def _parse_part_of_speech(value: str | None) -> PartOfSpeech | None:
+    if value is None:
+        return None
+    try:
+        return PartOfSpeech(value)
+    except ValueError:
+        # A row written before PartOfSpeech's vocabulary last changed — drop the
+        # label rather than fail the whole list; nothing else depends on it.
+        return None
+
+
 def _token_from_json(row: dict[str, Any]) -> ReadingToken:
     if not row["is_word"]:
         return ReadingPunctuation(text=row["text"])
@@ -63,7 +74,7 @@ def _token_from_json(row: dict[str, Any]) -> ReadingToken:
         # (batched, by word text) whenever history is read; see the module docstring.
         pinyin=None,
         definitions=(),
-        part_of_speech=PartOfSpeech(row["part_of_speech"]) if row["part_of_speech"] is not None else None,
+        part_of_speech=_parse_part_of_speech(row["part_of_speech"]),
         is_extra=row["is_extra"],
         dictionary_entry_id=None,
     )
