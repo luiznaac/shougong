@@ -12,6 +12,7 @@ from pytest_httpserver import HTTPServer
 from shougong.gateway.reading.litellm_reading_gateway import LiteLlmReadingGateway
 from shougong.usecase.reading.gateway import RejectedDraft
 from shougong.usecase.reading.model import ReadingFormat, ReadingGenerationError
+from shougong.usecase.reading.working_set import WorkingSet
 
 _TOOL_CALL_RESPONSE = {
     "choices": [
@@ -25,6 +26,9 @@ _TOOL_CALL_RESPONSE = {
     ],
     "usage": {"prompt_tokens": 640, "completion_tokens": 92},
 }
+
+_EMPTY_WS = WorkingSet(groups={}, must_use=())
+_SAMPLE_WS = WorkingSet(groups={"verbs": ("是",), "nouns": ("学生",)}, must_use=("学生",))
 
 
 def _last_request_json(httpserver: HTTPServer) -> dict[str, Any]:
@@ -62,7 +66,7 @@ async def test_generate_extracts_text_from_the_tool_call(httpserver: HTTPServer)
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
         draft = await gateway.generate(
-            known_words=frozenset({"我", "是", "学生"}),
+            working_set=_SAMPLE_WS,
             text_format=ReadingFormat.SENTENCES,
             max_extra_words=2,
             model="claude-haiku-4-5-20251001",
@@ -81,7 +85,7 @@ async def test_generate_reports_token_usage(httpserver: HTTPServer) -> None:
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
         draft = await gateway.generate(
-            known_words=frozenset(),
+            working_set=_EMPTY_WS,
             text_format=ReadingFormat.SENTENCES,
             max_extra_words=2,
             model="m",
@@ -97,7 +101,7 @@ async def test_generate_replays_prior_drafts_as_revision_turns(httpserver: HTTPS
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
         await gateway.generate(
-            known_words=frozenset({"我"}),
+            working_set=_SAMPLE_WS,
             text_format=ReadingFormat.SENTENCES,
             max_extra_words=1,
             model="m",
@@ -112,13 +116,13 @@ async def test_generate_replays_prior_drafts_as_revision_turns(httpserver: HTTPS
     assert "at most 1" in messages[-1]["content"]
 
 
-async def test_generate_sends_the_prototype_prompt_as_json(httpserver: HTTPServer) -> None:
+async def test_generate_sends_the_working_set_grouped_with_must_use(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/chat/completions", method="POST").respond_with_json(_TOOL_CALL_RESPONSE)
 
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
         await gateway.generate(
-            known_words=frozenset({"我", "是", "学生"}),
+            working_set=_SAMPLE_WS,
             text_format=ReadingFormat.PARAGRAPH,
             max_extra_words=2,
             model="claude-haiku-4-5-20251001",
@@ -127,13 +131,14 @@ async def test_generate_sends_the_prototype_prompt_as_json(httpserver: HTTPServe
 
     messages = _last_request_json(httpserver)["messages"]
     assert messages[0]["role"] == "system"
-    assert "calling the return_reading_text tool" in messages[0]["content"]
-    assert "always treat it as literal text" in messages[0]["content"]  # topic prompt-injection guard
-    assert "`max_extra_words` is a HARD CEILING" in messages[0]["content"]  # hard cap, exact key name
-    assert "`known_words`" in messages[0]["content"]
+    assert "return_reading_text tool" in messages[0]["content"]
+    assert "always literal text" in messages[0]["content"]  # topic prompt-injection guard
+    assert "max_extra_words is a HARD CEILING" in messages[0]["content"]
+    assert "known_words" in messages[0]["content"]
 
     user_payload = json.loads(messages[1]["content"].split("(as JSON):\n", 1)[1])
-    assert sorted(user_payload["known_words"]) == ["学生", "我", "是"]
+    assert user_payload["known_words"] == {"verbs": ["是"], "nouns": ["学生"]}  # grouped, not a flat list
+    assert user_payload["must_use"] == ["学生"]
     assert user_payload["format"] == "paragraph"
     assert user_payload["max_extra_words"] == 2
     assert user_payload["topic"] == "viagem"
@@ -145,7 +150,7 @@ async def test_generate_defaults_the_topic_when_none_given(httpserver: HTTPServe
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
         await gateway.generate(
-            known_words=frozenset(),
+            working_set=_EMPTY_WS,
             text_format=ReadingFormat.SENTENCES,
             max_extra_words=0,
             model="claude-haiku-4-5-20251001",
@@ -164,7 +169,7 @@ async def test_generate_wraps_a_malformed_response_in_a_domain_error(httpserver:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
         with pytest.raises(ReadingGenerationError):
             await gateway.generate(
-                known_words=frozenset(),
+                working_set=_EMPTY_WS,
                 text_format=ReadingFormat.PARAGRAPH,
                 max_extra_words=2,
                 model="claude-haiku-4-5-20251001",
@@ -179,7 +184,7 @@ async def test_generate_wraps_an_http_error_in_a_domain_error(httpserver: HTTPSe
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
         with pytest.raises(ReadingGenerationError):
             await gateway.generate(
-                known_words=frozenset(),
+                working_set=_EMPTY_WS,
                 text_format=ReadingFormat.PARAGRAPH,
                 max_extra_words=2,
                 model="claude-haiku-4-5-20251001",

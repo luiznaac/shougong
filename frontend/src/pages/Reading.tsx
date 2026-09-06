@@ -194,6 +194,9 @@ export function Reading() {
             </p>
           )}
           {current.attempts.length > 1 && <AttemptTrail attempts={current.attempts} />}
+          {Object.keys(current.working_set).length > 0 && (
+            <OfferedVocabulary workingSet={current.working_set} mustUse={current.must_use} />
+          )}
         </div>
       )}
 
@@ -299,6 +302,59 @@ function AttemptTrail({ attempts }: { attempts: ReadingAttempt[] }) {
           );
         })}
       </ol>
+    </details>
+  );
+}
+
+const WORKING_SET_GROUP_LABELS: Record<string, string> = {
+  always_available: "sempre disponíveis",
+  words: "palavras",
+  verbs: "verbos",
+  nouns: "substantivos",
+  people: "pessoas",
+  places: "lugares",
+  descriptions: "qualificadores",
+  time: "tempo",
+  quantity: "quantidade",
+  connectives: "conectivos",
+  adverbs: "advérbios",
+  other: "outros",
+};
+
+function OfferedVocabulary({
+  workingSet,
+  mustUse,
+}: {
+  workingSet: Record<string, string[]>;
+  mustUse: string[];
+}) {
+  const anchors = new Set(mustUse);
+  return (
+    <details className="mt-4 rounded-md border border-white/10 bg-slate-950/40">
+      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        Vocabulário oferecido
+      </summary>
+      <div className="space-y-2 px-3 pb-3">
+        {mustUse.length > 0 && (
+          <p className="text-xs text-slate-500">
+            Âncoras: <span className="font-hanzi text-emerald-300">{mustUse.join(" ")}</span>
+          </p>
+        )}
+        {Object.entries(workingSet).map(([group, words]) => (
+          <div key={group} className="text-sm">
+            <span className="text-xs uppercase tracking-wide text-slate-500">
+              {WORKING_SET_GROUP_LABELS[group] ?? group}
+            </span>
+            <p lang="zh-Hans" className="font-hanzi mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+              {words.map((word, i) => (
+                <span key={i} className={anchors.has(word) ? "text-emerald-300" : "text-slate-300"}>
+                  {word}
+                </span>
+              ))}
+            </p>
+          </div>
+        ))}
+      </div>
     </details>
   );
 }

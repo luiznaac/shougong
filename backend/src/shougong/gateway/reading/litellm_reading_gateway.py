@@ -23,6 +23,7 @@ import httpx
 
 from shougong.usecase.reading.gateway import IReadingTextGateway, ReadingDraft, RejectedDraft
 from shougong.usecase.reading.model import ReadingFormat, ReadingGenerationError
+from shougong.usecase.reading.working_set import WorkingSet
 
 _TOOL_NAME = "return_reading_text"
 
@@ -64,14 +65,15 @@ def _revision_instruction(rejected_words: Sequence[str], max_extra_words: int) -
 
 def _build_messages(
     *,
-    known_words: frozenset[str],
+    working_set: WorkingSet,
     text_format: ReadingFormat,
     max_extra_words: int,
     topic: str | None,
     prior_attempts: Sequence[RejectedDraft],
 ) -> list[dict[str, str]]:
     user_payload: dict[str, Any] = {
-        "known_words": sorted(known_words),
+        "known_words": {group: list(words) for group, words in working_set.groups.items()},
+        "must_use": list(working_set.must_use),
         "format": text_format.value,
         "max_extra_words": max_extra_words,
         "topic": topic or "free choice, something everyday",
@@ -112,7 +114,7 @@ class LiteLlmReadingGateway(IReadingTextGateway):
     async def generate(
         self,
         *,
-        known_words: frozenset[str],
+        working_set: WorkingSet,
         text_format: ReadingFormat,
         max_extra_words: int,
         model: str,
@@ -122,7 +124,7 @@ class LiteLlmReadingGateway(IReadingTextGateway):
         payload: dict[str, Any] = {
             "model": model,
             "messages": _build_messages(
-                known_words=known_words,
+                working_set=working_set,
                 text_format=text_format,
                 max_extra_words=max_extra_words,
                 topic=topic,

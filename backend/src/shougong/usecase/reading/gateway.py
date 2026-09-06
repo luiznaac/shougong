@@ -15,6 +15,7 @@ from shougong.usecase.reading.model import (
     SavedReadingText,
 )
 from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
+from shougong.usecase.reading.working_set import WordUsage, WorkingSet
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +52,7 @@ class IReadingTextGateway(Protocol):
     async def generate(
         self,
         *,
-        known_words: frozenset[str],
+        working_set: WorkingSet,
         text_format: ReadingFormat,
         max_extra_words: int,
         model: str,
@@ -88,3 +89,14 @@ class IVocabularyProfileRepository(Protocol):
     async def upsert_many(self, profiles: Sequence[VocabularyProfile], updated_at: datetime) -> None: ...
 
     async def get(self, simplified: str) -> VocabularyProfile | None: ...
+
+
+class IReadingWordUsageRepository(Protocol):
+    """How often, and how recently, each word has appeared in a generated
+    reading — feeds the working-set recency bias."""
+
+    async def load(self, words: Sequence[str]) -> dict[str, WordUsage]: ...
+
+    async def record(self, words: Sequence[str], at: datetime) -> None:
+        """Bump the use count and set last_used_at for each word."""
+        ...

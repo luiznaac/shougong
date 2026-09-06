@@ -46,6 +46,7 @@ from shougong.persistence.dictionary.repository import DictionaryRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
 from shougong.persistence.reading.repository import ReadingHistoryRepository
 from shougong.persistence.reading.vocabulary_profile_repository import VocabularyProfileRepository
+from shougong.persistence.reading.word_usage_repository import ReadingWordUsageRepository
 from shougong.persistence.strokes.repository import StrokeRepository
 from shougong.persistence.study.repository import StudyItemRepository
 from shougong.persistence.study_item_history.repository import StudyItemHistoryRepository
@@ -123,16 +124,19 @@ class Container:
             settings.gateways.ai.api_key,
         )
         self._reading_history_repository = ReadingHistoryRepository(self.transaction_template)
+        self._hsk_vocabulary_source = HskVocabularySource(self.http_client)
+        self._vocabulary_profile_repository = VocabularyProfileRepository(self.transaction_template)
+        self._reading_word_usage_repository = ReadingWordUsageRepository(self.transaction_template)
         self._reading_service = ReadingService(
             self._reading_gateway,
             self._segmenter,
             self._study_item_repository,
             self._dictionary_repository,
             self._reading_history_repository,
+            self._vocabulary_profile_repository,
+            self._reading_word_usage_repository,
             self.clock,
         )
-        self._hsk_vocabulary_source = HskVocabularySource(self.http_client)
-        self._vocabulary_profile_repository = VocabularyProfileRepository(self.transaction_template)
         self._vocabulary_profile_service = VocabularyProfileService(
             self._study_item_repository,
             self._dictionary_repository,

@@ -295,6 +295,10 @@ class SavedReadingTextResponse(BaseModel):
     extra_words: list[str]  # of the chosen draft; falls back to flagged tokens on old rows
     prompt_tokens: int
     completion_tokens: int
+    # The vocabulary offered to the model for this generation ({group: [words]})
+    # and its anchor words. Empty on rows saved before working sets existed.
+    working_set: dict[str, list[str]]
+    must_use: list[str]
     created_at: datetime
 
     @classmethod
@@ -316,6 +320,8 @@ class SavedReadingTextResponse(BaseModel):
             extra_words=extra_words,
             prompt_tokens=reading.prompt_tokens,
             completion_tokens=reading.completion_tokens,
+            working_set={group: list(words) for group, words in reading.working_set.items()},
+            must_use=list(reading.must_use),
             created_at=saved.created_at,
         )
 
