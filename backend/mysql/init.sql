@@ -81,12 +81,14 @@ CREATE TABLE IF NOT EXISTS study_item_history (
 -- deliberately WITHOUT pinyin, definitions, or a dictionary id, which the app
 -- re-resolves by word text (batched) from dictionary_entry on every read
 -- instead of freezing a copy here. `known_word_count` is the size of the
--- known-vocabulary set sent to the model.
+-- known-vocabulary set sent to the model. `model` is the LiteLLM model id the
+-- caller picked for this generation (empty string on rows predating that field).
 CREATE TABLE IF NOT EXISTS reading_text (
     id                       BIGINT       NOT NULL AUTO_INCREMENT,
     format                   VARCHAR(16)  NOT NULL,
     max_extra_words          INT          NOT NULL,
     topic                    VARCHAR(255) NULL,
+    model                    VARCHAR(128) NOT NULL DEFAULT '',
     known_word_count         INT          NOT NULL,
     tokens                   JSON         NOT NULL,
     created_at               DATETIME(6)  NOT NULL,

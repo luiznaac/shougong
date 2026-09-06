@@ -117,7 +117,6 @@ class Container:
             self.http_client,
             settings.gateways.ai.base_url,
             settings.gateways.ai.api_key,
-            settings.gateways.ai.model,
         )
         self._reading_history_repository = ReadingHistoryRepository(self.transaction_template)
         self._reading_service = ReadingService(

@@ -262,6 +262,10 @@ class FakeReadingTextGateway(IReadingTextGateway):
     def __init__(self, response: str) -> None:
         self.response = response
         self.calls: list[dict[str, object]] = []
+        self.models: tuple[str, ...] = ("fake-model",)
+
+    async def list_models(self) -> tuple[str, ...]:
+        return self.models
 
     async def generate(
         self,
@@ -269,6 +273,7 @@ class FakeReadingTextGateway(IReadingTextGateway):
         known_words: frozenset[str],
         text_format: ReadingFormat,
         max_extra_words: int,
+        model: str,
         topic: str | None,
     ) -> str:
         self.calls.append(
@@ -276,6 +281,7 @@ class FakeReadingTextGateway(IReadingTextGateway):
                 "known_words": known_words,
                 "text_format": text_format,
                 "max_extra_words": max_extra_words,
+                "model": model,
                 "topic": topic,
             }
         )

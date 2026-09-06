@@ -30,11 +30,11 @@ class AppGatewayConfig(BaseModel):
 
 class AiGatewayConfig(BaseModel):
     # Points at the self-hosted LiteLLM proxy (OpenAI-compatible), already
-    # running elsewhere — this service never deploys it. No default `model`:
-    # which model actually backs this deliberately isn't baked into the repo.
+    # running elsewhere — this service never deploys it. Which model backs a
+    # given generation is chosen per request by the caller (the reading screen
+    # lists the proxy's models and sends one), never configured here.
     base_url: str = "http://localhost:4000"
     api_key: str = ""
-    model: str = ""
 
 
 class GatewaysConfig(BaseModel):

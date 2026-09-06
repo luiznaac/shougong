@@ -91,6 +91,14 @@ export function useReadingHistory() {
   });
 }
 
+export function useReadingModels() {
+  return useQuery({
+    queryKey: ["reading-texts", "models"],
+    queryFn: () => api.listReadingModels(),
+    staleTime: 5 * 60 * 1000, // the proxy's model list changes rarely
+  });
+}
+
 export function useGenerateReading() {
   const qc = useQueryClient();
   return useMutation({

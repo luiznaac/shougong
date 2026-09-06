@@ -100,6 +100,9 @@ export type PartOfSpeech =
 export interface GenerateReadingRequest {
   format: ReadingFormat;
   max_extra_words: number;
+  // LiteLLM model id, chosen on the reading screen from GET /reading-texts/models.
+  // Always sent — there is no server-side default model.
+  model: string;
   topic?: string | null;
 }
 
@@ -122,6 +125,8 @@ export interface SavedReadingText {
   id: number;
   format: ReadingFormat;
   max_extra_words: number;
+  // LiteLLM model that generated this text ("" for rows saved before model choice existed).
+  model: string;
   topic: string | null;
   tokens: ReadingToken[];
   // Size of the known-vocabulary set (the study queue) sent to the model.

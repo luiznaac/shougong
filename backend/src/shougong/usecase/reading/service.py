@@ -53,12 +53,16 @@ class ReadingService:
             known_words=known_words,
             text_format=request.format,
             max_extra_words=request.max_extra_words,
+            model=request.model,
             topic=request.topic,
         )
         segmented = self._segmenter.segment(text)
 
         reading = await self._resolve(request, segmented, known_index, known_word_count=len(known_words))
         return await self._history.save(request, reading, self._clock.now())
+
+    async def list_models(self) -> tuple[str, ...]:
+        return await self._gateway.list_models()
 
     async def list_history(self, *, limit: int, offset: int) -> list[SavedReadingText]:
         items = await self._history.list(limit=limit, offset=offset)

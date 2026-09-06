@@ -46,6 +46,7 @@ class PartOfSpeech(StrEnum):
 class ReadingRequest:
     format: ReadingFormat
     max_extra_words: int
+    model: str  # LiteLLM model id the caller picked; always supplied by the client
     topic: str | None = None
 
 
