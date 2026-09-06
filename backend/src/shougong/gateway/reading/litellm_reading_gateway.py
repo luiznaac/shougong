@@ -15,15 +15,21 @@ context (docs aren't needed in the image), and this isn't documentation.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from shougong.usecase.reading.gateway import IReadingTextGateway
+from shougong.usecase.reading.gateway import IReadingTextGateway, ReadingDraft, RejectedDraft
 from shougong.usecase.reading.model import ReadingFormat, ReadingGenerationError
 
 _TOOL_NAME = "return_reading_text"
+
+# Generous ceiling so a runaway response can't rack up cost — the correction
+# loop can call the model several times per request. Sized well above any
+# reasonable reading text so it never truncates legitimate output.
+_MAX_OUTPUT_TOKENS = 1200
 
 _TOOL_SCHEMA = {
     "type": "function",
@@ -47,12 +53,22 @@ _TOOL_SCHEMA = {
 _SYSTEM_PROMPT = Path(__file__).with_name("system_prompt.txt").read_text(encoding="utf-8").strip()
 
 
+def _revision_instruction(rejected_words: Sequence[str], max_extra_words: int) -> str:
+    return (
+        f"These words are not in known_words: {', '.join(rejected_words)}. "
+        "Rewrite the whole text so none of them appear. Keep the meaning and the "
+        "narrative arc — rewrite sentences, don't drop them. "
+        f"You may keep at most {max_extra_words} of them."
+    )
+
+
 def _build_messages(
     *,
     known_words: frozenset[str],
     text_format: ReadingFormat,
     max_extra_words: int,
     topic: str | None,
+    prior_attempts: Sequence[RejectedDraft],
 ) -> list[dict[str, str]]:
     user_payload: dict[str, Any] = {
         "known_words": sorted(known_words),
@@ -60,7 +76,7 @@ def _build_messages(
         "max_extra_words": max_extra_words,
         "topic": topic or "free choice, something everyday",
     }
-    return [
+    messages: list[dict[str, str]] = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {
             "role": "user",
@@ -68,6 +84,10 @@ def _build_messages(
             + json.dumps(user_payload, ensure_ascii=False),
         },
     ]
+    for attempt in prior_attempts:
+        messages.append({"role": "assistant", "content": attempt.draft})
+        messages.append({"role": "user", "content": _revision_instruction(attempt.rejected_words, max_extra_words)})
+    return messages
 
 
 class LiteLlmReadingGateway(IReadingTextGateway):
@@ -97,7 +117,8 @@ class LiteLlmReadingGateway(IReadingTextGateway):
         max_extra_words: int,
         model: str,
         topic: str | None,
-    ) -> str:
+        prior_attempts: Sequence[RejectedDraft] = (),
+    ) -> ReadingDraft:
         payload: dict[str, Any] = {
             "model": model,
             "messages": _build_messages(
@@ -105,9 +126,11 @@ class LiteLlmReadingGateway(IReadingTextGateway):
                 text_format=text_format,
                 max_extra_words=max_extra_words,
                 topic=topic,
+                prior_attempts=prior_attempts,
             ),
             "tools": [_TOOL_SCHEMA],
             "tool_choice": {"type": "function", "function": {"name": _TOOL_NAME}},
+            "max_tokens": _MAX_OUTPUT_TOKENS,
         }
 
         try:
@@ -117,6 +140,11 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             response.raise_for_status()
             body = response.json()
             arguments = json.loads(body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])
-            return str(arguments["text"])
+            usage = body.get("usage") or {}
+            return ReadingDraft(
+                text=str(arguments["text"]),
+                prompt_tokens=int(usage.get("prompt_tokens", 0)),
+                completion_tokens=int(usage.get("completion_tokens", 0)),
+            )
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise ReadingGenerationError(f"ai gateway request failed: {exc}") from exc

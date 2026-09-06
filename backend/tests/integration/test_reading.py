@@ -63,6 +63,10 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
 
     first = body[0]
     assert first["known_word_count"] == 12
+    # seeded the old way, without a generation trail
+    assert first["attempts"] == []
+    assert first["attempt_count"] == 1
+    assert (first["prompt_tokens"], first["completion_tokens"]) == (0, 0)
     word, punct = first["tokens"]
     # pinyin/definitions/dictionary_entry_id are never stored — they come back
     # hydrated from the dictionary_entry row seeded above, keyed by word text.
@@ -122,6 +126,53 @@ async def test_list_models_proxies_the_ai_gateway(settings: Settings, httpserver
 
     assert response.status_code == 200
     assert response.json() == ["claude-haiku-4-5", "claude-sonnet-4-5"]
+
+
+async def test_list_history_returns_the_generation_trail_and_derived_figures(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    await _seed_entry(container)
+    attempts = [
+        {
+            "attempt": 1,
+            "text": "我是猫。",
+            "segmentation": ["我", "是", "猫", "。"],
+            "extra_words": ["猫"],
+            "prompt_tokens": 700,
+            "completion_tokens": 40,
+            "chosen": False,
+        },
+        {
+            "attempt": 2,
+            "text": "我是学生。",
+            "segmentation": ["我", "是", "学生", "。"],
+            "extra_words": [],
+            "prompt_tokens": 760,
+            "completion_tokens": 55,
+            "chosen": True,
+        },
+    ]
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO reading_text "
+                "(format, max_extra_words, topic, model, known_word_count, tokens, attempts, created_at) "
+                "VALUES ('sentences', 0, NULL, 'm', 5, :tokens, :attempts, '2026-02-01 00:00:00')"
+            ),
+            {
+                "tokens": json.dumps([{"is_word": True, "text": "学生", "part_of_speech": "noun", "is_extra": False}]),
+                "attempts": json.dumps(attempts),
+            },
+        )
+
+    row = (await client.get("/reading-texts")).json()[0]
+
+    assert row["attempt_count"] == 2
+    assert row["extra_words"] == []  # of the chosen draft
+    assert (row["prompt_tokens"], row["completion_tokens"]) == (1460, 95)  # summed across attempts
+    assert [a["chosen"] for a in row["attempts"]] == [False, True]
+    assert row["attempts"][0]["segmentation"] == ["我", "是", "猫", "。"]
+    assert row["attempts"][0]["extra_words"] == ["猫"]
 
 
 async def test_list_history_respects_limit_and_offset(container: Container, client: httpx.AsyncClient) -> None:

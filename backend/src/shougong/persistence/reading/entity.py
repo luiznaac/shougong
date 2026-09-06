@@ -29,4 +29,8 @@ class ReadingTextEntity(Base):
     model: Mapped[str] = mapped_column(String(128), server_default=text("''"))
     known_word_count: Mapped[int] = mapped_column(Integer)
     tokens: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    # The full generation trail: every draft the correction loop produced (kept
+    # even when discarded), one flagged `chosen`. Empty `[]` on rows written
+    # before the loop existed (matches `DEFAULT (JSON_ARRAY())` in init.sql).
+    attempts: Mapped[list[dict[str, object]]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)

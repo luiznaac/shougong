@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -23,8 +24,24 @@ class SegmentedToken:
     part_of_speech: PartOfSpeech | None
 
 
+@dataclass(frozen=True, slots=True)
+class RejectedDraft:
+    """A prior draft the service rejected, fed back so the model can revise it."""
+
+    draft: str
+    rejected_words: tuple[str, ...]  # words in the draft that are outside known_words
+
+
+@dataclass(frozen=True, slots=True)
+class ReadingDraft:
+    text: str
+    prompt_tokens: int
+    completion_tokens: int
+
+
 class IReadingTextGateway(Protocol):
-    """Generates one text — a single shot, never retried."""
+    """Produces one draft per call. The service may call it again with the
+    previous drafts in ``prior_attempts`` to have the model revise its work."""
 
     async def list_models(self) -> tuple[str, ...]:
         """Model ids the backing proxy currently exposes, sorted."""
@@ -38,7 +55,8 @@ class IReadingTextGateway(Protocol):
         max_extra_words: int,
         model: str,
         topic: str | None,
-    ) -> str: ...
+        prior_attempts: Sequence[RejectedDraft] = (),
+    ) -> ReadingDraft: ...
 
 
 class ISegmenter(Protocol):

@@ -17,6 +17,8 @@ from shougong.usecase.reading.gateway import (
     IReadingHistoryRepository,
     IReadingTextGateway,
     ISegmenter,
+    ReadingDraft,
+    RejectedDraft,
     SegmentedToken,
 )
 from shougong.usecase.reading.model import (
@@ -259,8 +261,10 @@ class FakeReadingTextGateway(IReadingTextGateway):
     """Returns a canned text; records what it was called with (a single shot,
     never retried)."""
 
-    def __init__(self, response: str) -> None:
-        self.response = response
+    def __init__(self, response: str | Sequence[str], *, tokens_per_call: int = 100) -> None:
+        # One string → returned every call; a sequence → one per call, last repeats.
+        self._responses = [response] if isinstance(response, str) else list(response)
+        self._tokens_per_call = tokens_per_call
         self.calls: list[dict[str, object]] = []
         self.models: tuple[str, ...] = ("fake-model",)
 
@@ -275,7 +279,8 @@ class FakeReadingTextGateway(IReadingTextGateway):
         max_extra_words: int,
         model: str,
         topic: str | None,
-    ) -> str:
+        prior_attempts: Sequence[RejectedDraft] = (),
+    ) -> ReadingDraft:
         self.calls.append(
             {
                 "known_words": known_words,
@@ -283,9 +288,11 @@ class FakeReadingTextGateway(IReadingTextGateway):
                 "max_extra_words": max_extra_words,
                 "model": model,
                 "topic": topic,
+                "prior_attempts": tuple(prior_attempts),
             }
         )
-        return self.response
+        text = self._responses[min(len(self.calls) - 1, len(self._responses) - 1)]
+        return ReadingDraft(text=text, prompt_tokens=self._tokens_per_call, completion_tokens=self._tokens_per_call)
 
 
 def make_segmented_token(text: str, *, part_of_speech: PartOfSpeech | None = PartOfSpeech.NOUN) -> SegmentedToken:

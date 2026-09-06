@@ -121,6 +121,18 @@ export interface ReadingToken {
   dictionary_entry_id: number | null;
 }
 
+// One draft the model produced on the way to the final text — kept even when
+// discarded, so the correction loop leaves an auditable trail.
+export interface ReadingAttempt {
+  attempt: number; // 1-based position in the trail
+  text: string;
+  segmentation: string[]; // the segmenter's raw tokens for this draft
+  extra_words: string[]; // words the validator flagged as outside known_words
+  prompt_tokens: number;
+  completion_tokens: number;
+  chosen: boolean; // exactly one attempt became the reading
+}
+
 export interface SavedReadingText {
   id: number;
   format: ReadingFormat;
@@ -131,5 +143,12 @@ export interface SavedReadingText {
   tokens: ReadingToken[];
   // Size of the known-vocabulary set (the study queue) sent to the model.
   known_word_count: number;
+  // Full generation trail, plus figures derived from it. `attempts` is empty and
+  // `attempt_count` is 1 for rows saved before the correction loop existed.
+  attempts: ReadingAttempt[];
+  attempt_count: number;
+  extra_words: string[]; // of the chosen draft
+  prompt_tokens: number; // summed across attempts
+  completion_tokens: number;
   created_at: string;
 }

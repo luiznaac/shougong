@@ -8,7 +8,7 @@ import {
   useReadingModels,
   useStudyItems,
 } from "../api/queries.ts";
-import type { ReadingFormat, ReadingToken, SavedReadingText } from "../api/types.ts";
+import type { ReadingAttempt, ReadingFormat, ReadingToken, SavedReadingText } from "../api/types.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
 
@@ -19,8 +19,8 @@ const FORMAT_LABELS: Record<ReadingFormat, string> = {
 
 const MODEL_STORAGE_KEY = "reading.model";
 
-function countExtraWords(tokens: ReadingToken[]): number {
-  return new Set(tokens.filter((t) => t.is_word && t.is_extra).map((t) => t.text)).size;
+function totalTokens(reading: SavedReadingText): number {
+  return reading.prompt_tokens + reading.completion_tokens;
 }
 
 export function Reading() {
@@ -168,16 +168,29 @@ export function Reading() {
                 <span>{current.topic}</span>
               </>
             )}
+            {current.attempt_count > 1 && (
+              <>
+                <span>&middot;</span>
+                <span>{current.attempt_count} tentativas</span>
+              </>
+            )}
+            {totalTokens(current) > 0 && (
+              <>
+                <span>&middot;</span>
+                <span>{totalTokens(current).toLocaleString()} tokens</span>
+              </>
+            )}
             <span className="ml-auto">{new Date(current.created_at).toLocaleString()}</span>
           </div>
           <div className="mt-3">
             <ReadingTokens tokens={current.tokens} />
           </div>
-          {countExtraWords(current.tokens) > 0 && (
+          {current.extra_words.length > 0 && (
             <p className="mt-4 text-xs text-amber-400">
-              {countExtraWords(current.tokens)} palavra(s) fora do vocabulário conhecido.
+              {current.extra_words.length} palavra(s) fora do vocabulário conhecido.
             </p>
           )}
+          {current.attempts.length > 1 && <AttemptTrail attempts={current.attempts} />}
         </div>
       )}
 
@@ -209,10 +222,16 @@ export function Reading() {
                       <span className="truncate">{item.topic}</span>
                     </>
                   )}
-                  {countExtraWords(item.tokens) > 0 && (
+                  {item.attempt_count > 1 && (
                     <>
                       <span>&middot;</span>
-                      <span className="text-amber-400">{countExtraWords(item.tokens)} extra(s)</span>
+                      <span>{item.attempt_count} tent.</span>
+                    </>
+                  )}
+                  {item.extra_words.length > 0 && (
+                    <>
+                      <span>&middot;</span>
+                      <span className="text-amber-400">{item.extra_words.length} extra(s)</span>
                     </>
                   )}
                   <span className="ml-auto shrink-0">{new Date(item.created_at).toLocaleString()}</span>
@@ -229,6 +248,55 @@ export function Reading() {
         )}
       </div>
     </div>
+  );
+}
+
+function AttemptTrail({ attempts }: { attempts: ReadingAttempt[] }) {
+  return (
+    <details className="mt-4 rounded-md border border-white/10 bg-slate-950/40">
+      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        Iterações ({attempts.length})
+      </summary>
+      <ol className="space-y-3 px-3 pb-3">
+        {attempts.map((attempt) => {
+          const flagged = new Set(attempt.extra_words);
+          return (
+            <li key={attempt.attempt} className="border-t border-white/5 pt-3">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>#{attempt.attempt}</span>
+                {attempt.chosen && (
+                  <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-emerald-300">escolhido</span>
+                )}
+                {attempt.extra_words.length > 0 && (
+                  <span className="text-amber-400">
+                    {attempt.extra_words.length} fora do vocabulário: {attempt.extra_words.join(" ")}
+                  </span>
+                )}
+                <span className="ml-auto">
+                  {(attempt.prompt_tokens + attempt.completion_tokens).toLocaleString()} tokens
+                </span>
+              </div>
+              {/* Segmented view: each chip is exactly what the segmenter produced — lets a
+                  mis-segmentation that got flagged as "extra" be spotted at a glance. */}
+              <p lang="zh-Hans" className="font-hanzi mt-2 flex flex-wrap gap-x-1 gap-y-1 text-lg leading-snug">
+                {attempt.segmentation.map((seg, i) => (
+                  <span
+                    key={i}
+                    className={
+                      flagged.has(seg)
+                        ? "rounded bg-amber-400/10 px-0.5 text-amber-400"
+                        : "text-slate-300"
+                    }
+                  >
+                    {seg}
+                  </span>
+                ))}
+              </p>
+            </li>
+          );
+        })}
+      </ol>
+    </details>
   );
 }
 

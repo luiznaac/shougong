@@ -9,7 +9,14 @@ from pydantic import BaseModel, Field
 
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
-from shougong.usecase.reading.model import ReadingFormat, ReadingRequest, ReadingToken, ReadingWord, SavedReadingText
+from shougong.usecase.reading.model import (
+    GenerationAttempt,
+    ReadingFormat,
+    ReadingRequest,
+    ReadingToken,
+    ReadingWord,
+    SavedReadingText,
+)
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
 from shougong.usecase.strokes.model import CharacterStrokes
 from shougong.usecase.study.model import BatchImportOutcome, BatchImportReport, ReviewResult, StudyItem
@@ -247,6 +254,28 @@ class ReadingTokenResponse(BaseModel):
         )
 
 
+class ReadingAttemptResponse(BaseModel):
+    attempt: int  # 1-based position in the generation trail
+    text: str
+    segmentation: list[str]  # the segmenter's raw tokens for this draft
+    extra_words: list[str]  # words the validator flagged as outside known_words
+    prompt_tokens: int
+    completion_tokens: int
+    chosen: bool  # exactly one attempt is the one that became the reading
+
+    @classmethod
+    def from_domain(cls, index: int, attempt: GenerationAttempt) -> ReadingAttemptResponse:
+        return cls(
+            attempt=index + 1,
+            text=attempt.text,
+            segmentation=list(attempt.segmentation),
+            extra_words=list(attempt.extra_words),
+            prompt_tokens=attempt.prompt_tokens,
+            completion_tokens=attempt.completion_tokens,
+            chosen=attempt.chosen,
+        )
+
+
 class SavedReadingTextResponse(BaseModel):
     id: int
     format: str
@@ -255,17 +284,32 @@ class SavedReadingTextResponse(BaseModel):
     topic: str | None
     tokens: list[ReadingTokenResponse]
     known_word_count: int
+    # Generation outcome: the full trail of drafts, plus figures derived from it.
+    attempts: list[ReadingAttemptResponse]
+    attempt_count: int  # 1 for rows saved before the correction loop existed
+    extra_words: list[str]  # of the chosen draft; falls back to flagged tokens on old rows
+    prompt_tokens: int
+    completion_tokens: int
     created_at: datetime
 
     @classmethod
     def from_domain(cls, saved: SavedReadingText) -> SavedReadingTextResponse:
+        reading = saved.reading
+        extra_words = list(reading.extra_words) or sorted(
+            {t.text for t in reading.tokens if isinstance(t, ReadingWord) and t.is_extra}
+        )
         return cls(
             id=saved.id,
             format=saved.request.format.value,
             max_extra_words=saved.request.max_extra_words,
             model=saved.request.model,
             topic=saved.request.topic,
-            tokens=[ReadingTokenResponse.from_domain(t) for t in saved.reading.tokens],
-            known_word_count=saved.reading.known_word_count,
+            tokens=[ReadingTokenResponse.from_domain(t) for t in reading.tokens],
+            known_word_count=reading.known_word_count,
+            attempts=[ReadingAttemptResponse.from_domain(i, a) for i, a in enumerate(reading.attempts)],
+            attempt_count=reading.attempt_count,
+            extra_words=extra_words,
+            prompt_tokens=reading.prompt_tokens,
+            completion_tokens=reading.completion_tokens,
             created_at=saved.created_at,
         )

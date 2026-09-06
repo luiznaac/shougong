@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.reading.gateway import SegmentedToken
 from shougong.usecase.reading.model import (
@@ -30,7 +32,7 @@ _NOW = make_srs_card().due  # 2026-01-01T00:00:00Z
 
 def _service(
     *,
-    response: str,
+    response: str | Sequence[str],
     segments: dict[str, tuple[SegmentedToken, ...]],
     known: list[StudyItem] | None = None,
     dictionary: FakeDictionaryRepository | None = None,
@@ -86,37 +88,85 @@ async def test_generate_calls_the_gateway_exactly_once() -> None:
 
     assert len(gateway.calls) == 1
     assert gateway.calls[0]["model"] == "haiku-x"  # the caller's model choice reaches the gateway
+    assert gateway.calls[0]["prior_attempts"] == ()  # first shot, nothing to revise
     assert saved.request.model == "haiku-x"  # and is persisted with the reading
     assert saved.reading.known_word_count == 3
+    assert saved.reading.attempt_count == 1
+    assert [a.chosen for a in saved.reading.attempts] == [True]
     words = [t for t in saved.reading.tokens if isinstance(t, ReadingWord)]
     assert all(not w.is_extra for w in words)
     assert any(isinstance(t, ReadingPunctuation) for t in saved.reading.tokens)
     assert history.saved == [saved]
 
 
-async def test_extras_over_budget_are_reported_not_retried() -> None:
+async def test_extras_over_budget_trigger_a_rewrite() -> None:
     wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
     shi = make_dictionary_entry(entry_id=2, simplified="是", pinyin="shi4", definitions=("to be",))
     known = [make_study_item(item_id=1, entry=wo), make_study_item(item_id=2, entry=shi)]
 
     service, gateway, _ = _service(
-        response="我是猫。",
+        response=["我是猫。", "我是我。"],  # first draft has an out-of-vocabulary word, the rewrite doesn't
         segments={
-            "我是猫。": (
-                _tok("我", PartOfSpeech.PRONOUN),
-                _tok("是", PartOfSpeech.VERB),
-                _tok("猫", PartOfSpeech.NOUN),
-                _tok("。", None),
-            )
+            "我是猫。": (_tok("我", PartOfSpeech.PRONOUN), _tok("是", PartOfSpeech.VERB), _tok("猫"), _tok("。", None)),
+            "我是我。": (_tok("我", PartOfSpeech.PRONOUN), _tok("是", PartOfSpeech.VERB), _tok("我"), _tok("。", None)),
         },
         known=known,
     )
 
     saved = await service.generate(_req(ReadingFormat.SENTENCES, 0))
 
-    assert len(gateway.calls) == 1  # exceeding the budget never triggers a second call
-    extra_words = [t.text for t in saved.reading.tokens if isinstance(t, ReadingWord) and t.is_extra]
-    assert extra_words == ["猫"]
+    assert len(gateway.calls) == 2
+    prior = gateway.calls[1]["prior_attempts"]
+    assert [d.rejected_words for d in prior] == [("猫",)]  # the exact violation is handed back
+    assert saved.reading.attempt_count == 2
+    assert [a.chosen for a in saved.reading.attempts] == [False, True]
+    assert saved.reading.extra_words == ()  # the chosen draft is clean
+    assert not any(isinstance(t, ReadingWord) and t.is_extra for t in saved.reading.tokens)
+
+
+async def test_gives_up_after_max_attempts_keeps_the_cleanest_draft() -> None:
+    wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
+    known = [make_study_item(item_id=1, entry=wo)]
+
+    service, gateway, _ = _service(
+        response=["猫猫猫。", "我猫。", "我猫猫。"],  # 1 distinct extra / 1 / 1 — none within budget 0
+        segments={
+            "猫猫猫。": (_tok("猫"), _tok("猫"), _tok("猫"), _tok("。", None)),
+            "我猫。": (_tok("我", PartOfSpeech.PRONOUN), _tok("猫"), _tok("。", None)),
+            "我猫猫。": (_tok("我", PartOfSpeech.PRONOUN), _tok("猫"), _tok("猫"), _tok("。", None)),
+        },
+        known=known,
+    )
+
+    saved = await service.generate(_req(ReadingFormat.SENTENCES, 0))
+
+    assert len(gateway.calls) == 3
+    assert saved.reading.attempt_count == 3
+    chosen = next(a for a in saved.reading.attempts if a.chosen)
+    assert chosen.text == "我猫猫。"  # fewest extras (tie on 1), most recent wins
+    assert saved.reading.extra_words == ("猫",)
+
+
+async def test_attempt_trail_records_segmentation_and_token_usage() -> None:
+    wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
+    known = [make_study_item(item_id=1, entry=wo)]
+
+    service, _, _ = _service(
+        response=["我猫。", "我我。"],
+        segments={
+            "我猫。": (_tok("我", PartOfSpeech.PRONOUN), _tok("猫"), _tok("。", None)),
+            "我我。": (_tok("我", PartOfSpeech.PRONOUN), _tok("我"), _tok("。", None)),
+        },
+        known=known,
+    )
+
+    saved = await service.generate(_req(ReadingFormat.SENTENCES, 0))
+
+    first = saved.reading.attempts[0]
+    assert first.segmentation == ("我", "猫", "。")  # the segmenter's raw tokens, punctuation included
+    assert first.extra_words == ("猫",)
+    assert saved.reading.prompt_tokens == 200  # 100 per call, summed over 2 attempts
+    assert saved.reading.completion_tokens == 200
 
 
 async def test_a_word_with_no_dictionary_entry_at_all_resolves_with_no_pinyin() -> None:
