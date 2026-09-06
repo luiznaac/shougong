@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS study_item_history (
 -- caller picked for this generation (empty string on rows predating that field).
 -- `attempts` is the full generation trail — every draft the correction loop
 -- produced, kept even when discarded, one flagged `chosen` (`[]` on old rows).
+-- `working_set` is the vocabulary offered to the model for this generation
+-- ({group: [words]}), `must_use` its anchor words (`{}`/`[]` on old rows).
 CREATE TABLE IF NOT EXISTS reading_text (
     id                       BIGINT       NOT NULL AUTO_INCREMENT,
     format                   VARCHAR(16)  NOT NULL,
@@ -94,9 +96,20 @@ CREATE TABLE IF NOT EXISTS reading_text (
     known_word_count         INT          NOT NULL,
     tokens                   JSON         NOT NULL,
     attempts                 JSON         NOT NULL DEFAULT (JSON_ARRAY()),
+    working_set              JSON         NOT NULL DEFAULT (JSON_OBJECT()),
+    must_use                 JSON         NOT NULL DEFAULT (JSON_ARRAY()),
     created_at               DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),
     KEY ix_reading_text_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- How often, and how recently, each word has appeared in a generated reading.
+-- The working-set sampler down-weights recently used words so practice rotates.
+CREATE TABLE IF NOT EXISTS reading_word_usage (
+    simplified    VARCHAR(64)  NOT NULL,
+    uses          INT          NOT NULL DEFAULT 0,
+    last_used_at  DATETIME(6)  NULL,
+    PRIMARY KEY (simplified)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- One row per word in the study queue: its HSK level, the raw HSK POS tags, and

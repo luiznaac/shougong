@@ -17,6 +17,7 @@ from shougong.usecase.reading.gateway import (
     IHskVocabularySource,
     IReadingHistoryRepository,
     IReadingTextGateway,
+    IReadingWordUsageRepository,
     ISegmenter,
     IVocabularyProfileRepository,
     ReadingDraft,
@@ -31,6 +32,7 @@ from shougong.usecase.reading.model import (
     SavedReadingText,
 )
 from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
+from shougong.usecase.reading.working_set import WordUsage, WorkingSet
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeRepository
@@ -277,7 +279,7 @@ class FakeReadingTextGateway(IReadingTextGateway):
     async def generate(
         self,
         *,
-        known_words: frozenset[str],
+        working_set: WorkingSet,
         text_format: ReadingFormat,
         max_extra_words: int,
         model: str,
@@ -286,7 +288,7 @@ class FakeReadingTextGateway(IReadingTextGateway):
     ) -> ReadingDraft:
         self.calls.append(
             {
-                "known_words": known_words,
+                "working_set": working_set,
                 "text_format": text_format,
                 "max_extra_words": max_extra_words,
                 "model": model,
@@ -351,3 +353,18 @@ class FakeVocabularyProfileRepository(IVocabularyProfileRepository):
 
     async def get(self, simplified: str) -> VocabularyProfile | None:
         return self.profiles.get(simplified)
+
+
+class FakeReadingWordUsageRepository(IReadingWordUsageRepository):
+    def __init__(self, usage: dict[str, WordUsage] | None = None) -> None:
+        self.usage: dict[str, WordUsage] = dict(usage or {})
+        self.recorded: list[tuple[tuple[str, ...], datetime]] = []
+
+    async def load(self, words: Sequence[str]) -> dict[str, WordUsage]:
+        return {w: self.usage[w] for w in words if w in self.usage}
+
+    async def record(self, words: Sequence[str], at: datetime) -> None:
+        self.recorded.append((tuple(words), at))
+        for word in words:
+            current = self.usage.get(word)
+            self.usage[word] = WordUsage(uses=(current.uses if current else 0) + 1, last_used_at=at)

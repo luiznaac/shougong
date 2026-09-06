@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from collections.abc import Sequence
 
 from shougong.usecase.commons.time import FixedClock
@@ -19,8 +20,10 @@ from tests.fixtures import (
     FakeDictionaryRepository,
     FakeReadingHistoryRepository,
     FakeReadingTextGateway,
+    FakeReadingWordUsageRepository,
     FakeSegmenter,
     FakeStudyItemRepository,
+    FakeVocabularyProfileRepository,
     make_dictionary_entry,
     make_segmented_token,
     make_srs_card,
@@ -37,6 +40,7 @@ def _service(
     known: list[StudyItem] | None = None,
     dictionary: FakeDictionaryRepository | None = None,
     history: FakeReadingHistoryRepository | None = None,
+    usage: FakeReadingWordUsageRepository | None = None,
 ) -> tuple[ReadingService, FakeReadingTextGateway, FakeReadingHistoryRepository]:
     gateway = FakeReadingTextGateway(response)
     segmenter = FakeSegmenter(segments)
@@ -48,7 +52,10 @@ def _service(
         study,
         dictionary or FakeDictionaryRepository(),
         history,
+        FakeVocabularyProfileRepository(),
+        usage or FakeReadingWordUsageRepository(),
         FixedClock(_NOW),
+        rng=random.Random(0),
     )
     return service, gateway, history
 
@@ -210,6 +217,30 @@ async def test_a_repeated_known_word_is_resolved_using_the_studied_entry_not_ano
     assert len(words) == 2  # both occurrences resolved
     assert all(w.pinyin == "xing2" and not w.is_extra for w in words)
     assert all(w.dictionary_entry_id == studied.id for w in words)  # the studied entry, not the other reading
+
+
+async def test_the_working_set_is_offered_to_the_gateway_and_word_usage_is_recorded() -> None:
+    wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
+    shi = make_dictionary_entry(entry_id=2, simplified="是", pinyin="shi4", definitions=("to be",))
+    known = [make_study_item(item_id=1, entry=wo), make_study_item(item_id=2, entry=shi)]
+    usage = FakeReadingWordUsageRepository()
+
+    service, gateway, _ = _service(
+        response="我是我。",
+        segments={
+            "我是我。": (_tok("我", PartOfSpeech.PRONOUN), _tok("是", PartOfSpeech.VERB), _tok("我"), _tok("。", None)),
+        },
+        known=known,
+        usage=usage,
+    )
+
+    saved = await service.generate(_req(ReadingFormat.SENTENCES, 0))
+
+    working_set = gateway.calls[0]["working_set"]
+    assert set(working_set.all_words) == {"我", "是"}  # degenerate flat group for a tiny vocabulary
+    assert saved.reading.working_set == {"words": ("我", "是")}
+    assert usage.recorded == [(("我", "是"), _NOW)]  # distinct known words of the chosen draft
+    assert usage.usage["我"].uses == 1
 
 
 async def test_list_models_delegates_to_the_gateway() -> None:

@@ -12,6 +12,7 @@ returns a translation, and never decides what counts as "known".
 
 from __future__ import annotations
 
+import random
 from dataclasses import replace
 
 from shougong.usecase.commons.time import IClock
@@ -20,7 +21,9 @@ from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.reading.gateway import (
     IReadingHistoryRepository,
     IReadingTextGateway,
+    IReadingWordUsageRepository,
     ISegmenter,
+    IVocabularyProfileRepository,
     RejectedDraft,
     SegmentedToken,
 )
@@ -34,6 +37,7 @@ from shougong.usecase.reading.model import (
     SavedReadingText,
 )
 from shougong.usecase.reading.validation import is_chinese_word, out_of_vocabulary
+from shougong.usecase.reading.working_set import WorkingSet, build_working_set
 from shougong.usecase.study.gateway import IStudyItemRepository
 
 _MAX_GENERATION_ATTEMPTS = 3
@@ -47,18 +51,25 @@ class ReadingService:
         study_repository: IStudyItemRepository,
         dictionary_repository: IDictionaryRepository,
         history_repository: IReadingHistoryRepository,
+        vocabulary_profile_repository: IVocabularyProfileRepository,
+        word_usage_repository: IReadingWordUsageRepository,
         clock: IClock,
+        rng: random.Random | None = None,
     ) -> None:
         self._gateway = gateway
         self._segmenter = segmenter
         self._study = study_repository
         self._dictionary = dictionary_repository
         self._history = history_repository
+        self._profiles = vocabulary_profile_repository
+        self._word_usage = word_usage_repository
         self._clock = clock
+        self._rng = rng or random.Random()
 
     async def generate(self, request: ReadingRequest) -> SavedReadingText:
         known_index = await self._known_word_index()
         known_words = frozenset(known_index)
+        working_set = await self._build_working_set(known_words)
 
         attempts: list[GenerationAttempt] = []
         segmentations: list[tuple[SegmentedToken, ...]] = []
@@ -66,7 +77,7 @@ class ReadingService:
 
         for _ in range(_MAX_GENERATION_ATTEMPTS):
             draft = await self._gateway.generate(
-                known_words=known_words,
+                working_set=working_set,
                 text_format=request.format,
                 max_extra_words=request.max_extra_words,
                 model=request.model,
@@ -101,8 +112,27 @@ class ReadingService:
             tokens=tokens,
             known_word_count=len(known_words),
             attempts=tuple(attempts),
+            working_set=dict(working_set.groups),
+            must_use=working_set.must_use,
         )
+        await self._record_word_usage(segmentations[chosen], known_words)
         return await self._history.save(request, reading, self._clock.now())
+
+    async def _build_working_set(self, known_words: frozenset[str]) -> WorkingSet:
+        profiles = await self._profiles.list_all()
+        usage = await self._word_usage.load([p.simplified for p in profiles])
+        return build_working_set(
+            profiles=profiles,
+            known_words=known_words,
+            usage=usage,
+            now=self._clock.now(),
+            rng=self._rng,
+        )
+
+    async def _record_word_usage(self, segmented: tuple[SegmentedToken, ...], known_words: frozenset[str]) -> None:
+        used = sorted({t.text for t in segmented if is_chinese_word(t.text) and t.text in known_words})
+        if used:
+            await self._word_usage.record(used, self._clock.now())
 
     async def list_models(self) -> tuple[str, ...]:
         return await self._gateway.list_models()

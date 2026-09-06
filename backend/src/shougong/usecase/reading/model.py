@@ -8,7 +8,7 @@ never from the model.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -92,6 +92,10 @@ class GeneratedReading:
     tokens: tuple[ReadingToken, ...]
     known_word_count: int  # size of the known-vocabulary set sent to the model
     attempts: tuple[GenerationAttempt, ...] = ()  # empty on rows generated before the loop existed
+    # The vocabulary actually offered to the model: group label -> words, plus
+    # the must-use anchors. Empty on rows generated before working sets existed.
+    working_set: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    must_use: tuple[str, ...] = ()
 
     @property
     def _chosen(self) -> GenerationAttempt | None:

@@ -188,5 +188,9 @@ export interface SavedReadingText {
   extra_words: string[]; // of the chosen draft
   prompt_tokens: number; // summed across attempts
   completion_tokens: number;
+  // The vocabulary offered to the model for this generation (group label -> words)
+  // and its anchor words. Empty for rows saved before working sets existed.
+  working_set: Record<string, string[]>;
+  must_use: string[];
   created_at: string;
 }

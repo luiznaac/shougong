@@ -33,4 +33,8 @@ class ReadingTextEntity(Base):
     # even when discarded), one flagged `chosen`. Empty `[]` on rows written
     # before the loop existed (matches `DEFAULT (JSON_ARRAY())` in init.sql).
     attempts: Mapped[list[dict[str, object]]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
+    # The vocabulary offered to the model: {group label: [words]} plus the
+    # must-use anchors. Empty on rows written before working sets existed.
+    working_set: Mapped[dict[str, list[str]]] = mapped_column(JSON, server_default=text("(JSON_OBJECT())"))
+    must_use: Mapped[list[str]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)

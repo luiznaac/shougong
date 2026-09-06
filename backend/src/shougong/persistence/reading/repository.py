@@ -116,6 +116,8 @@ def to_domain(row: ReadingTextEntity) -> SavedReadingText:
         tokens=tuple(_token_from_json(t) for t in row.tokens),
         known_word_count=row.known_word_count,
         attempts=tuple(_attempt_from_json(a) for a in (row.attempts or [])),
+        working_set={group: tuple(words) for group, words in (row.working_set or {}).items()},
+        must_use=tuple(row.must_use or []),
     )
     return SavedReadingText(id=row.id, request=request, reading=reading, created_at=_as_utc(row.created_at))
 
@@ -135,6 +137,8 @@ class ReadingHistoryRepository(IReadingHistoryRepository):
                 known_word_count=reading.known_word_count,
                 tokens=[_token_to_json(t) for t in reading.tokens],
                 attempts=[_attempt_to_json(i, a) for i, a in enumerate(reading.attempts)],
+                working_set={group: list(words) for group, words in reading.working_set.items()},
+                must_use=list(reading.must_use),
                 created_at=_naive_utc(created_at),
             )
             session.add(row)

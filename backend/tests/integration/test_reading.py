@@ -156,12 +156,15 @@ async def test_list_history_returns_the_generation_trail_and_derived_figures(
         await conn.execute(
             text(
                 "INSERT INTO reading_text "
-                "(format, max_extra_words, topic, model, known_word_count, tokens, attempts, created_at) "
-                "VALUES ('sentences', 0, NULL, 'm', 5, :tokens, :attempts, '2026-02-01 00:00:00')"
+                "(format, max_extra_words, topic, model, known_word_count, tokens, attempts, "
+                "working_set, must_use, created_at) "
+                "VALUES ('sentences', 0, NULL, 'm', 5, :tokens, :attempts, :ws, :mu, '2026-02-01 00:00:00')"
             ),
             {
                 "tokens": json.dumps([{"is_word": True, "text": "学生", "part_of_speech": "noun", "is_extra": False}]),
                 "attempts": json.dumps(attempts),
+                "ws": json.dumps({"verbs": ["是"], "nouns": ["学生"]}),
+                "mu": json.dumps(["学生"]),
             },
         )
 
@@ -173,6 +176,26 @@ async def test_list_history_returns_the_generation_trail_and_derived_figures(
     assert [a["chosen"] for a in row["attempts"]] == [False, True]
     assert row["attempts"][0]["segmentation"] == ["我", "是", "猫", "。"]
     assert row["attempts"][0]["extra_words"] == ["猫"]
+    assert row["working_set"] == {"verbs": ["是"], "nouns": ["学生"]}
+    assert row["must_use"] == ["学生"]
+
+
+async def test_list_history_defaults_working_set_and_must_use_on_old_rows(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO reading_text (format, max_extra_words, topic, known_word_count, tokens, created_at) "
+                "VALUES ('paragraph', 2, NULL, 0, :tokens, '2026-01-01 00:00:00')"
+            ),
+            {"tokens": json.dumps([{"is_word": True, "text": "学生", "part_of_speech": "noun", "is_extra": False}])},
+        )
+
+    row = (await client.get("/reading-texts")).json()[0]
+
+    assert row["working_set"] == {}
+    assert row["must_use"] == []
 
 
 async def test_list_history_respects_limit_and_offset(container: Container, client: httpx.AsyncClient) -> None:
