@@ -25,6 +25,7 @@ from shougong.persistence.reading.entity import ReadingTextEntity
 from shougong.usecase.reading.gateway import IReadingHistoryRepository
 from shougong.usecase.reading.model import (
     GeneratedReading,
+    GenerationAttempt,
     PartOfSpeech,
     ReadingFormat,
     ReadingPunctuation,
@@ -80,6 +81,29 @@ def _token_from_json(row: dict[str, Any]) -> ReadingToken:
     )
 
 
+def _attempt_to_json(index: int, attempt: GenerationAttempt) -> dict[str, Any]:
+    return {
+        "attempt": index + 1,
+        "text": attempt.text,
+        "segmentation": list(attempt.segmentation),
+        "extra_words": list(attempt.extra_words),
+        "prompt_tokens": attempt.prompt_tokens,
+        "completion_tokens": attempt.completion_tokens,
+        "chosen": attempt.chosen,
+    }
+
+
+def _attempt_from_json(row: dict[str, Any]) -> GenerationAttempt:
+    return GenerationAttempt(
+        text=row["text"],
+        segmentation=tuple(row["segmentation"]),
+        extra_words=tuple(row["extra_words"]),
+        prompt_tokens=row["prompt_tokens"],
+        completion_tokens=row["completion_tokens"],
+        chosen=row["chosen"],
+    )
+
+
 def to_domain(row: ReadingTextEntity) -> SavedReadingText:
     request = ReadingRequest(
         format=ReadingFormat(row.format),
@@ -91,6 +115,7 @@ def to_domain(row: ReadingTextEntity) -> SavedReadingText:
         format=ReadingFormat(row.format),
         tokens=tuple(_token_from_json(t) for t in row.tokens),
         known_word_count=row.known_word_count,
+        attempts=tuple(_attempt_from_json(a) for a in (row.attempts or [])),
     )
     return SavedReadingText(id=row.id, request=request, reading=reading, created_at=_as_utc(row.created_at))
 
@@ -109,6 +134,7 @@ class ReadingHistoryRepository(IReadingHistoryRepository):
                 model=request.model,
                 known_word_count=reading.known_word_count,
                 tokens=[_token_to_json(t) for t in reading.tokens],
+                attempts=[_attempt_to_json(i, a) for i, a in enumerate(reading.attempts)],
                 created_at=_naive_utc(created_at),
             )
             session.add(row)

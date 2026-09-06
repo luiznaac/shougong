@@ -10,6 +10,7 @@ import pytest
 from pytest_httpserver import HTTPServer
 
 from shougong.gateway.reading.litellm_reading_gateway import LiteLlmReadingGateway
+from shougong.usecase.reading.gateway import RejectedDraft
 from shougong.usecase.reading.model import ReadingFormat, ReadingGenerationError
 
 _TOOL_CALL_RESPONSE = {
@@ -22,6 +23,7 @@ _TOOL_CALL_RESPONSE = {
             },
         },
     ],
+    "usage": {"prompt_tokens": 640, "completion_tokens": 92},
 }
 
 
@@ -59,7 +61,7 @@ async def test_generate_extracts_text_from_the_tool_call(httpserver: HTTPServer)
 
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
-        text = await gateway.generate(
+        draft = await gateway.generate(
             known_words=frozenset({"我", "是", "学生"}),
             text_format=ReadingFormat.SENTENCES,
             max_extra_words=2,
@@ -67,10 +69,47 @@ async def test_generate_extracts_text_from_the_tool_call(httpserver: HTTPServer)
             topic=None,
         )
 
-    assert text == "我是学生。"
+    assert draft.text == "我是学生。"
     sent = _last_request_json(httpserver)
     assert sent["model"] == "claude-haiku-4-5-20251001"  # taken from the call, not from config
     assert sent["tool_choice"]["function"]["name"] == "return_reading_text"
+
+
+async def test_generate_reports_token_usage(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(_TOOL_CALL_RESPONSE)
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        draft = await gateway.generate(
+            known_words=frozenset(),
+            text_format=ReadingFormat.SENTENCES,
+            max_extra_words=2,
+            model="m",
+            topic=None,
+        )
+
+    assert (draft.prompt_tokens, draft.completion_tokens) == (640, 92)
+
+
+async def test_generate_replays_prior_drafts_as_revision_turns(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(_TOOL_CALL_RESPONSE)
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        await gateway.generate(
+            known_words=frozenset({"我"}),
+            text_format=ReadingFormat.SENTENCES,
+            max_extra_words=1,
+            model="m",
+            topic=None,
+            prior_attempts=[RejectedDraft(draft="我是猫。", rejected_words=("是", "猫"))],
+        )
+
+    messages = _last_request_json(httpserver)["messages"]
+    assert messages[-2] == {"role": "assistant", "content": "我是猫。"}
+    assert messages[-1]["role"] == "user"
+    assert "是, 猫" in messages[-1]["content"]
+    assert "at most 1" in messages[-1]["content"]
 
 
 async def test_generate_sends_the_prototype_prompt_as_json(httpserver: HTTPServer) -> None:

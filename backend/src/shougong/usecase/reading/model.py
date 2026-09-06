@@ -73,10 +73,46 @@ type ReadingToken = ReadingWord | ReadingPunctuation
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationAttempt:
+    """One draft the model produced on the way to the final text — kept even
+    when discarded, so the correction loop leaves an auditable trail (how many
+    rounds, what the segmenter saw, what was flagged)."""
+
+    text: str
+    segmentation: tuple[str, ...]  # the segmenter's raw tokens for this draft
+    extra_words: tuple[str, ...]  # words the validator flagged as outside known_words
+    prompt_tokens: int
+    completion_tokens: int
+    chosen: bool  # exactly one attempt per reading is the chosen one
+
+
+@dataclass(frozen=True, slots=True)
 class GeneratedReading:
     format: ReadingFormat
     tokens: tuple[ReadingToken, ...]
     known_word_count: int  # size of the known-vocabulary set sent to the model
+    attempts: tuple[GenerationAttempt, ...] = ()  # empty on rows generated before the loop existed
+
+    @property
+    def _chosen(self) -> GenerationAttempt | None:
+        return next((a for a in self.attempts if a.chosen), None)
+
+    @property
+    def attempt_count(self) -> int:
+        return len(self.attempts) or 1
+
+    @property
+    def extra_words(self) -> tuple[str, ...]:
+        chosen = self._chosen
+        return chosen.extra_words if chosen else ()
+
+    @property
+    def prompt_tokens(self) -> int:
+        return sum(a.prompt_tokens for a in self.attempts)
+
+    @property
+    def completion_tokens(self) -> int:
+        return sum(a.completion_tokens for a in self.attempts)
 
 
 @dataclass(frozen=True, slots=True)

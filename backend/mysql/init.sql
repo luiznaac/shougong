@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS study_item_history (
 -- instead of freezing a copy here. `known_word_count` is the size of the
 -- known-vocabulary set sent to the model. `model` is the LiteLLM model id the
 -- caller picked for this generation (empty string on rows predating that field).
+-- `attempts` is the full generation trail — every draft the correction loop
+-- produced, kept even when discarded, one flagged `chosen` (`[]` on old rows).
 CREATE TABLE IF NOT EXISTS reading_text (
     id                       BIGINT       NOT NULL AUTO_INCREMENT,
     format                   VARCHAR(16)  NOT NULL,
@@ -91,6 +93,7 @@ CREATE TABLE IF NOT EXISTS reading_text (
     model                    VARCHAR(128) NOT NULL DEFAULT '',
     known_word_count         INT          NOT NULL,
     tokens                   JSON         NOT NULL,
+    attempts                 JSON         NOT NULL DEFAULT (JSON_ARRAY()),
     created_at               DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),
     KEY ix_reading_text_created_at (created_at)

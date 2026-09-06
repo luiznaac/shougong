@@ -1,11 +1,13 @@
 """`ReadingService` — generate a vocabulary-restricted reading text, validate it
 locally against the learner's known words, and persist the result.
 
-The LLM is only ever responsible for the running text, generated once (no
-retry if it exceeds the requested extra-word budget — the actual extras are
-just reported back, flagged per word). Segmentation, word-level vocabulary
-validation, and pinyin/definitions all happen locally — the model never sees
-or returns a translation, and never decides what counts as "known".
+The LLM is only ever responsible for the running text. It is asked once; if the
+draft uses more distinct words outside the learner's vocabulary than requested,
+those exact words are handed back and a rewrite is requested, up to
+`_MAX_GENERATION_ATTEMPTS` times. Every draft — including the rejected ones — is
+kept on the saved reading as an audit trail. Segmentation, word-level vocabulary
+validation, and pinyin/definitions all happen locally — the model never sees or
+returns a translation, and never decides what counts as "known".
 """
 
 from __future__ import annotations
@@ -15,17 +17,26 @@ from dataclasses import replace
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
-from shougong.usecase.reading.gateway import IReadingHistoryRepository, IReadingTextGateway, ISegmenter, SegmentedToken
+from shougong.usecase.reading.gateway import (
+    IReadingHistoryRepository,
+    IReadingTextGateway,
+    ISegmenter,
+    RejectedDraft,
+    SegmentedToken,
+)
 from shougong.usecase.reading.model import (
     GeneratedReading,
+    GenerationAttempt,
     ReadingPunctuation,
     ReadingRequest,
     ReadingToken,
     ReadingWord,
     SavedReadingText,
 )
-from shougong.usecase.reading.validation import is_chinese_word
+from shougong.usecase.reading.validation import is_chinese_word, out_of_vocabulary
 from shougong.usecase.study.gateway import IStudyItemRepository
+
+_MAX_GENERATION_ATTEMPTS = 3
 
 
 class ReadingService:
@@ -49,16 +60,48 @@ class ReadingService:
         known_index = await self._known_word_index()
         known_words = frozenset(known_index)
 
-        text = await self._gateway.generate(
-            known_words=known_words,
-            text_format=request.format,
-            max_extra_words=request.max_extra_words,
-            model=request.model,
-            topic=request.topic,
-        )
-        segmented = self._segmenter.segment(text)
+        attempts: list[GenerationAttempt] = []
+        segmentations: list[tuple[SegmentedToken, ...]] = []
+        prior: list[RejectedDraft] = []
 
-        reading = await self._resolve(request, segmented, known_index, known_word_count=len(known_words))
+        for _ in range(_MAX_GENERATION_ATTEMPTS):
+            draft = await self._gateway.generate(
+                known_words=known_words,
+                text_format=request.format,
+                max_extra_words=request.max_extra_words,
+                model=request.model,
+                topic=request.topic,
+                prior_attempts=prior,
+            )
+            segmented = self._segmenter.segment(draft.text)
+            extras = out_of_vocabulary([t.text for t in segmented], known_words)
+
+            attempts.append(
+                GenerationAttempt(
+                    text=draft.text,
+                    segmentation=tuple(t.text for t in segmented),
+                    extra_words=tuple(extras),
+                    prompt_tokens=draft.prompt_tokens,
+                    completion_tokens=draft.completion_tokens,
+                    chosen=False,
+                )
+            )
+            segmentations.append(segmented)
+
+            if len(extras) <= request.max_extra_words:
+                break
+            prior.append(RejectedDraft(draft=draft.text, rejected_words=tuple(extras)))
+
+        chosen = _choose_attempt(attempts, request.max_extra_words)
+        attempts[chosen] = replace(attempts[chosen], chosen=True)
+
+        tokens = await self._resolve(segmentations[chosen], known_index)
+        reading = GeneratedReading(
+            format=request.format,
+            tokens=tokens,
+            known_word_count=len(known_words),
+            attempts=tuple(attempts),
+        )
         return await self._history.save(request, reading, self._clock.now())
 
     async def list_models(self) -> tuple[str, ...]:
@@ -109,12 +152,9 @@ class ReadingService:
 
     async def _resolve(
         self,
-        request: ReadingRequest,
         segmented: tuple[SegmentedToken, ...],
         known_index: dict[str, DictionaryEntry],
-        *,
-        known_word_count: int,
-    ) -> GeneratedReading:
+    ) -> tuple[ReadingToken, ...]:
         resolved_cache: dict[str, DictionaryEntry | None] = {}
         tokens: list[ReadingToken] = []
 
@@ -142,4 +182,14 @@ class ReadingService:
                 )
             )
 
-        return GeneratedReading(format=request.format, tokens=tuple(tokens), known_word_count=known_word_count)
+        return tuple(tokens)
+
+
+def _choose_attempt(attempts: list[GenerationAttempt], max_extra_words: int) -> int:
+    """Index of the draft that becomes the reading: the first one within the
+    extra-word budget, or — if none is — the one with the fewest violations
+    (the most recent wins a tie)."""
+    for i, attempt in enumerate(attempts):
+        if len(attempt.extra_words) <= max_extra_words:
+            return i
+    return min(range(len(attempts)), key=lambda i: (len(attempts[i].extra_words), -i))
