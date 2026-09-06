@@ -14,9 +14,11 @@ from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
 from shougong.usecase.reading.gateway import (
+    IHskVocabularySource,
     IReadingHistoryRepository,
     IReadingTextGateway,
     ISegmenter,
+    IVocabularyProfileRepository,
     ReadingDraft,
     RejectedDraft,
     SegmentedToken,
@@ -28,6 +30,7 @@ from shougong.usecase.reading.model import (
     ReadingRequest,
     SavedReadingText,
 )
+from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeRepository
@@ -323,3 +326,28 @@ class FakeReadingHistoryRepository(IReadingHistoryRepository):
     async def list(self, *, limit: int, offset: int) -> list[SavedReadingText]:
         newest_first = sorted(self.saved, key=lambda s: s.id, reverse=True)
         return newest_first[offset : offset + limit]
+
+
+class FakeHskVocabularySource(IHskVocabularySource):
+    def __init__(self, entries: dict[str, HskEntry] | None = None) -> None:
+        self.entries: dict[str, HskEntry] = dict(entries or {})
+        self.fetch_calls = 0
+
+    async def fetch(self) -> dict[str, HskEntry]:
+        self.fetch_calls += 1
+        return dict(self.entries)
+
+
+class FakeVocabularyProfileRepository(IVocabularyProfileRepository):
+    def __init__(self, profiles: list[VocabularyProfile] | None = None) -> None:
+        self.profiles: dict[str, VocabularyProfile] = {p.simplified: p for p in (profiles or [])}
+
+    async def list_all(self) -> list[VocabularyProfile]:
+        return [self.profiles[k] for k in sorted(self.profiles)]
+
+    async def upsert_many(self, profiles: Sequence[VocabularyProfile], updated_at: datetime) -> None:
+        for profile in profiles:
+            self.profiles[profile.simplified] = profile
+
+    async def get(self, simplified: str) -> VocabularyProfile | None:
+        return self.profiles.get(simplified)

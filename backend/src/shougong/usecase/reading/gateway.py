@@ -14,6 +14,7 @@ from shougong.usecase.reading.model import (
     ReadingRequest,
     SavedReadingText,
 )
+from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,3 +72,19 @@ class IReadingHistoryRepository(Protocol):
     async def list(self, *, limit: int, offset: int) -> list[SavedReadingText]:
         """Most recently generated first."""
         ...
+
+
+class IHskVocabularySource(Protocol):
+    """The HSK 3.0 word list from its upstream (a community dataset)."""
+
+    async def fetch(self) -> dict[str, HskEntry]:
+        """Every listed word → its level and POS tags. Cached after the first call."""
+        ...
+
+
+class IVocabularyProfileRepository(Protocol):
+    async def list_all(self) -> list[VocabularyProfile]: ...
+
+    async def upsert_many(self, profiles: Sequence[VocabularyProfile], updated_at: datetime) -> None: ...
+
+    async def get(self, simplified: str) -> VocabularyProfile | None: ...

@@ -133,6 +133,44 @@ export interface ReadingAttempt {
   chosen: boolean; // exactly one attempt became the reading
 }
 
+// Broad grammatical class of a known word, from the backend's own taxonomy.
+export type VocabularyCategory =
+  | "verb"
+  | "noun"
+  | "person"
+  | "place"
+  | "qualifier"
+  | "adverb"
+  | "time"
+  | "quantity"
+  | "connective"
+  | "pronoun"
+  | "functional"
+  | "other";
+
+export interface VocabularyProfile {
+  simplified: string;
+  hsk_level: number | null;
+  pos_tags: string[];
+  pos_category: VocabularyCategory;
+  source: "hsk" | "manual" | "unknown";
+  pinyin: string | null;
+  gloss: string | null;
+}
+
+export interface VocabularySummary {
+  total: number;
+  categorised: number;
+  by_category: Record<string, number>;
+  by_hsk_level: Record<string, number>; // keyed by str(level) or "none"
+  qualifier_shortage: boolean;
+}
+
+export interface VocabularyOverview {
+  profiles: VocabularyProfile[];
+  summary: VocabularySummary;
+}
+
 export interface SavedReadingText {
   id: number;
   format: ReadingFormat;
