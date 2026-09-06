@@ -79,3 +79,37 @@ export interface StudyItemHistory {
   card: SrsCard;
   created_at: string;
 }
+
+export type ReadingFormat = "paragraph" | "sentences";
+
+export interface GenerateReadingRequest {
+  format: ReadingFormat;
+  max_extra_words: number;
+  topic?: string | null;
+}
+
+// One segmented token of a generated reading — a word (pinyin/definitions/part
+// of speech from the app's own dictionary, never from the LLM) or a punctuation
+// token passed through as-is (`is_word: false`, the other fields unused).
+export interface ReadingToken {
+  text: string;
+  is_word: boolean;
+  pinyin: string | null;
+  definitions: string[];
+  part_of_speech: string | null;
+  is_extra: boolean;
+  // Populated whenever a dictionary entry was resolved (including for extra
+  // words) — lets an extra word be added straight to the study queue.
+  dictionary_entry_id: number | null;
+}
+
+export interface SavedReadingText {
+  id: number;
+  format: ReadingFormat;
+  max_extra_words: number;
+  topic: string | null;
+  tokens: ReadingToken[];
+  // Size of the known-vocabulary set (the study queue) sent to the model.
+  known_word_count: number;
+  created_at: string;
+}

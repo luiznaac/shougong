@@ -70,6 +70,21 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
+    async def find_by_simplified_many(self, simplified_words: Sequence[str]) -> list[DictionaryEntry]:
+        async def _run() -> list[DictionaryEntry]:
+            if not simplified_words:
+                return []
+            session = current_session()
+            stmt = (
+                select(DictionaryEntryEntity)
+                .where(DictionaryEntryEntity.simplified.in_(simplified_words))
+                .order_by(DictionaryEntryEntity.id)
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+            return [to_domain(row) for row in rows]
+
+        return await self._tx.execute(_run)
+
     async def get(self, entry_id: int) -> DictionaryEntry | None:
         async def _run() -> DictionaryEntry | None:
             session = current_session()

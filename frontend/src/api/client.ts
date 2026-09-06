@@ -3,8 +3,10 @@ import type {
   BatchImportRowRequest,
   CharacterStrokes,
   DictionaryEntry,
+  GenerateReadingRequest,
   ReviewResult,
   ReviewLog,
+  SavedReadingText,
   SrsRating,
   StudyItem,
   StudyItemHistory,
@@ -112,5 +114,13 @@ export const api = {
       if (page.length < 200) break;
     }
     return all;
+  },
+
+  // --- reading ---
+  generateReading(req: GenerateReadingRequest): Promise<SavedReadingText> {
+    return request(`/reading-texts`, { method: "POST", body: JSON.stringify(req) });
+  },
+  listReadingHistory(limit = 20, offset = 0): Promise<SavedReadingText[]> {
+    return request(`/reading-texts?limit=${limit}&offset=${offset}`);
   },
 };

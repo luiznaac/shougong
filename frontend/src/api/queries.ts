@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client.ts";
-import type { SrsRating } from "./types.ts";
+import type { GenerateReadingRequest, SrsRating } from "./types.ts";
 
 export const keys = {
   studyItems: (due?: boolean) => ["study-items", { due: due ?? false }] as const,
@@ -8,6 +8,7 @@ export const keys = {
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
   dictionary: (q: string) => ["dictionary", q] as const,
+  readingHistory: ["reading-texts"] as const,
 };
 
 export function useStudyItems(opts: { due?: boolean } = {}) {
@@ -80,5 +81,20 @@ export function useReviewMutation() {
       qc.invalidateQueries({ queryKey: keys.studyItem(id) });
       qc.invalidateQueries({ queryKey: keys.reviews(id) });
     },
+  });
+}
+
+export function useReadingHistory() {
+  return useQuery({
+    queryKey: keys.readingHistory,
+    queryFn: () => api.listReadingHistory(),
+  });
+}
+
+export function useGenerateReading() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: GenerateReadingRequest) => api.generateReading(req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.readingHistory }),
   });
 }

@@ -26,4 +26,13 @@ class IStudyItemRepository(Protocol):
 
     async def list_reviews(self, item_id: int, *, limit: int, offset: int) -> list[SrsReviewLog]: ...
 
+    async def list_known_entries(self) -> list[DictionaryEntry]:
+        """Every dictionary entry the learner has queued for study, unpaginated —
+        regardless of FSRS state. Used to build a "known vocabulary" set."""
+        ...
+
+    # NOTE: keep this method last — its name shadows the builtin `list` for any
+    # annotation written after it in this class body (mypy resolves the bare
+    # `list[...]` forward reference against the class namespace, where `list`
+    # is now this method).
     async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]: ...
