@@ -17,6 +17,11 @@ from shougong.usecase.reading.model import (
     ReadingWord,
     SavedReadingText,
 )
+from shougong.usecase.reading.vocabulary import (
+    VocabularyCategory,
+    VocabularyProfile,
+    VocabularySummary,
+)
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
 from shougong.usecase.strokes.model import CharacterStrokes
 from shougong.usecase.study.model import BatchImportOutcome, BatchImportReport, ReviewResult, StudyItem
@@ -313,3 +318,69 @@ class SavedReadingTextResponse(BaseModel):
             completion_tokens=reading.completion_tokens,
             created_at=saved.created_at,
         )
+
+
+class VocabularyProfileResponse(BaseModel):
+    simplified: str
+    hsk_level: int | None
+    pos_tags: list[str]
+    pos_category: str
+    source: str  # "hsk" | "manual" | "unknown"
+    pinyin: str | None
+    gloss: str | None
+
+    @classmethod
+    def from_domain(cls, profile: VocabularyProfile) -> VocabularyProfileResponse:
+        return cls(
+            simplified=profile.simplified,
+            hsk_level=profile.hsk_level,
+            pos_tags=list(profile.pos_tags),
+            pos_category=profile.pos_category.value,
+            source=profile.source.value,
+            pinyin=profile.pinyin,
+            gloss=profile.gloss,
+        )
+
+
+class VocabularySummaryResponse(BaseModel):
+    total: int
+    categorised: int
+    by_category: dict[str, int]
+    by_hsk_level: dict[str, int]
+    qualifier_shortage: bool
+
+    @classmethod
+    def from_domain(cls, summary: VocabularySummary) -> VocabularySummaryResponse:
+        return cls(
+            total=summary.total,
+            categorised=summary.categorised,
+            by_category=summary.by_category,
+            by_hsk_level=summary.by_hsk_level,
+            qualifier_shortage=summary.qualifier_shortage,
+        )
+
+
+class VocabularyOverviewResponse(BaseModel):
+    profiles: list[VocabularyProfileResponse]
+    summary: VocabularySummaryResponse
+
+
+class OverrideVocabularyRequest(BaseModel):
+    pos_category: Literal[
+        "verb",
+        "noun",
+        "person",
+        "place",
+        "qualifier",
+        "adverb",
+        "time",
+        "quantity",
+        "connective",
+        "pronoun",
+        "functional",
+        "other",
+    ]
+    hsk_level: int | None = Field(default=None, ge=1, le=9)
+
+    def category(self) -> VocabularyCategory:
+        return VocabularyCategory(self.pos_category)

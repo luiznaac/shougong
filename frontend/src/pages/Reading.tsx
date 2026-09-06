@@ -10,6 +10,7 @@ import {
 } from "../api/queries.ts";
 import type { ReadingAttempt, ReadingFormat, ReadingToken, SavedReadingText } from "../api/types.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
+import { VocabularyPanel } from "../components/VocabularyPanel.tsx";
 import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
 
 const FORMAT_LABELS: Record<ReadingFormat, string> = {
@@ -147,6 +148,8 @@ export function Reading() {
           {generateMutation.isPending ? "Gerando…" : "Gerar"}
         </button>
       </div>
+
+      <VocabularyPanel />
 
       {error && <p className="text-sm text-rose-400">{error}</p>}
 

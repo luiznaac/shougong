@@ -1,0 +1,39 @@
+"""Real local HTTP server (pytest-httpserver) standing in for the HSK dataset host."""
+
+from __future__ import annotations
+
+import httpx
+from pytest_httpserver import HTTPServer
+
+from shougong.gateway.reading.hsk_vocabulary_source import HskVocabularySource, parse_dataset
+
+_DATASET = [
+    {"s": "阿姨", "l": ["t3", "n4", "o3"], "p": ["n"]},
+    {"s": "北京", "l": ["n2", "o1"], "p": ["ns"]},
+    {"s": "呵护", "l": ["o7"], "p": ["v", "vn"]},
+    {"s": "什么", "l": ["n1"], "p": ["r"]},
+    {"s": "", "l": ["n1"], "p": ["x"]},  # skipped: no simplified form
+]
+
+
+def test_parse_dataset_keeps_simplified_level_and_pos() -> None:
+    parsed = parse_dataset(_DATASET)
+
+    assert set(parsed) == {"阿姨", "北京", "呵护", "什么"}
+    assert parsed["阿姨"].hsk_level == 4  # lowest `nN`, ignoring `tN`
+    assert parsed["北京"].hsk_level == 2
+    assert parsed["呵护"].hsk_level == 7  # no `nN` → lowest `oN`
+    assert parsed["呵护"].pos_tags == ("v", "vn")
+
+
+async def test_fetch_downloads_once_and_caches(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/complete.min.json", method="GET").respond_with_json(_DATASET)
+
+    async with httpx.AsyncClient() as client:
+        source = HskVocabularySource(client, httpserver.url_for("/complete.min.json"))
+        first = await source.fetch()
+        second = await source.fetch()
+
+    assert first is second  # cached
+    assert len(httpserver.log) == 1  # downloaded only once
+    assert first["北京"].hsk_level == 2

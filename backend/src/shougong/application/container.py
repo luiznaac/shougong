@@ -28,6 +28,7 @@ from shougong.gateway.configuration.http_client import build_http_client
 from shougong.gateway.dictionary.cedict_source import CedictSource
 from shougong.gateway.health.app_health_gateway import AppHealthGateway
 from shougong.gateway.health.http_client_health_check import HttpClientHealthCheck
+from shougong.gateway.reading.hsk_vocabulary_source import HskVocabularySource
 from shougong.gateway.reading.litellm_reading_gateway import LiteLlmReadingGateway
 from shougong.gateway.strokes.hanzi_writer_source import HanziWriterSource
 from shougong.httpapi.configuration.server import build_app
@@ -38,11 +39,13 @@ from shougong.httpapi.controller.reading_controller import ReadingController
 from shougong.httpapi.controller.strokes_controller import StrokesController
 from shougong.httpapi.controller.study_controller import StudyController
 from shougong.httpapi.controller.study_item_history_controller import StudyItemHistoryController
+from shougong.httpapi.controller.vocabulary_controller import VocabularyController
 from shougong.persistence.configuration.database import build_engine, build_session_factory
 from shougong.persistence.configuration.transaction import SqlAlchemyTransactionTemplate
 from shougong.persistence.dictionary.repository import DictionaryRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
 from shougong.persistence.reading.repository import ReadingHistoryRepository
+from shougong.persistence.reading.vocabulary_profile_repository import VocabularyProfileRepository
 from shougong.persistence.strokes.repository import StrokeRepository
 from shougong.persistence.study.repository import StudyItemRepository
 from shougong.persistence.study_item_history.repository import StudyItemHistoryRepository
@@ -54,6 +57,7 @@ from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
 from shougong.usecase.reading.service import ReadingService
+from shougong.usecase.reading.vocabulary_service import VocabularyProfileService
 from shougong.usecase.srs.day_boundary import DayBoundaryEngine
 from shougong.usecase.strokes.service import StrokeService
 from shougong.usecase.study.service import StudyService
@@ -127,6 +131,15 @@ class Container:
             self._reading_history_repository,
             self.clock,
         )
+        self._hsk_vocabulary_source = HskVocabularySource(self.http_client)
+        self._vocabulary_profile_repository = VocabularyProfileRepository(self.transaction_template)
+        self._vocabulary_profile_service = VocabularyProfileService(
+            self._study_item_repository,
+            self._dictionary_repository,
+            self._hsk_vocabulary_source,
+            self._vocabulary_profile_repository,
+            self.clock,
+        )
 
         # --- http layer ------------------------------------------------
         self.controllers: list[IController] = [
@@ -136,16 +149,22 @@ class Container:
             StudyController(self._study_service),
             StudyItemHistoryController(self._study_item_history_service),
             ReadingController(self._reading_service),
+            VocabularyController(self._vocabulary_profile_service),
         ]
 
         @asynccontextmanager
         async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             autoload = asyncio.create_task(self._autoload_dictionary()) if self.settings.dictionary_autoload else None
             jieba_warmup = asyncio.create_task(self._warm_up_jieba())
+            vocab_sync = (
+                asyncio.create_task(self._sync_vocabulary_profile())
+                if self.settings.vocabulary_profile_autoload
+                else None
+            )
             try:
                 yield
             finally:
-                for task in (autoload, jieba_warmup):
+                for task in (autoload, jieba_warmup, vocab_sync):
                     if task is not None:
                         task.cancel()
                         with suppress(asyncio.CancelledError):
@@ -177,6 +196,16 @@ class Container:
             raise
         except Exception:
             _log.exception("reading.jieba_warmup.failed")
+
+    async def _sync_vocabulary_profile(self) -> None:
+        """Fire-and-forget: resolve a grammatical profile for every studied word
+        from the HSK dataset. A download failure is logged, never fatal."""
+        try:
+            await self._vocabulary_profile_service.sync()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _log.exception("vocabulary.sync.failed")
 
     async def aclose(self) -> None:
         await self.http_client.aclose()

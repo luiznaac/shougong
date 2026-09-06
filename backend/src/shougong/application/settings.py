@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # On startup, download CC-CEDICT and fill `dictionary_entry` if it is empty.
     dictionary_autoload: bool = True
 
+    # On startup, resolve a grammatical profile (HSK level + category) for every
+    # studied word from the HSK dataset. Off in tests that don't want the fetch.
+    vocabulary_profile_autoload: bool = True
+
     # IANA timezone whose midnight is the SRS "day boundary": a day's cards all
     # become due at once (local midnight) rather than through the day.
     study_timezone: str = "UTC"

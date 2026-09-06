@@ -98,3 +98,18 @@ CREATE TABLE IF NOT EXISTS reading_text (
     PRIMARY KEY (id),
     KEY ix_reading_text_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One row per word in the study queue: its HSK level, the raw HSK POS tags, and
+-- the broad `pos_category` derived from them (this app's own taxonomy) — used to
+-- build a balanced working set for reading generation. Resolved from the HSK
+-- dataset on startup; `source='manual'` rows are user overrides a resync leaves
+-- alone, `source='unknown'` means the word isn't in the HSK list.
+CREATE TABLE IF NOT EXISTS vocabulary_profile (
+    simplified    VARCHAR(64)  NOT NULL,
+    hsk_level     INT          NULL,
+    pos_tags      JSON         NOT NULL,
+    pos_category  VARCHAR(16)  NOT NULL,
+    source        VARCHAR(16)  NOT NULL,
+    updated_at    DATETIME(6)  NOT NULL,
+    PRIMARY KEY (simplified)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
