@@ -6,9 +6,10 @@ session bound to that transaction via `current_session()`.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import cast
 
-from sqlalchemy import func, insert, or_, select
+from sqlalchemy import Table, bindparam, func, insert, or_, select, update
 
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
@@ -16,7 +17,7 @@ from shougong.persistence.configuration.transaction import (
 )
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
+from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
 
 _BULK_BATCH = 1000
 
@@ -27,6 +28,8 @@ def to_domain(row: DictionaryEntryEntity) -> DictionaryEntry:
         simplified=row.simplified,
         pinyin=row.pinyin,
         definitions=tuple(row.definitions),
+        hsk_level=row.hsk_level,
+        pos_tags=tuple(row.pos_tags or ()),
     )
 
 
@@ -120,5 +123,58 @@ class DictionaryRepository(IDictionaryRepository):
                 )
                 added += len(batch)
             return added
+
+        return await self._tx.execute(_run)
+
+    async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:
+        async def _run() -> int:
+            session = current_session()
+            words = list(dataset.values())
+            table = cast(Table, DictionaryEntryEntity.__table__)
+            stmt = (
+                update(table)
+                .where(table.c.simplified == bindparam("s"))
+                .values(hsk_level=bindparam("l"), pos_tags=bindparam("p"))
+            )
+            for start in range(0, len(words), _BULK_BATCH):
+                batch = words[start : start + _BULK_BATCH]
+                await session.execute(
+                    stmt,
+                    [{"s": w.simplified, "l": w.hsk_level, "p": list(w.pos_tags)} for w in batch],
+                )
+            return len(words)
+
+        return await self._tx.execute(_run)
+
+    async def count_with_hsk(self) -> int:
+        async def _run() -> int:
+            session = current_session()
+            total = await session.scalar(
+                select(func.count())
+                .select_from(DictionaryEntryEntity)
+                .where(DictionaryEntryEntity.hsk_level.isnot(None))
+            )
+            return int(total or 0)
+
+        return await self._tx.execute(_run)
+
+    async def hsk_words(self) -> list[HskDatasetWord]:
+        async def _run() -> list[HskDatasetWord]:
+            session = current_session()
+            stmt = select(
+                DictionaryEntryEntity.simplified,
+                DictionaryEntryEntity.hsk_level,
+                DictionaryEntryEntity.pos_tags,
+            ).where(DictionaryEntryEntity.hsk_level.isnot(None))
+            rows = (await session.execute(stmt)).all()
+            # A hanzi with several readings has several rows, all stamped the
+            # same — keep one per simplified form.
+            by_word: dict[str, HskDatasetWord] = {}
+            for simplified, level, tags in rows:
+                by_word.setdefault(
+                    simplified,
+                    HskDatasetWord(simplified=simplified, hsk_level=level, pos_tags=tuple(tags or ())),
+                )
+            return list(by_word.values())
 
         return await self._tx.execute(_run)

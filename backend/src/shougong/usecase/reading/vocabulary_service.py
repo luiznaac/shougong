@@ -1,139 +1,81 @@
-"""`VocabularyProfileService` — keep a grammatical profile of the learner's known
-words, resolved from the HSK dataset, so a later step can build a balanced
-working set.
+"""`VocabularyOverviewService` — a read-only grammatical overview of the learner's
+known words, derived on the fly from the dictionary (which carries HSK level and
+POS tags) so the "Meu vocabulário" panel can show the breakdown.
 
-`sync` is idempotent and never touches a word the user has overridden by hand.
-Nothing here is on the text-generation path.
+Nothing here is on the text-generation path and nothing is persisted.
 """
 
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping
-from dataclasses import replace
+from collections.abc import Iterable, Sequence
 
 from shougong.usecase.commons.logging import get_logger
-from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
-from shougong.usecase.reading.gateway import IHskVocabularySource, IVocabularyProfileRepository
+from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.reading.proficiency import estimate_proficiency
 from shougong.usecase.reading.vocabulary import (
     QUALIFIER_FLOOR,
-    HskEntry,
-    ProfileSource,
     VocabularyCategory,
-    VocabularyProfile,
     VocabularySummary,
-    category_for,
+    VocabularyWord,
+    categories_for,
+    hsk_level_stats,
 )
 from shougong.usecase.study.gateway import IStudyItemRepository
 
 _log = get_logger(__name__)
 
 
-class VocabularyProfileService:
+class VocabularyOverviewService:
     def __init__(
         self,
         study_repository: IStudyItemRepository,
         dictionary_repository: IDictionaryRepository,
-        hsk_source: IHskVocabularySource,
-        profile_repository: IVocabularyProfileRepository,
-        clock: IClock,
     ) -> None:
         self._study = study_repository
         self._dictionary = dictionary_repository
-        self._hsk = hsk_source
-        self._profiles = profile_repository
-        self._clock = clock
 
-    async def sync(self) -> VocabularySummary:
-        known = await self._study.list_known_entries()
-        existing = {p.simplified: p for p in await self._profiles.list_all()}
-        try:
-            hsk = await self._hsk.fetch()
-        except Exception:
-            # Upstream unreachable — keep whatever profiles we already have
-            # rather than failing the request.
-            _log.exception("vocabulary.sync.hsk_unavailable")
-            return _summarise(list(existing.values()), await self._level_totals())
-
-        resolved: list[VocabularyProfile] = []
-        for entry in known:
-            word = entry.simplified
-            if word in existing and existing[word].source is ProfileSource.MANUAL:
-                continue
-            resolved.append(_profile_for(word, hsk.get(word)))
-
-        if resolved:
-            await self._profiles.upsert_many(resolved, self._clock.now())
-        _log.info("vocabulary.sync", known=len(known), resolved=len(resolved))
-        return await self.summary()
-
-    async def list(self) -> list[VocabularyProfile]:
-        profiles = await self._profiles.list_all()
-        entries = await self._dictionary.find_by_simplified_many(tuple(p.simplified for p in profiles))
-        by_word = {e.simplified: e for e in entries}  # first reading wins
-        return [
-            replace(
-                p,
-                pinyin=by_word[p.simplified].pinyin if p.simplified in by_word else None,
-                gloss="; ".join(by_word[p.simplified].definitions) if p.simplified in by_word else None,
-            )
-            for p in profiles
-        ]
+    async def list(self) -> list[VocabularyWord]:
+        return [_word_for(entry) for entry in _distinct(await self._study.list_known_entries())]
 
     async def summary(self) -> VocabularySummary:
-        return _summarise(await self._profiles.list_all(), await self._level_totals())
+        total_by_level = hsk_level_stats(await self._dictionary.hsk_words()).total_by_level
+        words = [_word_for(entry) for entry in _distinct(await self._study.list_known_entries())]
 
-    async def _level_totals(self) -> dict[int, int]:
-        try:
-            return (await self._hsk.level_stats()).total_by_level
-        except Exception:
-            _log.exception("vocabulary.summary.hsk_unavailable")
-            return {}
+        by_category: Counter[str] = Counter()
+        for word in words:
+            by_category.update(category.value for category in word.pos_categories)
+        by_level = Counter(str(w.hsk_level) if w.hsk_level is not None else "none" for w in words)
+        known_by_level = Counter(w.hsk_level for w in words if w.hsk_level is not None)
 
-    async def override(
-        self, simplified: str, pos_category: VocabularyCategory, hsk_level: int | None
-    ) -> VocabularyProfile:
-        existing = await self._profiles.get(simplified)
-        profile = VocabularyProfile(
-            simplified=simplified,
-            hsk_level=hsk_level,
-            pos_tags=existing.pos_tags if existing else (),
-            pos_category=pos_category,
-            source=ProfileSource.MANUAL,
+        _log.info("vocabulary.overview", known=len(words))
+        return VocabularySummary(
+            total=len(words),
+            categorised=sum(1 for w in words if w.hsk_level is not None),
+            by_category=dict(by_category),
+            by_hsk_level=dict(by_level),
+            qualifier_shortage=by_category.get(VocabularyCategory.QUALIFIER.value, 0) < QUALIFIER_FLOOR,
+            proficiency=estimate_proficiency(known_by_level, total_by_level),
         )
-        await self._profiles.upsert_many([profile], self._clock.now())
-        return profile
 
 
-def _profile_for(word: str, hsk_entry: HskEntry | None) -> VocabularyProfile:
-    if hsk_entry is None:
-        return VocabularyProfile(
-            simplified=word,
-            hsk_level=None,
-            pos_tags=(),
-            pos_category=category_for(word, ()),
-            source=ProfileSource.UNKNOWN,
-        )
-    return VocabularyProfile(
-        simplified=word,
-        hsk_level=hsk_entry.hsk_level,
-        pos_tags=hsk_entry.pos_tags,
-        pos_category=category_for(word, hsk_entry.pos_tags),
-        source=ProfileSource.HSK,
-    )
+def _distinct(entries: Sequence[DictionaryEntry]) -> Iterable[DictionaryEntry]:
+    """One entry per simplified form — a hanzi with several readings is one word
+    here (they share HSK level and POS tags). First reading wins."""
+    seen: set[str] = set()
+    for entry in entries:
+        if entry.simplified not in seen:
+            seen.add(entry.simplified)
+            yield entry
 
 
-def _summarise(profiles: list[VocabularyProfile], total_by_level: Mapping[int, int]) -> VocabularySummary:
-    by_category = Counter(p.pos_category.value for p in profiles)
-    by_level = Counter(str(p.hsk_level) if p.hsk_level is not None else "none" for p in profiles)
-    known_by_level = Counter(p.hsk_level for p in profiles if p.hsk_level is not None)
-    return VocabularySummary(
-        total=len(profiles),
-        categorised=sum(1 for p in profiles if p.source is not ProfileSource.UNKNOWN),
-        by_category=dict(by_category),
-        by_hsk_level=dict(by_level),
-        qualifier_shortage=by_category.get(VocabularyCategory.QUALIFIER.value, 0) < QUALIFIER_FLOOR,
-        proficiency=estimate_proficiency(known_by_level, total_by_level),
+def _word_for(entry: DictionaryEntry) -> VocabularyWord:
+    return VocabularyWord(
+        simplified=entry.simplified,
+        hsk_level=entry.hsk_level,
+        pos_tags=entry.pos_tags,
+        pos_categories=categories_for(entry.simplified, entry.pos_tags),
+        pinyin=entry.pinyin,
+        gloss="; ".join(entry.definitions) if entry.definitions else None,
     )

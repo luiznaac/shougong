@@ -8,6 +8,8 @@ export interface DictionaryEntry {
   simplified: string;
   pinyin: string; // numbered, space-separated, e.g. "zhi1 dao4"
   definitions: string[];
+  hsk_level: number | null; // stamped from the HSK dataset; null outside HSK
+  pos_tags: string[]; // raw HSK POS tags
 }
 
 export interface CharacterStrokes {
@@ -152,8 +154,7 @@ export interface VocabularyProfile {
   simplified: string;
   hsk_level: number | null;
   pos_tags: string[];
-  pos_category: VocabularyCategory;
-  source: "hsk" | "manual" | "unknown";
+  pos_categories: VocabularyCategory[]; // every class the word's tags imply
   pinyin: string | null;
   gloss: string | null;
 }

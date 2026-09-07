@@ -1,15 +1,20 @@
 USE shougong;
 
 -- CC-CEDICT entries, trimmed to simplified form + pinyin + English glosses.
--- Populated by scripts/load_cedict.py (see README), never seeded here.
+-- Definitions come from CC-CEDICT; `hsk_level` and `pos_tags` are stamped in a
+-- one-off enrichment pass from the HSK dataset (see DictionaryService.enrich_hsk),
+-- the same value on every row that shares a `simplified`. Never seeded here.
 CREATE TABLE IF NOT EXISTS dictionary_entry (
     id          BIGINT       NOT NULL AUTO_INCREMENT,
     simplified  VARCHAR(64)  NOT NULL,
     pinyin      VARCHAR(191) NOT NULL,
     definitions JSON         NOT NULL,
+    hsk_level   INT          NULL,
+    pos_tags    JSON         NOT NULL DEFAULT (JSON_ARRAY()),
     PRIMARY KEY (id),
     KEY ix_dictionary_entry_simplified (simplified),
-    KEY ix_dictionary_entry_pinyin (pinyin)
+    KEY ix_dictionary_entry_pinyin (pinyin),
+    KEY ix_dictionary_entry_hsk_level (hsk_level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Per-character stroke order data (SVG paths + medians), from the hanzi-writer-data
@@ -163,20 +168,5 @@ CREATE TABLE IF NOT EXISTS reading_word_usage (
     simplified    VARCHAR(64)  NOT NULL,
     uses          INT          NOT NULL DEFAULT 0,
     last_used_at  DATETIME(6)  NULL,
-    PRIMARY KEY (simplified)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- One row per word in the study queue: its HSK level, the raw HSK POS tags, and
--- the broad `pos_category` derived from them (this app's own taxonomy) — used to
--- build a balanced working set for reading generation. Resolved from the HSK
--- dataset on startup; `source='manual'` rows are user overrides a resync leaves
--- alone, `source='unknown'` means the word isn't in the HSK list.
-CREATE TABLE IF NOT EXISTS vocabulary_profile (
-    simplified    VARCHAR(64)  NOT NULL,
-    hsk_level     INT          NULL,
-    pos_tags      JSON         NOT NULL,
-    pos_category  VARCHAR(16)  NOT NULL,
-    source        VARCHAR(16)  NOT NULL,
-    updated_at    DATETIME(6)  NOT NULL,
     PRIMARY KEY (simplified)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

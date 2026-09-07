@@ -1,137 +1,100 @@
 from __future__ import annotations
 
-from shougong.usecase.commons.time import FixedClock
-from shougong.usecase.reading.proficiency import HskLevelStats
-from shougong.usecase.reading.vocabulary import (
-    HskEntry,
-    ProfileSource,
-    VocabularyCategory,
-    VocabularyProfile,
-)
-from shougong.usecase.reading.vocabulary_service import VocabularyProfileService
-from tests.fixtures import (
-    FakeDictionaryRepository,
-    FakeHskVocabularySource,
-    FakeStudyItemRepository,
-    FakeVocabularyProfileRepository,
-    make_dictionary_entry,
-    make_srs_card,
-    make_study_item,
-)
+from collections.abc import Sequence
 
-_NOW = make_srs_card().due
+from shougong.usecase.dictionary.model import DictionaryEntry
+from shougong.usecase.reading.vocabulary import VocabularyCategory
+from shougong.usecase.reading.vocabulary_service import VocabularyOverviewService
+from tests.fixtures import FakeDictionaryRepository, FakeStudyItemRepository, make_dictionary_entry, make_study_item
+
+Word = tuple[str, int | None, tuple[str, ...]]
 
 
-def _service(
-    *,
-    known: list[str],
-    hsk: dict[str, HskEntry] | None = None,
-    profiles: list[VocabularyProfile] | None = None,
-    dictionary: FakeDictionaryRepository | None = None,
-    stats: HskLevelStats | None = None,
-) -> tuple[VocabularyProfileService, FakeVocabularyProfileRepository]:
-    entries = [
-        make_dictionary_entry(entry_id=i, simplified=w, pinyin="x", definitions=("g",)) for i, w in enumerate(known, 1)
+def _entries(words: Sequence[Word], start: int) -> list[DictionaryEntry]:
+    return [
+        make_dictionary_entry(
+            entry_id=start + i, simplified=w, pinyin="x", definitions=("g",), hsk_level=level, pos_tags=tags
+        )
+        for i, (w, level, tags) in enumerate(words)
     ]
-    study = FakeStudyItemRepository([make_study_item(item_id=e.id, entry=e) for e in entries])
-    profile_repo = FakeVocabularyProfileRepository(profiles)
-    service = VocabularyProfileService(
-        study,
-        dictionary or FakeDictionaryRepository(entries),
-        FakeHskVocabularySource(hsk or {}, stats=stats),
-        profile_repo,
-        FixedClock(_NOW),
+
+
+def _service(known: Sequence[Word], *, also_in_hsk: Sequence[Word] = ()) -> VocabularyOverviewService:
+    studied = _entries(known, start=1)
+    dictionary_only = _entries(also_in_hsk, start=1000)
+    study = FakeStudyItemRepository([make_study_item(item_id=e.id, entry=e) for e in studied])
+    return VocabularyOverviewService(study, FakeDictionaryRepository([*studied, *dictionary_only]))
+
+
+async def test_list_derives_word_classes_and_carries_pinyin_and_gloss() -> None:
+    study = FakeStudyItemRepository(
+        [
+            make_study_item(
+                item_id=1,
+                entry=make_dictionary_entry(
+                    entry_id=1,
+                    simplified="书",
+                    pinyin="shu1",
+                    definitions=("book", "letter"),
+                    hsk_level=1,
+                    pos_tags=("n",),
+                ),
+            )
+        ]
     )
-    return service, profile_repo
+    service = VocabularyOverviewService(study, FakeDictionaryRepository())
+
+    listed = await service.list()
+
+    assert listed[0].simplified == "书"
+    assert listed[0].pos_categories == frozenset({VocabularyCategory.NOUN})
+    assert (listed[0].pinyin, listed[0].gloss) == ("shu1", "book; letter")
 
 
-async def test_sync_resolves_from_hsk_and_marks_missing_words_unknown() -> None:
-    service, repo = _service(
-        known=["学生", "叽"],
-        hsk={"学生": HskEntry(hsk_level=1, pos_tags=("n",))},
-    )
+async def test_summary_counts_category_membership_and_flags_qualifier_shortage() -> None:
+    service = _service([("好", 1, ("a",)), ("跑", 2, ("v",)), ("代表", 2, ("v", "n"))])
 
-    await service.sync()
+    summary = await service.summary()
 
-    student = repo.profiles["学生"]
-    assert (student.hsk_level, student.pos_category, student.source) == (1, VocabularyCategory.NOUN, ProfileSource.HSK)
-    ji = repo.profiles["叽"]
-    assert (ji.hsk_level, ji.source) == (None, ProfileSource.UNKNOWN)
-
-
-async def test_sync_never_overwrites_a_manual_override() -> None:
-    manual = VocabularyProfile(
-        simplified="学生",
-        hsk_level=9,
-        pos_tags=(),
-        pos_category=VocabularyCategory.PERSON,
-        source=ProfileSource.MANUAL,
-    )
-    service, repo = _service(
-        known=["学生"],
-        hsk={"学生": HskEntry(hsk_level=1, pos_tags=("n",))},
-        profiles=[manual],
-    )
-
-    await service.sync()
-
-    assert repo.profiles["学生"] == manual  # untouched
-
-
-async def test_summary_counts_and_flags_qualifier_shortage() -> None:
-    service, _ = _service(
-        known=["好", "跑", "书", "妈妈"],
-        hsk={
-            "好": HskEntry(1, ("a",)),
-            "跑": HskEntry(2, ("v",)),
-            "书": HskEntry(1, ("n",)),
-            "妈妈": HskEntry(1, ("n",)),
-        },
-    )
-
-    summary = await service.sync()
-
-    assert summary.total == 4
-    assert summary.categorised == 4
+    assert summary.total == 3
+    assert summary.categorised == 3
+    assert summary.by_category["verb"] == 2  # 跑 and 代表
+    assert summary.by_category["noun"] == 1  # 代表 also lands here
     assert summary.by_category["qualifier"] == 1
     assert summary.qualifier_shortage is True  # only 1 adjective, floor is 5
 
 
-async def test_summary_reports_hsk_proficiency() -> None:
-    service, _ = _service(
-        known=["好", "跑", "书"],
-        hsk={"好": HskEntry(1, ("a",)), "跑": HskEntry(1, ("v",)), "书": HskEntry(2, ("n",))},
-        stats=HskLevelStats(total_by_level={1: 2, 2: 10}, functional_by_level={}),
+async def test_summary_reports_hsk_proficiency_against_the_dictionary_totals() -> None:
+    service = _service(
+        [("好", 1, ("a",)), ("跑", 1, ("v",)), ("书", 2, ("n",))],
+        also_in_hsk=[("的", 1, ("u",)), ("坏", 2, ("a",))] + [(f"w{i}", 2, ("n",)) for i in range(7)],
     )
 
-    summary = await service.sync()
+    summary = await service.summary()
 
-    assert summary.proficiency.coverage_by_level == {1: 1.0, 2: 0.1}  # 2/2 and 1/10
+    # level 1: 2 known of 3 total (好 跑 + 的); level 2: 1 known of 9 total
+    assert summary.proficiency.coverage_by_level == {1: 2 / 3, 2: 1 / 9}
     assert summary.proficiency.estimated_level == 1
 
 
-async def test_override_stores_a_manual_profile_and_keeps_the_pos_tags() -> None:
-    service, repo = _service(
-        known=["老师"],
-        hsk={"老师": HskEntry(3, ("n",))},
+async def test_summary_buckets_words_without_an_hsk_level_under_none() -> None:
+    service = _service([("书", 1, ("n",)), ("叽", None, ())])
+
+    summary = await service.summary()
+
+    assert summary.by_hsk_level == {"1": 1, "none": 1}
+    assert summary.categorised == 1
+
+
+async def test_a_word_with_several_readings_is_one_word_here() -> None:
+    walk = make_dictionary_entry(
+        entry_id=1, simplified="行", pinyin="xing2", definitions=("to walk",), hsk_level=2, pos_tags=("v",)
     )
-    await service.sync()
-
-    updated = await service.override("老师", VocabularyCategory.PERSON, hsk_level=3)
-
-    assert updated.source is ProfileSource.MANUAL
-    assert updated.pos_category is VocabularyCategory.PERSON
-    assert updated.pos_tags == ("n",)  # preserved from the earlier hsk profile
-    assert repo.profiles["老师"].source is ProfileSource.MANUAL
-
-
-async def test_list_hydrates_pinyin_and_gloss_from_the_dictionary() -> None:
-    dictionary = FakeDictionaryRepository(
-        [make_dictionary_entry(entry_id=1, simplified="书", pinyin="shu1", definitions=("book",))]
+    firm = make_dictionary_entry(
+        entry_id=2, simplified="行", pinyin="hang2", definitions=("firm",), hsk_level=2, pos_tags=("n",)
     )
-    service, _ = _service(known=["书"], hsk={"书": HskEntry(1, ("n",))}, dictionary=dictionary)
-    await service.sync()
+    study = FakeStudyItemRepository([make_study_item(item_id=1, entry=walk), make_study_item(item_id=2, entry=firm)])
+    service = VocabularyOverviewService(study, FakeDictionaryRepository([walk, firm]))
 
-    listed = await service.list()
-
-    assert (listed[0].pinyin, listed[0].gloss) == ("shu1", "book")
+    assert len(await service.list()) == 1
+    assert (await service.summary()).total == 1

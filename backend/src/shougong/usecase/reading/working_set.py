@@ -2,21 +2,25 @@
 
 Composition and validation are separated (spec §3.3): the model is handed a
 small *working set* of ~50 content words, sampled and grouped by grammatical
-class from the learner's profiled vocabulary and rotated every call, while the
+class from the learner's known vocabulary and rotated every call, while the
 validator still checks the finished text against the whole known-word list.
 
 Sampling is biased toward words the learner hasn't seen recently, so re-reading
-practice falls out for free (spec §3.3.1).
+practice falls out for free (spec §3.3.1). The `always_available` (function-word)
+group is a fixed floor — the `FUNCTIONAL_CORE` words the learner knows — plus,
+per HSK level, a coverage-weighted sample of the other function words they know:
+the more of a level they have, the more of that level's particles come along.
 """
 
 from __future__ import annotations
 
+import math
 import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from shougong.usecase.reading.vocabulary import FUNCTIONAL_CORE, VocabularyCategory, VocabularyProfile
+from shougong.usecase.reading.vocabulary import FUNCTIONAL_CORE, VocabularyCategory, VocabularyWord
 
 # Target content-word count and the per-class quotas it is split into. Sums to a
 # little over the target on purpose — the spec says tune the proportions, not the
@@ -72,15 +76,15 @@ class WorkingSet:
 
 def build_working_set(
     *,
-    profiles: Sequence[VocabularyProfile],
+    profiles: Sequence[VocabularyWord],
     known_words: frozenset[str],
     usage: Mapping[str, WordUsage],
     now: datetime,
     rng: random.Random,
+    coverage_by_level: Mapping[int, float],
 ) -> WorkingSet:
-    functional = sorted(FUNCTIONAL_CORE & known_words)
     content = [
-        p for p in profiles if p.simplified in known_words and p.pos_category is not VocabularyCategory.FUNCTIONAL
+        p for p in profiles if p.simplified in known_words and VocabularyCategory.FUNCTIONAL not in p.pos_categories
     ]
 
     if len(content) < _MIN_CONTENT_FOR_SAMPLING:
@@ -89,14 +93,16 @@ def build_working_set(
         return WorkingSet(groups={"words": tuple(sorted(known_words))}, must_use=())
 
     by_category: dict[VocabularyCategory, list[str]] = {}
-    for profile in content:
-        by_category.setdefault(profile.pos_category, []).append(profile.simplified)
+    for word in content:
+        for category in word.pos_categories:
+            by_category.setdefault(category, []).append(word.simplified)
 
     sample_all = len(content) <= _TARGET_SIZE  # small enough to send whole, still grouped
 
     groups: dict[str, tuple[str, ...]] = {}
+    functional = _functional_group(profiles, known_words, coverage_by_level, usage, now, rng)
     if functional:
-        groups["always_available"] = tuple(functional)
+        groups["always_available"] = functional
 
     sampled_by_category: dict[VocabularyCategory, list[str]] = {}
     for category, quota in _QUOTAS:
@@ -108,6 +114,42 @@ def build_working_set(
         groups[_GROUP_LABELS[category]] = tuple(picked)
 
     return WorkingSet(groups=groups, must_use=_pick_must_use(sampled_by_category, rng))
+
+
+def _functional_group(
+    profiles: Sequence[VocabularyWord],
+    known_words: frozenset[str],
+    coverage_by_level: Mapping[int, float],
+    usage: Mapping[str, WordUsage],
+    now: datetime,
+    rng: random.Random,
+) -> tuple[str, ...]:
+    """The `always_available` group: the `FUNCTIONAL_CORE` floor the learner
+    knows, plus a per-level coverage-weighted sample of their other function
+    words. With no coverage data (dictionary not yet enriched) it is just the
+    floor — the old behaviour."""
+    selected = set(FUNCTIONAL_CORE & known_words)
+
+    by_level: dict[int | None, list[str]] = {}
+    for word in profiles:
+        if word.simplified not in known_words:
+            continue
+        if VocabularyCategory.FUNCTIONAL not in word.pos_categories:
+            continue
+        by_level.setdefault(word.hsk_level, []).append(word.simplified)
+
+    for level, words in by_level.items():
+        pool = sorted(set(words) - selected)
+        if not pool:
+            continue
+        if level is None:
+            selected.update(pool)  # no level to weight by — few, keep them all
+            continue
+        k = math.ceil(coverage_by_level.get(level, 0.0) * len(pool))
+        if k > 0:
+            selected.update(_sample_category(pool, k, usage, now, rng))
+
+    return tuple(sorted(selected))
 
 
 def _sample_category(
@@ -166,9 +208,14 @@ def _pick_must_use(sampled_by_category: dict[VocabularyCategory, list[str]], rng
     verbs = sampled_by_category.get(VocabularyCategory.VERB, [])
     nouns = sampled_by_category.get(VocabularyCategory.NOUN, [])
     must: list[str] = []
-    must.extend(rng.sample(verbs, min(2, len(verbs))))
-    must.extend(rng.sample(nouns, min(2, len(nouns))))
+    for word in rng.sample(verbs, min(2, len(verbs))):
+        if word not in must:
+            must.append(word)
+    for word in rng.sample(nouns, min(2, len(nouns))):
+        if word not in must:
+            must.append(word)
 
-    rest = [word for words in sampled_by_category.values() for word in words if word not in must]
+    chosen = set(must)
+    rest = sorted({word for words in sampled_by_category.values() for word in words} - chosen)
     must.extend(rng.sample(rest, min(_MUST_USE_COUNT - len(must), len(rest))))
     return tuple(must)

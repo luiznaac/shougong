@@ -5,22 +5,21 @@ Import from here instead of hand-rolling doubles in each test.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from itertools import count, pairwise
 from typing import TypeVar
 
 from shougong.usecase.configuration.transaction import ITransactionTemplate
-from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
+from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
+from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
 from shougong.usecase.reading.gateway import (
-    IHskVocabularySource,
     IReadingHistoryRepository,
     IReadingTextGateway,
     IReadingTopicRepository,
     IReadingWordUsageRepository,
     ISegmenter,
-    IVocabularyProfileRepository,
     ReadingDraft,
     RejectedDraft,
     SegmentedToken,
@@ -33,8 +32,7 @@ from shougong.usecase.reading.model import (
     ReadingTopic,
     SavedReadingText,
 )
-from shougong.usecase.reading.proficiency import BudgetAudience, HskLevelStats
-from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
+from shougong.usecase.reading.proficiency import BudgetAudience
 from shougong.usecase.reading.working_set import WordUsage, WorkingSet
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
@@ -56,8 +54,17 @@ def make_dictionary_entry(
     simplified: str = "学",
     pinyin: str = "xue2",
     definitions: tuple[str, ...] = ("to learn", "to study"),
+    hsk_level: int | None = None,
+    pos_tags: tuple[str, ...] = (),
 ) -> DictionaryEntry:
-    return DictionaryEntry(id=entry_id, simplified=simplified, pinyin=pinyin, definitions=definitions)
+    return DictionaryEntry(
+        id=entry_id,
+        simplified=simplified,
+        pinyin=pinyin,
+        definitions=definitions,
+        hsk_level=hsk_level,
+        pos_tags=pos_tags,
+    )
 
 
 def make_srs_card(*, due: datetime = _EPOCH) -> SrsCard:
@@ -119,6 +126,23 @@ class FakeDictionaryRepository(IDictionaryRepository):
                 )
             )
         return len(records)
+
+    async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:
+        for i, entry in enumerate(self.entries):
+            word = dataset.get(entry.simplified)
+            if word is not None:
+                self.entries[i] = replace(entry, hsk_level=word.hsk_level, pos_tags=word.pos_tags)
+        return len(dataset)
+
+    async def count_with_hsk(self) -> int:
+        return sum(1 for e in self.entries if e.hsk_level is not None)
+
+    async def hsk_words(self) -> list[HskDatasetWord]:
+        seen: dict[str, HskDatasetWord] = {}
+        for e in self.entries:
+            if e.hsk_level is not None and e.simplified not in seen:
+                seen[e.simplified] = HskDatasetWord(simplified=e.simplified, hsk_level=e.hsk_level, pos_tags=e.pos_tags)
+        return list(seen.values())
 
 
 class FakeCedictSource(ICedictSource):
@@ -335,33 +359,14 @@ class FakeReadingHistoryRepository(IReadingHistoryRepository):
         return newest_first[offset : offset + limit]
 
 
-class FakeHskVocabularySource(IHskVocabularySource):
-    def __init__(self, entries: dict[str, HskEntry] | None = None, *, stats: HskLevelStats | None = None) -> None:
-        self.entries: dict[str, HskEntry] = dict(entries or {})
+class FakeHskDatasetSource(IHskDatasetSource):
+    def __init__(self, words: dict[str, HskDatasetWord] | None = None) -> None:
+        self.words: dict[str, HskDatasetWord] = dict(words or {})
         self.fetch_calls = 0
-        self.stats = stats or HskLevelStats(total_by_level={}, functional_by_level={})
 
-    async def fetch(self) -> dict[str, HskEntry]:
+    async def fetch(self) -> dict[str, HskDatasetWord]:
         self.fetch_calls += 1
-        return dict(self.entries)
-
-    async def level_stats(self) -> HskLevelStats:
-        return self.stats
-
-
-class FakeVocabularyProfileRepository(IVocabularyProfileRepository):
-    def __init__(self, profiles: list[VocabularyProfile] | None = None) -> None:
-        self.profiles: dict[str, VocabularyProfile] = {p.simplified: p for p in (profiles or [])}
-
-    async def list_all(self) -> list[VocabularyProfile]:
-        return [self.profiles[k] for k in sorted(self.profiles)]
-
-    async def upsert_many(self, profiles: Sequence[VocabularyProfile], updated_at: datetime) -> None:
-        for profile in profiles:
-            self.profiles[profile.simplified] = profile
-
-    async def get(self, simplified: str) -> VocabularyProfile | None:
-        return self.profiles.get(simplified)
+        return dict(self.words)
 
 
 class FakeReadingTopicRepository(IReadingTopicRepository):
