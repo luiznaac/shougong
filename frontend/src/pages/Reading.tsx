@@ -8,7 +8,7 @@ import {
   useReadingModels,
   useStudyItems,
 } from "../api/queries.ts";
-import type { ReadingAttempt, ReadingFormat, ReadingToken, SavedReadingText } from "../api/types.ts";
+import type { ReadingAttempt, ReadingFormat, ReadingSpeaker, ReadingToken, SavedReadingText } from "../api/types.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { ReadingTopicsPanel } from "../components/ReadingTopicsPanel.tsx";
 import { VocabularyPanel } from "../components/VocabularyPanel.tsx";
@@ -17,6 +17,7 @@ import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
 const FORMAT_LABELS: Record<ReadingFormat, string> = {
   paragraph: "Parágrafo",
   sentences: "Frases soltas",
+  dialogue: "Diálogo",
 };
 
 const MODEL_STORAGE_KEY = "reading.model";
@@ -28,6 +29,7 @@ function totalTokens(reading: SavedReadingText): number {
 export function Reading() {
   const [format, setFormat] = useState<ReadingFormat>("paragraph");
   const [maxExtraWords, setMaxExtraWords] = useState(2);
+  const [maxAttempts, setMaxAttempts] = useState(3);
   const [topic, setTopic] = useState("");
   const [model, setModel] = useState<string | null>(() => {
     try {
@@ -66,6 +68,7 @@ export function Reading() {
       const saved = await generateMutation.mutateAsync({
         format,
         max_extra_words: maxExtraWords,
+        max_attempts: maxAttempts,
         model,
         topic: topic.trim() || null,
       });
@@ -95,6 +98,7 @@ export function Reading() {
           >
             <option value="paragraph">Parágrafo</option>
             <option value="sentences">Frases soltas</option>
+            <option value="dialogue">Diálogo</option>
           </select>
         </label>
 
@@ -125,6 +129,18 @@ export function Reading() {
             max={20}
             value={maxExtraWords}
             onChange={(e) => setMaxExtraWords(Number(e.target.value))}
+            className="w-24 rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-slate-400">
+          Tentativas (máx.)
+          <input
+            type="number"
+            min={1}
+            max={6}
+            value={maxAttempts}
+            onChange={(e) => setMaxAttempts(Number(e.target.value))}
             className="w-24 rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100"
           />
         </label>
@@ -191,7 +207,7 @@ export function Reading() {
             <span className="ml-auto">{new Date(current.created_at).toLocaleString()}</span>
           </div>
           <div className="mt-3">
-            <ReadingTokens tokens={current.tokens} />
+            <ReadingTokens tokens={current.tokens} speakers={current.speakers} />
           </div>
           {current.extra_words.length > 0 && (
             <p className="mt-4 text-xs text-amber-400">
@@ -289,6 +305,9 @@ function AttemptTrail({ attempts }: { attempts: ReadingAttempt[] }) {
                   {(attempt.prompt_tokens + attempt.completion_tokens).toLocaleString()} tokens
                 </span>
               </div>
+              {attempt.dialogue_problems.length > 0 && (
+                <p className="mt-1 text-xs text-amber-400">{attempt.dialogue_problems.join(" · ")}</p>
+              )}
               {/* Segmented view: each chip is exactly what the segmenter produced — lets a
                   mis-segmentation that got flagged as "extra" be spotted at a glance. */}
               <p lang="zh-Hans" className="font-hanzi mt-2 flex flex-wrap gap-x-1 gap-y-1 text-lg leading-snug">
@@ -366,13 +385,61 @@ function OfferedVocabulary({
   );
 }
 
-function ReadingTokens({ tokens }: { tokens: ReadingToken[] }) {
+function ReadingTokens({ tokens, speakers }: { tokens: ReadingToken[]; speakers: ReadingSpeaker[] }) {
+  if (tokens.some((t) => t.speaker != null)) {
+    return <DialogueView tokens={tokens} speakers={speakers} />;
+  }
   return (
     <p lang="zh-Hans" className="font-hanzi whitespace-pre-wrap text-2xl leading-loose">
       {tokens.map((token, i) =>
         token.is_word ? <WordToken key={i} token={token} /> : <span key={i}>{token.text}</span>,
       )}
     </p>
+  );
+}
+
+function DialogueView({ tokens, speakers }: { tokens: ReadingToken[]; speakers: ReadingSpeaker[] }) {
+  const pinyinByName = new Map(speakers.map((s) => [s.name, s.pinyin]));
+  const order = speakers.map((s) => s.name);
+
+  // Group consecutive same-speaker runs; the "\n" separators between turns are dropped.
+  const turns: { speaker: string; tokens: ReadingToken[] }[] = [];
+  for (const token of tokens) {
+    if (!token.is_word && token.text.trim() === "") continue;
+    const speaker = token.speaker ?? "";
+    const last = turns.at(-1);
+    if (last && last.speaker === speaker) last.tokens.push(token);
+    else turns.push({ speaker, tokens: [token] });
+  }
+
+  const seen = new Set<string>();
+  return (
+    <div className="space-y-3">
+      {turns.map((turn, i) => {
+        const left = order.indexOf(turn.speaker) % 2 === 0;
+        const firstTime = !seen.has(turn.speaker);
+        seen.add(turn.speaker);
+        const pinyin = pinyinByName.get(turn.speaker);
+        return (
+          <div key={i} className={`flex flex-col ${left ? "items-start" : "items-end"}`}>
+            <span className="mb-0.5 text-xs text-slate-500">
+              <span className="font-hanzi">{turn.speaker}</span>
+              {firstTime && pinyin && <span className="ml-1">{pinyin}</span>}
+            </span>
+            <p
+              lang="zh-Hans"
+              className={`font-hanzi max-w-[80%] rounded-2xl px-3 py-2 text-xl leading-loose ${
+                left ? "bg-slate-800" : "bg-accent-500/15"
+              }`}
+            >
+              {turn.tokens.map((token, j) =>
+                token.is_word ? <WordToken key={j} token={token} /> : <span key={j}>{token.text}</span>,
+              )}
+            </p>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

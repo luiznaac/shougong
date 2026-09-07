@@ -23,6 +23,8 @@ class ReadingTextEntity(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     format: Mapped[str] = mapped_column(String(16))
     max_extra_words: Mapped[int] = mapped_column(Integer)
+    # Correction-loop rounds the caller allowed (matches `DEFAULT 3` in init.sql).
+    max_attempts: Mapped[int] = mapped_column(Integer, server_default=text("3"))
     topic: Mapped[str | None] = mapped_column(String(255))
     # True when the service drew the topic from `reading_topic` (blank free text).
     topic_generated: Mapped[bool] = mapped_column(Boolean, server_default=text("0"))
@@ -39,4 +41,6 @@ class ReadingTextEntity(Base):
     # must-use anchors. Empty on rows written before working sets existed.
     working_set: Mapped[dict[str, list[str]]] = mapped_column(JSON, server_default=text("(JSON_OBJECT())"))
     must_use: Mapped[list[str]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
+    # Dialogue speakers: [{name, pinyin}]. Empty for non-dialogue readings.
+    speakers: Mapped[list[dict[str, object]]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)

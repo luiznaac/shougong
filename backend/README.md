@@ -88,4 +88,12 @@ ALTER TABLE dictionary_entry
   ADD KEY ix_dictionary_entry_hsk_level (hsk_level);
 ```
 
+The `reading_text` table has grown the same way; on an older database apply:
+
+```sql
+ALTER TABLE reading_text
+  ADD COLUMN max_attempts INT NOT NULL DEFAULT 3,
+  ADD COLUMN speakers JSON NOT NULL DEFAULT (JSON_ARRAY());
+```
+
 See [CLAUDE.md](CLAUDE.md) for the architecture and the rules for evolving it.

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
 
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.reading.gateway import SegmentedToken
@@ -36,7 +35,7 @@ _NOW = make_srs_card().due  # 2026-01-01T00:00:00Z
 
 def _service(
     *,
-    response: str | Sequence[str],
+    response,
     segments: dict[str, tuple[SegmentedToken, ...]],
     known: list[StudyItem] | None = None,
     dictionary: FakeDictionaryRepository | None = None,
@@ -66,8 +65,10 @@ def _tok(text: str, pos: PartOfSpeech | None = PartOfSpeech.NOUN) -> SegmentedTo
     return make_segmented_token(text, part_of_speech=pos)
 
 
-def _req(fmt: ReadingFormat, max_extra_words: int, *, model: str = "test-model") -> ReadingRequest:
-    return ReadingRequest(format=fmt, max_extra_words=max_extra_words, model=model)
+def _req(
+    fmt: ReadingFormat, max_extra_words: int, *, model: str = "test-model", max_attempts: int = 3
+) -> ReadingRequest:
+    return ReadingRequest(format=fmt, max_extra_words=max_extra_words, model=model, max_attempts=max_attempts)
 
 
 async def test_generate_calls_the_gateway_exactly_once() -> None:
@@ -385,3 +386,90 @@ async def test_list_history_hydrates_pinyin_and_definitions_from_the_dictionary(
     assert hydrated.pinyin == "shui3 guo3"
     assert hydrated.definitions == ("fruit",)
     assert hydrated.dictionary_entry_id == 7  # recovered by word text, not by a stored id
+
+
+async def test_max_attempts_caps_the_correction_loop() -> None:
+    wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
+    service, gateway, _ = _service(
+        response="猫。",  # one distinct extra, never within budget 0
+        segments={"猫。": (_tok("猫"), _tok("。", None))},
+        known=[make_study_item(item_id=1, entry=wo)],
+    )
+
+    saved = await service.generate(_req(ReadingFormat.SENTENCES, 0, max_attempts=1))
+
+    assert len(gateway.calls) == 1
+    assert saved.reading.attempt_count == 1
+    assert saved.request.max_attempts == 1
+
+
+async def test_avoid_openings_are_drawn_from_recent_history() -> None:
+    wo = make_dictionary_entry(entry_id=1, simplified="我", pinyin="wo3", definitions=("I; me",))
+    shi = make_dictionary_entry(entry_id=2, simplified="是", pinyin="shi4", definitions=("to be",))
+    known = [make_study_item(item_id=1, entry=wo), make_study_item(item_id=2, entry=shi)]
+    history = FakeReadingHistoryRepository()
+
+    service, gateway, _ = _service(
+        response="我是我。",
+        segments={
+            "我是我。": (_tok("我", PartOfSpeech.PRONOUN), _tok("是", PartOfSpeech.VERB), _tok("我"), _tok("。", None)),
+        },
+        known=known,
+        history=history,
+    )
+    await service.generate(_req(ReadingFormat.SENTENCES, 0))  # first: nothing to avoid
+    assert gateway.calls[0]["avoid_openings"] == ()
+
+    await service.generate(_req(ReadingFormat.SENTENCES, 0))  # second: avoids the first opening
+    assert gateway.calls[1]["avoid_openings"] == ("我是我",)
+
+
+async def test_dialogue_returns_speaker_tagged_tokens_and_persists_speakers() -> None:
+    de = make_dictionary_entry(entry_id=1, simplified="哥哥", pinyin="ge1 ge5", definitions=("older brother",))
+    mei = make_dictionary_entry(entry_id=2, simplified="妹妹", pinyin="mei4 mei5", definitions=("younger sister",))
+    hao = make_dictionary_entry(entry_id=3, simplified="好", pinyin="hao3", definitions=("good",))
+    known = [make_study_item(item_id=i, entry=e) for i, e in enumerate((de, mei, hao), 1)]
+
+    service, gateway, _ = _service(
+        response={
+            "text": "好。好。",
+            "lines": [{"speaker": "哥哥", "text": "好。"}, {"speaker": "妹妹", "text": "好。"}],
+        },
+        segments={
+            "好。好。": (_tok("好"), _tok("。", None), _tok("好"), _tok("。", None)),
+            "好。": (_tok("好"), _tok("。", None)),
+        },
+        known=known,
+    )
+
+    saved = await service.generate(_req(ReadingFormat.DIALOGUE, 0))
+
+    assert gateway.calls[0]["speakers"] == ("哥哥", "妹妹")
+    assert {s.name for s in saved.reading.speakers} == {"哥哥", "妹妹"}
+    speakers_seen = [t.speaker for t in saved.reading.tokens if isinstance(t, ReadingWord)]
+    assert speakers_seen == ["哥哥", "妹妹"]
+
+
+async def test_a_dialogue_consistency_problem_triggers_a_rewrite() -> None:
+    ge = make_dictionary_entry(entry_id=1, simplified="哥哥", pinyin="ge1", definitions=("brother",))
+    mei = make_dictionary_entry(entry_id=2, simplified="妹妹", pinyin="mei4", definitions=("sister",))
+    hao = make_dictionary_entry(entry_id=3, simplified="好", pinyin="hao3", definitions=("good",))
+    known = [make_study_item(item_id=i, entry=e) for i, e in enumerate((ge, mei, hao), 1)]
+
+    service, gateway, _ = _service(
+        response=[
+            {"text": "好。", "lines": [{"speaker": "哥哥", "text": "好。"}]},  # only one speaker → problem
+            {"text": "好。好。", "lines": [{"speaker": "哥哥", "text": "好。"}, {"speaker": "妹妹", "text": "好。"}]},
+        ],
+        segments={
+            "好。": (_tok("好"), _tok("。", None)),
+            "好。好。": (_tok("好"), _tok("。", None), _tok("好"), _tok("。", None)),
+        },
+        known=known,
+    )
+
+    saved = await service.generate(_req(ReadingFormat.DIALOGUE, 0))
+
+    assert len(gateway.calls) == 2
+    assert saved.reading.attempts[0].dialogue_problems  # first draft flagged
+    assert [a.chosen for a in saved.reading.attempts] == [False, True]

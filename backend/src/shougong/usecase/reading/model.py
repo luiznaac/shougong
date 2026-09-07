@@ -22,6 +22,7 @@ class ReadingGenerationError(DomainError):
 class ReadingFormat(StrEnum):
     PARAGRAPH = "paragraph"
     SENTENCES = "sentences"
+    DIALOGUE = "dialogue"
 
 
 class PartOfSpeech(StrEnum):
@@ -56,6 +57,17 @@ class ReadingRequest:
     model: str  # LiteLLM model id the caller picked; always supplied by the client
     topic: str | None = None
     topic_generated: bool = False  # True when the service drew the topic from the scenario list
+    max_attempts: int = 3  # correction-loop rounds the caller allows
+
+
+@dataclass(frozen=True, slots=True)
+class ReadingSpeaker:
+    """A speaker in a dialogue reading. `pinyin` is filled for whitelist names
+    (shown to the learner on first use) and None for role words the learner
+    already knows."""
+
+    name: str
+    pinyin: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +80,7 @@ class ReadingWord:
     # None only when no dictionary entry exists at all; lets an extra word be
     # added straight to the study queue (`POST /study-items`) from the reading.
     dictionary_entry_id: int | None
+    speaker: str | None = None  # set only for dialogue tokens
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +88,7 @@ class ReadingPunctuation:
     """A non-word token (punctuation, whitespace, newline), passed through verbatim."""
 
     text: str
+    speaker: str | None = None  # set only for dialogue tokens
 
 
 type ReadingToken = ReadingWord | ReadingPunctuation
@@ -92,6 +106,7 @@ class GenerationAttempt:
     prompt_tokens: int
     completion_tokens: int
     chosen: bool  # exactly one attempt per reading is the chosen one
+    dialogue_problems: tuple[str, ...] = ()  # dialogue-consistency issues found in this draft
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +119,7 @@ class GeneratedReading:
     # the must-use anchors. Empty on rows generated before working sets existed.
     working_set: dict[str, tuple[str, ...]] = field(default_factory=dict)
     must_use: tuple[str, ...] = ()
+    speakers: tuple[ReadingSpeaker, ...] = ()  # non-empty only for dialogue readings
 
     @property
     def _chosen(self) -> GenerationAttempt | None:

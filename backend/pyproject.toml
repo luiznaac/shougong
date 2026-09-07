@@ -81,7 +81,8 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+# RUF001-003: test fixtures legitimately contain full-width CJK punctuation.
+"tests/**" = ["S101", "RUF001", "RUF002", "RUF003"]
 "src/shougong/usecase/commons/logging.py" = ["A005"]
 
 # ---------------------------------------------------------------------------

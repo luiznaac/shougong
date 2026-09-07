@@ -30,6 +30,22 @@ def test_out_of_vocabulary_ignores_punctuation_and_non_hanzi() -> None:
     assert out_of_vocabulary(tokens, frozenset({"我"})) == []
 
 
+def test_dialogue_quote_punctuation_never_counts_as_a_word() -> None:
+    # A dialogue's running text carries quote marks around the utterances — the
+    # positive-hanzi regex already keeps them (and every other non-hanzi glyph)
+    # out of the count.
+    tokens = ["“", "你", "好", "”", "　", "！", "？"]
+    assert out_of_vocabulary(tokens, frozenset({"你", "好"})) == []
+
+
+def test_out_of_vocabulary_treats_speaker_names_folded_into_known_as_in_scope() -> None:
+    # ReadingService folds the resolved speaker characters into known_words so a
+    # stray attribution the model wrote does not burn the extra-word budget.
+    tokens = ["王", "丽", "说", "好"]
+    assert out_of_vocabulary(tokens, frozenset({"说", "好"})) == ["丽", "王"]
+    assert out_of_vocabulary(tokens, frozenset({"说", "好", "王", "丽"})) == []
+
+
 def test_an_unknown_compound_surfaces_whole_not_as_its_known_characters() -> None:
     # The segmenter produced 分钟 as one token; the learner knows 分 and 钟
     # separately but not 分钟 — it must be reported as 分钟, not hidden.

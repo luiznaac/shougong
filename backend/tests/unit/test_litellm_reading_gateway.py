@@ -180,6 +180,58 @@ async def test_generate_sends_the_working_set_grouped_with_must_use(httpserver: 
     assert user_payload["format"] == "paragraph"
     assert user_payload["max_extra_words"] == 2
     assert user_payload["topic"] == "viagem"
+    assert user_payload["avoid_openings"] == []
+    assert "speakers" not in user_payload  # only for dialogue
+
+    tool_params = _last_request_json(httpserver)["tools"][0]["function"]["parameters"]["properties"]
+    assert "lines" in tool_params  # dialogue turn breakdown available in the schema
+
+
+async def test_generate_passes_avoid_openings_and_dialogue_speakers(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "arguments": json.dumps(
+                                        {
+                                            "text": "你好。你好。",
+                                            "lines": [
+                                                {"speaker": "哥哥", "text": "你好。"},
+                                                {"speaker": "妹妹", "text": "你好。"},
+                                            ],
+                                        }
+                                    )
+                                }
+                            }
+                        ]
+                    }
+                }
+            ],
+            "usage": {},
+        }
+    )
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        draft = await gateway.generate(
+            working_set=_EMPTY_WS,
+            text_format=ReadingFormat.DIALOGUE,
+            max_extra_words=2,
+            model="m",
+            topic=None,
+            budget_audience=BudgetAudience.INTERMEDIATE,
+            avoid_openings=["今天早上"],
+            speakers=["哥哥", "妹妹"],
+        )
+
+    assert [(line.speaker, line.text) for line in draft.lines] == [("哥哥", "你好。"), ("妹妹", "你好。")]
+    user_payload = json.loads(_last_request_json(httpserver)["messages"][1]["content"].split("(as JSON):\n", 1)[1])
+    assert user_payload["avoid_openings"] == ["今天早上"]
+    assert user_payload["speakers"] == ["哥哥", "妹妹"]
 
 
 async def test_generate_defaults_the_topic_when_none_given(httpserver: HTTPServer) -> None:

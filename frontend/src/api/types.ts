@@ -82,7 +82,7 @@ export interface StudyItemHistory {
   created_at: string;
 }
 
-export type ReadingFormat = "paragraph" | "sentences";
+export type ReadingFormat = "paragraph" | "sentences" | "dialogue";
 
 // Grammatical class of a word, from the backend's own vocabulary (English) —
 // translate for display via ../i18n/partOfSpeech.ts, never show this raw.
@@ -102,6 +102,7 @@ export type PartOfSpeech =
 export interface GenerateReadingRequest {
   format: ReadingFormat;
   max_extra_words: number;
+  max_attempts: number; // correction-loop rounds allowed (1–6)
   // LiteLLM model id, chosen on the reading screen from GET /reading-texts/models.
   // Always sent — there is no server-side default model.
   model: string;
@@ -121,6 +122,14 @@ export interface ReadingToken {
   // Populated whenever a dictionary entry was resolved (including for extra
   // words) — lets an extra word be added straight to the study queue.
   dictionary_entry_id: number | null;
+  speaker: string | null; // set only for dialogue tokens
+}
+
+// A speaker in a dialogue reading. `pinyin` is shown on first use for whitelist
+// names; null for role words the learner already knows.
+export interface ReadingSpeaker {
+  name: string;
+  pinyin: string | null;
 }
 
 // One draft the model produced on the way to the final text — kept even when
@@ -133,6 +142,7 @@ export interface ReadingAttempt {
   prompt_tokens: number;
   completion_tokens: number;
   chosen: boolean; // exactly one attempt became the reading
+  dialogue_problems: string[]; // turn-structure issues found in this draft
 }
 
 // Broad grammatical class of a known word, from the backend's own taxonomy.
@@ -188,6 +198,7 @@ export interface SavedReadingText {
   id: number;
   format: ReadingFormat;
   max_extra_words: number;
+  max_attempts: number; // correction-loop budget the caller allowed (3 on old rows)
   // LiteLLM model that generated this text ("" for rows saved before model choice existed).
   model: string;
   topic: string | null;
@@ -206,5 +217,6 @@ export interface SavedReadingText {
   // and its anchor words. Empty for rows saved before working sets existed.
   working_set: Record<string, string[]>;
   must_use: string[];
+  speakers: ReadingSpeaker[]; // non-empty only for dialogue readings
   created_at: string;
 }

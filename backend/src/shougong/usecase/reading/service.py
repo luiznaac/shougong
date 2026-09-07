@@ -2,12 +2,13 @@
 locally against the learner's known words, and persist the result.
 
 The LLM is only ever responsible for the running text. It is asked once; if the
-draft uses more distinct words outside the learner's vocabulary than requested,
-those exact words are handed back and a rewrite is requested, up to
-`_MAX_GENERATION_ATTEMPTS` times. Every draft — including the rejected ones — is
-kept on the saved reading as an audit trail. Segmentation, word-level vocabulary
-validation, and pinyin/definitions all happen locally — the model never sees or
-returns a translation, and never decides what counts as "known".
+draft uses more distinct words outside the learner's vocabulary than requested
+(or, for dialogue, breaks the turn structure), the exact problems are handed
+back and a rewrite is requested, up to `request.max_attempts` times. Every draft
+— including the rejected ones — is kept on the saved reading as an audit trail.
+Segmentation, word-level vocabulary validation, and pinyin/definitions all
+happen locally — the model never sees or returns a translation, and never
+decides what counts as "known".
 """
 
 from __future__ import annotations
@@ -19,33 +20,39 @@ from dataclasses import replace
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
+from shougong.usecase.reading.dialogue import check_dialogue
 from shougong.usecase.reading.gateway import (
+    DialogueLine,
     IReadingHistoryRepository,
     IReadingTextGateway,
     IReadingTopicRepository,
     IReadingWordUsageRepository,
     ISegmenter,
+    ReadingDraft,
     RejectedDraft,
     SegmentedToken,
 )
 from shougong.usecase.reading.model import (
     GeneratedReading,
     GenerationAttempt,
+    ReadingFormat,
     ReadingPunctuation,
     ReadingRequest,
+    ReadingSpeaker,
     ReadingToken,
     ReadingWord,
     SavedReadingText,
 )
 from shougong.usecase.reading.proficiency import BudgetAudience, budget_audience, estimate_proficiency
+from shougong.usecase.reading.speakers import resolve_speakers, usage_keys, usage_keys_for
 from shougong.usecase.reading.topics import resolve_topic
 from shougong.usecase.reading.validation import is_chinese_word, out_of_vocabulary
 from shougong.usecase.reading.vocabulary import VocabularyWord, categories_for, hsk_level_stats
 from shougong.usecase.reading.working_set import WorkingSet, build_working_set
 from shougong.usecase.study.gateway import IStudyItemRepository
 
-_MAX_GENERATION_ATTEMPTS = 3
 _RECENT_TOPICS = 12
+_RECENT_OPENINGS = 8
 
 
 class ReadingService:
@@ -84,12 +91,20 @@ class ReadingService:
             else budget_audience(known_words, stats, proficiency.estimated_level)
         )
         request = await self._resolve_topic(request)
+        avoid_openings = await self._recent_openings()
+
+        is_dialogue = request.format is ReadingFormat.DIALOGUE
+        speakers = await self._resolve_speakers(known_words) if is_dialogue else ()
+        speaker_names = tuple(s.name for s in speakers)
+        speaker_chars = frozenset("".join(speaker_names))
+        validation_words = known_words | speaker_chars
 
         attempts: list[GenerationAttempt] = []
+        drafts: list[ReadingDraft] = []
         segmentations: list[tuple[SegmentedToken, ...]] = []
         prior: list[RejectedDraft] = []
 
-        for _ in range(_MAX_GENERATION_ATTEMPTS):
+        for _ in range(request.max_attempts):
             draft = await self._gateway.generate(
                 working_set=working_set,
                 text_format=request.format,
@@ -97,10 +112,13 @@ class ReadingService:
                 model=request.model,
                 topic=request.topic,
                 budget_audience=audience,
+                avoid_openings=avoid_openings,
+                speakers=speaker_names,
                 prior_attempts=prior,
             )
             segmented = self._segmenter.segment(draft.text)
-            extras = out_of_vocabulary([t.text for t in segmented], known_words)
+            extras = out_of_vocabulary([t.text for t in segmented], validation_words)
+            problems = check_dialogue(draft.lines, draft.text, frozenset(speaker_names)) if is_dialogue else []
 
             attempts.append(
                 GenerationAttempt(
@@ -110,18 +128,24 @@ class ReadingService:
                     prompt_tokens=draft.prompt_tokens,
                     completion_tokens=draft.completion_tokens,
                     chosen=False,
+                    dialogue_problems=tuple(problems),
                 )
             )
+            drafts.append(draft)
             segmentations.append(segmented)
 
-            if len(extras) <= request.max_extra_words:
+            if len(extras) <= request.max_extra_words and not problems:
                 break
-            prior.append(RejectedDraft(draft=draft.text, rejected_words=tuple(extras)))
+            prior.append(RejectedDraft(draft=draft.text, rejected_words=tuple(extras), problems=tuple(problems)))
 
         chosen = _choose_attempt(attempts, request.max_extra_words)
         attempts[chosen] = replace(attempts[chosen], chosen=True)
 
-        tokens = await self._resolve(segmentations[chosen], known_index)
+        if is_dialogue and drafts[chosen].lines:
+            tokens = await self._resolve_dialogue(drafts[chosen].lines, known_index, speaker_chars)
+        else:
+            tokens = await self._resolve(segmentations[chosen], known_index, allowed_extra=speaker_chars)
+
         reading = GeneratedReading(
             format=request.format,
             tokens=tokens,
@@ -129,8 +153,11 @@ class ReadingService:
             attempts=tuple(attempts),
             working_set=dict(working_set.groups),
             must_use=working_set.must_use,
+            speakers=speakers,
         )
         await self._record_word_usage(segmentations[chosen], known_words)
+        if speakers:
+            await self._word_usage.record(usage_keys_for(speakers), self._clock.now())
         return await self._history.save(request, reading, self._clock.now())
 
     async def _resolve_topic(self, request: ReadingRequest) -> ReadingRequest:
@@ -145,6 +172,20 @@ class ReadingService:
             self._rng,
         )
         return replace(request, topic=resolved.text, topic_generated=resolved.generated)
+
+    async def _recent_openings(self) -> list[str]:
+        items = await self._history.list(limit=_RECENT_OPENINGS, offset=0)
+        openings: list[str] = []
+        for item in items:
+            words = [t.text for t in item.reading.tokens if isinstance(t, ReadingWord)][:4]
+            opening = "".join(words)
+            if opening and opening not in openings:
+                openings.append(opening)
+        return openings
+
+    async def _resolve_speakers(self, known_words: frozenset[str]) -> tuple[ReadingSpeaker, ...]:
+        usage = await self._word_usage.load(usage_keys())
+        return resolve_speakers(known_words=known_words, usage=usage, now=self._clock.now(), rng=self._rng)
 
     async def _build_working_set(
         self, known_index: dict[str, DictionaryEntry], coverage_by_level: dict[int, float]
@@ -224,24 +265,51 @@ class ReadingService:
         self,
         segmented: tuple[SegmentedToken, ...],
         known_index: dict[str, DictionaryEntry],
+        *,
+        allowed_extra: frozenset[str] = frozenset(),
     ) -> tuple[ReadingToken, ...]:
-        resolved_cache: dict[str, DictionaryEntry | None] = {}
-        tokens: list[ReadingToken] = []
+        cache: dict[str, DictionaryEntry | None] = {}
+        return tuple(await self._resolve_run(segmented, known_index, cache, allowed_extra, speaker=None))
 
+    async def _resolve_dialogue(
+        self,
+        lines: tuple[DialogueLine, ...],
+        known_index: dict[str, DictionaryEntry],
+        allowed_extra: frozenset[str],
+    ) -> tuple[ReadingToken, ...]:
+        cache: dict[str, DictionaryEntry | None] = {}
+        tokens: list[ReadingToken] = []
+        for index, line in enumerate(lines):
+            segmented = self._segmenter.segment(line.text)
+            tokens.extend(await self._resolve_run(segmented, known_index, cache, allowed_extra, speaker=line.speaker))
+            if index < len(lines) - 1:
+                tokens.append(ReadingPunctuation(text="\n", speaker=line.speaker))
+        return tuple(tokens)
+
+    async def _resolve_run(
+        self,
+        segmented: tuple[SegmentedToken, ...],
+        known_index: dict[str, DictionaryEntry],
+        cache: dict[str, DictionaryEntry | None],
+        allowed_extra: frozenset[str],
+        *,
+        speaker: str | None,
+    ) -> list[ReadingToken]:
+        out: list[ReadingToken] = []
         for token in segmented:
             if not is_chinese_word(token.text):
-                tokens.append(ReadingPunctuation(text=token.text))
+                out.append(ReadingPunctuation(text=token.text, speaker=speaker))
                 continue
 
             entry = known_index.get(token.text)
-            is_extra = entry is None
-            if is_extra:
-                if token.text not in resolved_cache:
+            is_extra = entry is None and token.text not in allowed_extra
+            if entry is None:
+                if token.text not in cache:
                     candidates = await self._dictionary.find_by_simplified(token.text)
-                    resolved_cache[token.text] = candidates[0] if candidates else None
-                entry = resolved_cache[token.text]
+                    cache[token.text] = candidates[0] if candidates else None
+                entry = cache[token.text]
 
-            tokens.append(
+            out.append(
                 ReadingWord(
                     text=token.text,
                     pinyin=entry.pinyin if entry else None,
@@ -249,17 +317,21 @@ class ReadingService:
                     part_of_speech=token.part_of_speech,
                     is_extra=is_extra,
                     dictionary_entry_id=entry.id if entry else None,
+                    speaker=speaker,
                 )
             )
-
-        return tuple(tokens)
+        return out
 
 
 def _choose_attempt(attempts: list[GenerationAttempt], max_extra_words: int) -> int:
     """Index of the draft that becomes the reading: the first one within the
-    extra-word budget, or — if none is — the one with the fewest violations
-    (the most recent wins a tie)."""
+    extra-word budget and free of dialogue problems, or — if none is — the
+    least-bad one (no dialogue problem first, then fewest violations, most
+    recent wins a tie)."""
     for i, attempt in enumerate(attempts):
-        if len(attempt.extra_words) <= max_extra_words:
+        if len(attempt.extra_words) <= max_extra_words and not attempt.dialogue_problems:
             return i
-    return min(range(len(attempts)), key=lambda i: (len(attempts[i].extra_words), -i))
+    return min(
+        range(len(attempts)),
+        key=lambda i: (bool(attempts[i].dialogue_problems), len(attempts[i].extra_words), -i),
+    )

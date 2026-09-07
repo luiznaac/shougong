@@ -160,7 +160,7 @@ def _sample_category(
     weighted_k = quota - uniform_k
 
     remaining = list(pool)
-    weights = [_recency_weight(word, usage, now) for word in remaining]
+    weights = [recency_weight(word, usage, now) for word in remaining]
     picked = _weighted_sample_without_replacement(remaining, weights, weighted_k, rng)
 
     leftover = [word for word in remaining if word not in picked]
@@ -168,7 +168,9 @@ def _sample_category(
     return picked
 
 
-def _recency_weight(word: str, usage: Mapping[str, WordUsage], now: datetime) -> float:
+def recency_weight(word: str, usage: Mapping[str, WordUsage], now: datetime) -> float:
+    """Sampling weight — higher for words used less and longer ago. Shared with
+    the dialogue-speaker picker."""
     record = usage.get(word)
     uses = record.uses if record else 0
     if record is None or record.last_used_at is None:

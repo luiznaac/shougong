@@ -15,6 +15,7 @@ from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
 from shougong.usecase.reading.gateway import (
+    DialogueLine,
     IReadingHistoryRepository,
     IReadingTextGateway,
     IReadingTopicRepository,
@@ -289,13 +290,20 @@ class FakeStudyItemRepository(IStudyItemRepository):
         return [logs[i] for i in order][offset : offset + limit]
 
 
+# A canned gateway response: a plain string is the text; a dict is
+# {"text": ..., "lines": [{"speaker", "text"}, ...]} for dialogue.
+FakeReadingResponse = str | dict[str, object]
+
+
 class FakeReadingTextGateway(IReadingTextGateway):
     """Returns a canned text; records what it was called with (a single shot,
     never retried)."""
 
-    def __init__(self, response: str | Sequence[str], *, tokens_per_call: int = 100) -> None:
-        # One string → returned every call; a sequence → one per call, last repeats.
-        self._responses = [response] if isinstance(response, str) else list(response)
+    def __init__(
+        self, response: FakeReadingResponse | Sequence[FakeReadingResponse], *, tokens_per_call: int = 100
+    ) -> None:
+        # One item → returned every call; a sequence → one per call, last repeats.
+        self._responses = [response] if isinstance(response, str | dict) else list(response)
         self._tokens_per_call = tokens_per_call
         self.calls: list[dict[str, object]] = []
         self.models: tuple[str, ...] = ("fake-model",)
@@ -312,6 +320,8 @@ class FakeReadingTextGateway(IReadingTextGateway):
         model: str,
         topic: str | None,
         budget_audience: BudgetAudience,
+        avoid_openings: Sequence[str] = (),
+        speakers: Sequence[str] = (),
         prior_attempts: Sequence[RejectedDraft] = (),
     ) -> ReadingDraft:
         self.calls.append(
@@ -322,11 +332,26 @@ class FakeReadingTextGateway(IReadingTextGateway):
                 "model": model,
                 "topic": topic,
                 "budget_audience": budget_audience,
+                "avoid_openings": tuple(avoid_openings),
+                "speakers": tuple(speakers),
                 "prior_attempts": tuple(prior_attempts),
             }
         )
-        text = self._responses[min(len(self.calls) - 1, len(self._responses) - 1)]
-        return ReadingDraft(text=text, prompt_tokens=self._tokens_per_call, completion_tokens=self._tokens_per_call)
+        response = self._responses[min(len(self.calls) - 1, len(self._responses) - 1)]
+        if isinstance(response, str):
+            text, lines = response, ()
+        else:
+            text = str(response["text"])
+            lines = tuple(
+                DialogueLine(speaker=str(entry["speaker"]), text=str(entry["text"]))
+                for entry in response.get("lines", [])  # type: ignore[union-attr]
+            )
+        return ReadingDraft(
+            text=text,
+            prompt_tokens=self._tokens_per_call,
+            completion_tokens=self._tokens_per_call,
+            lines=lines,
+        )
 
 
 def make_segmented_token(text: str, *, part_of_speech: PartOfSpeech | None = PartOfSpeech.NOUN) -> SegmentedToken:
