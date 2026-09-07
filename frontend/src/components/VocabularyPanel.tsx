@@ -44,11 +44,15 @@ export function VocabularyPanel() {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
               {Object.entries(summary.by_hsk_level)
                 .sort((a, b) => (a[0] === "none" ? 1 : b[0] === "none" ? -1 : Number(a[0]) - Number(b[0])))
-                .map(([level, n]) => (
-                  <span key={level}>
-                    {level === "none" ? "sem HSK" : `HSK ${level}`}: {n}
-                  </span>
-                ))}
+                .map(([level, n]) => {
+                  const cov = summary.proficiency.coverage_by_level[level];
+                  return (
+                    <span key={level}>
+                      {level === "none" ? "sem HSK" : `HSK ${level}`}: {n}
+                      {cov != null && <span className="text-slate-600"> ({Math.round(cov * 100)}%)</span>}
+                    </span>
+                  );
+                })}
             </div>
 
             <div className="text-xs text-slate-400">
@@ -56,14 +60,6 @@ export function VocabularyPanel() {
               <span className="text-slate-200">
                 {summary.proficiency.estimated_level > 0 ? `HSK ${summary.proficiency.estimated_level}` : "iniciante"}
               </span>
-              {Object.keys(summary.proficiency.coverage_by_level).length > 0 && (
-                <span className="ml-3 text-slate-500">
-                  {Object.entries(summary.proficiency.coverage_by_level)
-                    .sort((a, b) => Number(a[0]) - Number(b[0]))
-                    .map(([level, cov]) => `HSK ${level} ${Math.round(cov * 100)}%`)
-                    .join(" · ")}
-                </span>
-              )}
             </div>
 
             {summary.qualifier_shortage && (
