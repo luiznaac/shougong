@@ -234,6 +234,50 @@ async def test_generate_passes_avoid_openings_and_dialogue_speakers(httpserver: 
     assert user_payload["speakers"] == ["哥哥", "妹妹"]
 
 
+async def test_generate_rebuilds_missing_text_from_dialogue_lines(httpserver: HTTPServer) -> None:
+    # models routinely fill `lines` for dialogue and omit the required `text`
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "arguments": json.dumps(
+                                        {
+                                            "lines": [
+                                                {"speaker": "哥哥", "text": "你好。"},
+                                                {"speaker": "妹妹", "text": "再见。"},
+                                            ]
+                                        }
+                                    )
+                                }
+                            }
+                        ]
+                    }
+                }
+            ],
+            "usage": {},
+        }
+    )
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        draft = await gateway.generate(
+            working_set=_EMPTY_WS,
+            text_format=ReadingFormat.DIALOGUE,
+            max_extra_words=2,
+            model="m",
+            topic=None,
+            budget_audience=BudgetAudience.INTERMEDIATE,
+            speakers=["哥哥", "妹妹"],
+        )
+
+    assert draft.text == "你好。再见。"  # assembled from the turns
+    assert len(draft.lines) == 2
+
+
 async def test_generate_defaults_the_topic_when_none_given(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/chat/completions", method="POST").respond_with_json(_TOOL_CALL_RESPONSE)
 

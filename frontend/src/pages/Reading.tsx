@@ -26,6 +26,13 @@ function totalTokens(reading: SavedReadingText): number {
   return reading.prompt_tokens + reading.completion_tokens;
 }
 
+// A cleared number input reads back as "" → NaN; keep the request inside the
+// backend's bounds so it never 422s.
+function clamp(value: number, lo: number, hi: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(hi, Math.max(lo, Math.round(value)));
+}
+
 export function Reading() {
   const [format, setFormat] = useState<ReadingFormat>("paragraph");
   const [maxExtraWords, setMaxExtraWords] = useState(2);
@@ -67,8 +74,8 @@ export function Reading() {
     try {
       const saved = await generateMutation.mutateAsync({
         format,
-        max_extra_words: maxExtraWords,
-        max_attempts: maxAttempts,
+        max_extra_words: clamp(maxExtraWords, 0, 20, 2),
+        max_attempts: clamp(maxAttempts, 1, 6, 3),
         model,
         topic: topic.trim() || null,
       });

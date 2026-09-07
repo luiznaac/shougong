@@ -200,11 +200,18 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             body = response.json()
             arguments = json.loads(body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])
             usage = body.get("usage") or {}
+            lines = _parse_lines(arguments.get("lines"))
+            # `text` is required by the schema, but models frequently omit it for
+            # dialogue and just fill `lines` — rebuild the running text from the
+            # turns rather than failing the whole generation.
+            text = str(arguments.get("text") or "").strip() or "".join(line.text for line in lines)
+            if not text:
+                raise ReadingGenerationError("ai gateway returned an empty reading text")
             return ReadingDraft(
-                text=str(arguments["text"]),
+                text=text,
                 prompt_tokens=int(usage.get("prompt_tokens", 0)),
                 completion_tokens=int(usage.get("completion_tokens", 0)),
-                lines=_parse_lines(arguments.get("lines")),
+                lines=lines,
             )
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise ReadingGenerationError(f"ai gateway request failed: {exc}") from exc
@@ -215,6 +222,6 @@ def _parse_lines(raw: Any) -> tuple[DialogueLine, ...]:
         return ()
     lines: list[DialogueLine] = []
     for entry in raw:
-        if isinstance(entry, dict) and "speaker" in entry and "text" in entry:
+        if isinstance(entry, dict) and entry.get("speaker") and entry.get("text"):
             lines.append(DialogueLine(speaker=str(entry["speaker"]), text=str(entry["text"])))
     return tuple(lines)
