@@ -32,7 +32,8 @@ def mysql() -> Iterator[MySqlContainer]:
 def settings(mysql: MySqlContainer) -> Settings:
     return Settings(
         app_env="test",
-        # nothing reachable — the HSK dataset never downloads in tests
+        # no background HSK enrichment in tests; nothing reachable if it did run
+        hsk_enrich_autoload=False,
         hsk_dataset_url="http://localhost:1/hsk.json",
         mysql=MySqlConfig(
             host=mysql.get_container_host_ip(),

@@ -19,9 +19,8 @@ from shougong.usecase.reading.model import (
     SavedReadingText,
 )
 from shougong.usecase.reading.vocabulary import (
-    VocabularyCategory,
-    VocabularyProfile,
     VocabularySummary,
+    VocabularyWord,
 )
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
 from shougong.usecase.strokes.model import CharacterStrokes
@@ -48,6 +47,8 @@ class DictionaryEntryResponse(BaseModel):
     simplified: str
     pinyin: str
     definitions: list[str]
+    hsk_level: int | None
+    pos_tags: list[str]
 
     @classmethod
     def from_domain(cls, entry: DictionaryEntry) -> DictionaryEntryResponse:
@@ -56,6 +57,8 @@ class DictionaryEntryResponse(BaseModel):
             simplified=entry.simplified,
             pinyin=entry.pinyin,
             definitions=list(entry.definitions),
+            hsk_level=entry.hsk_level,
+            pos_tags=list(entry.pos_tags),
         )
 
 
@@ -329,25 +332,23 @@ class SavedReadingTextResponse(BaseModel):
         )
 
 
-class VocabularyProfileResponse(BaseModel):
+class VocabularyWordResponse(BaseModel):
     simplified: str
     hsk_level: int | None
     pos_tags: list[str]
-    pos_category: str
-    source: str  # "hsk" | "manual" | "unknown"
+    pos_categories: list[str]  # every grammatical class the word's tags imply
     pinyin: str | None
     gloss: str | None
 
     @classmethod
-    def from_domain(cls, profile: VocabularyProfile) -> VocabularyProfileResponse:
+    def from_domain(cls, word: VocabularyWord) -> VocabularyWordResponse:
         return cls(
-            simplified=profile.simplified,
-            hsk_level=profile.hsk_level,
-            pos_tags=list(profile.pos_tags),
-            pos_category=profile.pos_category.value,
-            source=profile.source.value,
-            pinyin=profile.pinyin,
-            gloss=profile.gloss,
+            simplified=word.simplified,
+            hsk_level=word.hsk_level,
+            pos_tags=list(word.pos_tags),
+            pos_categories=sorted(category.value for category in word.pos_categories),
+            pinyin=word.pinyin,
+            gloss=word.gloss,
         )
 
 
@@ -380,29 +381,8 @@ class VocabularySummaryResponse(BaseModel):
 
 
 class VocabularyOverviewResponse(BaseModel):
-    profiles: list[VocabularyProfileResponse]
+    profiles: list[VocabularyWordResponse]
     summary: VocabularySummaryResponse
-
-
-class OverrideVocabularyRequest(BaseModel):
-    pos_category: Literal[
-        "verb",
-        "noun",
-        "person",
-        "place",
-        "qualifier",
-        "adverb",
-        "time",
-        "quantity",
-        "connective",
-        "pronoun",
-        "functional",
-        "other",
-    ]
-    hsk_level: int | None = Field(default=None, ge=1, le=9)
-
-    def category(self) -> VocabularyCategory:
-        return VocabularyCategory(self.pos_category)
 
 
 class ReadingTopicResponse(BaseModel):

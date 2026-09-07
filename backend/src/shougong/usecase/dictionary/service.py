@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.commons.logging import get_logger
-from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository
+from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
 from shougong.usecase.dictionary.model import DictionaryEntry
 
 _log = get_logger(__name__)
@@ -41,3 +41,20 @@ class DictionaryService:
         added = await self._repository.bulk_add(records)
         _log.info("dictionary.populate.finished", count=added)
         return added
+
+    async def enrich_hsk(self, source: IHskDatasetSource) -> int:
+        """Stamp `hsk_level` and `pos_tags` onto the dictionary from the HSK dataset.
+
+        Idempotent: once any entry carries an `hsk_level`, every later call is a
+        no-op. Runs from the startup hook, after the dictionary is populated.
+        """
+        existing = await self._repository.count_with_hsk()
+        if existing > 0:
+            _log.info("dictionary.hsk_enrich.skipped", existing=existing)
+            return 0
+
+        _log.info("dictionary.hsk_enrich.started")
+        dataset = await source.fetch()
+        applied = await self._repository.apply_hsk(dataset)
+        _log.info("dictionary.hsk_enrich.finished", words=applied)
+        return applied

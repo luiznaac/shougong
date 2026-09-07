@@ -11,10 +11,7 @@ import type {
   SrsRating,
   StudyItem,
   StudyItemHistory,
-  VocabularyCategory,
   VocabularyOverview,
-  VocabularyProfile,
-  VocabularySummary,
 } from "./types.ts";
 
 const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
@@ -132,21 +129,9 @@ export const api = {
     return request(`/reading-texts/models`);
   },
 
-  // --- reading vocabulary profile ---
+  // --- reading vocabulary overview ---
   getVocabularyProfile(): Promise<VocabularyOverview> {
     return request(`/reading-vocabulary`);
-  },
-  syncVocabulary(): Promise<VocabularySummary> {
-    return request(`/reading-vocabulary/sync`, { method: "POST" });
-  },
-  overrideVocabulary(
-    simplified: string,
-    body: { pos_category: VocabularyCategory; hsk_level: number | null },
-  ): Promise<VocabularyProfile> {
-    return request(`/reading-vocabulary/${encodeURIComponent(simplified)}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    });
   },
 
   // --- reading topic scenarios ---

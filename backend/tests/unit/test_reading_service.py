@@ -14,20 +14,17 @@ from shougong.usecase.reading.model import (
     ReadingWord,
     SavedReadingText,
 )
-from shougong.usecase.reading.proficiency import BudgetAudience, HskLevelStats
+from shougong.usecase.reading.proficiency import BudgetAudience
 from shougong.usecase.reading.service import ReadingService
-from shougong.usecase.reading.vocabulary import ProfileSource, VocabularyCategory, VocabularyProfile
 from shougong.usecase.study.model import StudyItem
 from tests.fixtures import (
     FakeDictionaryRepository,
-    FakeHskVocabularySource,
     FakeReadingHistoryRepository,
     FakeReadingTextGateway,
     FakeReadingTopicRepository,
     FakeReadingWordUsageRepository,
     FakeSegmenter,
     FakeStudyItemRepository,
-    FakeVocabularyProfileRepository,
     make_dictionary_entry,
     make_segmented_token,
     make_srs_card,
@@ -46,8 +43,6 @@ def _service(
     history: FakeReadingHistoryRepository | None = None,
     usage: FakeReadingWordUsageRepository | None = None,
     topics: FakeReadingTopicRepository | None = None,
-    profiles: FakeVocabularyProfileRepository | None = None,
-    hsk_source: FakeHskVocabularySource | None = None,
 ) -> tuple[ReadingService, FakeReadingTextGateway, FakeReadingHistoryRepository]:
     gateway = FakeReadingTextGateway(response)
     segmenter = FakeSegmenter(segments)
@@ -59,10 +54,8 @@ def _service(
         study,
         dictionary or FakeDictionaryRepository(),
         history,
-        profiles or FakeVocabularyProfileRepository(),
         usage or FakeReadingWordUsageRepository(),
         topics or FakeReadingTopicRepository(),
-        hsk_source or FakeHskVocabularySource(),
         FixedClock(_NOW),
         rng=random.Random(0),
     )
@@ -252,23 +245,23 @@ async def test_the_working_set_is_offered_to_the_gateway_and_word_usage_is_recor
     assert usage.usage["我"].uses == 1
 
 
-def _functional(word: str) -> VocabularyProfile:
-    return VocabularyProfile(word, 1, ("u",), VocabularyCategory.FUNCTIONAL, ProfileSource.HSK)
+def _leveled(entry_id: int, simplified: str, level: int, *tags: str):
+    return make_dictionary_entry(
+        entry_id=entry_id, simplified=simplified, pinyin="x", definitions=("g",), hsk_level=level, pos_tags=tags
+    )
 
 
 async def test_budget_audience_is_intermediate_when_the_learner_has_their_level_particles() -> None:
-    de = make_dictionary_entry(entry_id=1, simplified="的", pinyin="de5", definitions=("(particle)",))
-    le = make_dictionary_entry(entry_id=2, simplified="了", pinyin="le5", definitions=("(particle)",))
-    hsk = FakeHskVocabularySource(
-        stats=HskLevelStats(total_by_level={1: 2}, functional_by_level={1: frozenset({"的", "了"})})
-    )
+    de = _leveled(1, "的", 1, "u")
+    le = _leveled(2, "了", 1, "u")
+    # the dictionary carries the whole HSK 1 particle set; the learner knows all of it
+    dictionary = FakeDictionaryRepository([de, le])
 
     service, gateway, _ = _service(
         response="的。",
         segments={"的。": (_tok("的", PartOfSpeech.PARTICLE), _tok("。", None))},
         known=[make_study_item(item_id=1, entry=de), make_study_item(item_id=2, entry=le)],
-        profiles=FakeVocabularyProfileRepository([_functional("的"), _functional("了")]),
-        hsk_source=hsk,
+        dictionary=dictionary,
     )
     await service.generate(_req(ReadingFormat.PARAGRAPH, 3))
 
@@ -276,17 +269,17 @@ async def test_budget_audience_is_intermediate_when_the_learner_has_their_level_
 
 
 async def test_budget_audience_is_beginner_for_a_learner_with_no_mastered_level() -> None:
-    de = make_dictionary_entry(entry_id=1, simplified="的", pinyin="de5", definitions=("(particle)",))
-    hsk = FakeHskVocabularySource(
-        stats=HskLevelStats(total_by_level={1: 10}, functional_by_level={1: frozenset({"的", "了"})})
-    )
+    de = _leveled(1, "的", 1, "u")
+    le = _leveled(2, "了", 1, "u")
+    # 10 HSK 1 words exist, 2 of them particles; the learner knows only 的
+    filler = [_leveled(10 + i, f"w{i}", 1, "n") for i in range(8)]
+    dictionary = FakeDictionaryRepository([de, le, *filler])
 
     service, gateway, _ = _service(
         response="的。",
         segments={"的。": (_tok("的", PartOfSpeech.PARTICLE), _tok("。", None))},
         known=[make_study_item(item_id=1, entry=de)],
-        profiles=FakeVocabularyProfileRepository([_functional("的")]),  # 1 of 10 → coverage 0.1
-        hsk_source=hsk,
+        dictionary=dictionary,
     )
     await service.generate(_req(ReadingFormat.PARAGRAPH, 3))
 

@@ -57,9 +57,10 @@ class Settings(BaseSettings):
     # On startup, download CC-CEDICT and fill `dictionary_entry` if it is empty.
     dictionary_autoload: bool = True
 
-    # On startup, resolve a grammatical profile (HSK level + category) for every
-    # studied word from the HSK dataset. Off in tests that don't want the fetch.
-    vocabulary_profile_autoload: bool = True
+    # On startup, after the dictionary is populated, download the HSK dataset once
+    # and stamp `hsk_level` + `pos_tags` onto `dictionary_entry`. Idempotent — a
+    # no-op once done. Off in tests that don't want the fetch.
+    hsk_enrich_autoload: bool = True
 
     # The HSK 3.0 word list (drkameleon/complete-hsk-vocabulary). Overridden in
     # tests to point somewhere unreachable so nothing downloads.

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
+from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
 
 
 class IDictionaryRepository(Protocol):
@@ -26,8 +26,31 @@ class IDictionaryRepository(Protocol):
 
     async def bulk_add(self, records: Sequence[CedictRecord]) -> int: ...
 
+    async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:
+        """Stamp `hsk_level` and `pos_tags` onto every entry whose simplified form
+        is a key of `dataset` — the same values on every row that shares it.
+        Returns the number of dataset words applied."""
+        ...
+
+    async def count_with_hsk(self) -> int:
+        """How many entries already carry an `hsk_level` — the enrichment gate."""
+        ...
+
+    async def hsk_words(self) -> list[HskDatasetWord]:
+        """One `HskDatasetWord` per distinct simplified form that has an
+        `hsk_level`, for the per-level statistics."""
+        ...
+
 
 class ICedictSource(Protocol):
     """Fetches the full CC-CEDICT dataset from its upstream (MDBG)."""
 
     async def fetch(self) -> list[CedictRecord]: ...
+
+
+class IHskDatasetSource(Protocol):
+    """Fetches the HSK word list from its upstream (a community dataset)."""
+
+    async def fetch(self) -> dict[str, HskDatasetWord]:
+        """Every listed word → its level and POS tags, keyed by simplified form."""
+        ...

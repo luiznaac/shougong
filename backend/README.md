@@ -72,4 +72,20 @@ Set `DICTIONARY_AUTOLOAD=false` to disable it. To force a refresh, clear the tab
 (`TRUNCATE dictionary_entry`) and restart. Traditional forms are ignored — this trainer only
 drills simplified handwriting.
 
+Right after that, a second one-off pass downloads the
+[HSK 3.0 word list](https://github.com/drkameleon/complete-hsk-vocabulary) (MIT) and stamps
+`hsk_level` + `pos_tags` onto `dictionary_entry` — the same values on every row that shares a
+`simplified`. It is skipped once any row carries an `hsk_level`. Set `HSK_ENRICH_AUTOLOAD=false`
+to disable it; to re-run, `UPDATE dictionary_entry SET hsk_level = NULL` and restart.
+
+There is no migration runner. On a database created before these columns existed, apply once by
+hand:
+
+```sql
+ALTER TABLE dictionary_entry
+  ADD COLUMN hsk_level INT NULL,
+  ADD COLUMN pos_tags JSON NOT NULL DEFAULT (JSON_ARRAY()),
+  ADD KEY ix_dictionary_entry_hsk_level (hsk_level);
+```
+
 See [CLAUDE.md](CLAUDE.md) for the architecture and the rules for evolving it.

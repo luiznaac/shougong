@@ -1,17 +1,14 @@
-import { useOverrideVocabulary, useSyncVocabulary, useVocabularyProfile } from "../api/queries.ts";
+import { useVocabularyProfile } from "../api/queries.ts";
 import type { VocabularyCategory, VocabularyProfile } from "../api/types.ts";
-import { VOCABULARY_CATEGORIES, vocabularyCategoryLabel } from "../i18n/vocabularyCategory.ts";
+import { vocabularyCategoryLabel } from "../i18n/vocabularyCategory.ts";
 
 /**
- * "Meu vocabulário" — the HSK level and grammatical class the app resolved for
- * every word in the study queue, so the reading generator can later sample a
- * balanced working set. Lets the user eyeball the breakdown and fix a class by
- * hand.
+ * "Meu vocabulário" — the HSK level and grammatical classes the app derives for
+ * every word in the study queue (from the dictionary's HSK data), so the reading
+ * generator can sample a balanced working set. Read-only overview.
  */
 export function VocabularyPanel() {
   const { data, isLoading, error } = useVocabularyProfile();
-  const sync = useSyncVocabulary();
-  const override = useOverrideVocabulary();
 
   const summary = data?.summary;
 
@@ -21,7 +18,7 @@ export function VocabularyPanel() {
         Meu vocabulário
         {summary && (
           <span className="ml-2 font-normal normal-case text-slate-500">
-            {summary.categorised}/{summary.total} categorizado
+            {summary.categorised}/{summary.total} no HSK
           </span>
         )}
       </summary>
@@ -69,14 +66,6 @@ export function VocabularyPanel() {
               </p>
             )}
 
-            <button
-              onClick={() => sync.mutate()}
-              disabled={sync.isPending}
-              className="rounded-md border border-white/10 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:opacity-50"
-            >
-              {sync.isPending ? "Recategorizando…" : "Recategorizar"}
-            </button>
-
             <div className="max-h-96 overflow-y-auto rounded-md border border-white/5">
               <table className="w-full text-left text-sm">
                 <thead className="sticky top-0 bg-slate-900 text-xs uppercase tracking-wide text-slate-500">
@@ -88,17 +77,7 @@ export function VocabularyPanel() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {(data?.profiles ?? []).map((profile) => (
-                    <VocabularyRow
-                      key={profile.simplified}
-                      profile={profile}
-                      onOverride={(pos_category) =>
-                        override.mutate({
-                          simplified: profile.simplified,
-                          pos_category,
-                          hsk_level: profile.hsk_level,
-                        })
-                      }
-                    />
+                    <VocabularyRow key={profile.simplified} profile={profile} />
                   ))}
                 </tbody>
               </table>
@@ -110,33 +89,17 @@ export function VocabularyPanel() {
   );
 }
 
-function VocabularyRow({
-  profile,
-  onOverride,
-}: {
-  profile: VocabularyProfile;
-  onOverride: (category: VocabularyCategory) => void;
-}) {
+function VocabularyRow({ profile }: { profile: VocabularyProfile }) {
+  const inHsk = profile.hsk_level != null;
   return (
-    <tr className={profile.source === "unknown" ? "text-amber-400/90" : "text-slate-200"}>
+    <tr className={inHsk ? "text-slate-200" : "text-amber-400/90"}>
       <td className="px-3 py-1.5">
         <span className="font-hanzi text-base">{profile.simplified}</span>
         {profile.pinyin && <span className="ml-2 text-xs text-slate-500">{profile.pinyin}</span>}
       </td>
       <td className="px-3 py-1.5 text-slate-400">{profile.hsk_level ?? "—"}</td>
-      <td className="px-3 py-1.5">
-        <select
-          value={profile.pos_category}
-          onChange={(e) => onOverride(e.target.value as VocabularyCategory)}
-          className="rounded border border-white/10 bg-slate-800 px-1.5 py-1 text-xs text-slate-100"
-        >
-          {VOCABULARY_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {vocabularyCategoryLabel(category)}
-            </option>
-          ))}
-        </select>
-        {profile.source === "manual" && <span className="ml-2 text-xs text-emerald-400">manual</span>}
+      <td className="px-3 py-1.5 text-xs text-slate-300">
+        {profile.pos_categories.map((category) => vocabularyCategoryLabel(category)).join(" · ") || "—"}
       </td>
     </tr>
   );
