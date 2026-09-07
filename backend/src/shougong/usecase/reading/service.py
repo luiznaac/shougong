@@ -15,10 +15,12 @@ from __future__ import annotations
 import random
 from dataclasses import replace
 
+from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.reading.gateway import (
+    IHskVocabularySource,
     IReadingHistoryRepository,
     IReadingTextGateway,
     IReadingTopicRepository,
@@ -37,6 +39,7 @@ from shougong.usecase.reading.model import (
     ReadingWord,
     SavedReadingText,
 )
+from shougong.usecase.reading.proficiency import BudgetAudience, budget_audience, estimate_proficiency
 from shougong.usecase.reading.topics import resolve_topic
 from shougong.usecase.reading.validation import is_chinese_word, out_of_vocabulary
 from shougong.usecase.reading.working_set import WorkingSet, build_working_set
@@ -44,6 +47,8 @@ from shougong.usecase.study.gateway import IStudyItemRepository
 
 _MAX_GENERATION_ATTEMPTS = 3
 _RECENT_TOPICS = 12
+
+_log = get_logger(__name__)
 
 
 class ReadingService:
@@ -57,6 +62,7 @@ class ReadingService:
         vocabulary_profile_repository: IVocabularyProfileRepository,
         word_usage_repository: IReadingWordUsageRepository,
         topic_repository: IReadingTopicRepository,
+        hsk_source: IHskVocabularySource,
         clock: IClock,
         rng: random.Random | None = None,
     ) -> None:
@@ -68,6 +74,7 @@ class ReadingService:
         self._profiles = vocabulary_profile_repository
         self._word_usage = word_usage_repository
         self._topics = topic_repository
+        self._hsk_source = hsk_source
         self._clock = clock
         self._rng = rng or random.Random()
 
@@ -75,6 +82,7 @@ class ReadingService:
         known_index = await self._known_word_index()
         known_words = frozenset(known_index)
         working_set = await self._build_working_set(known_words)
+        audience = await self._budget_audience(known_words)
         request = await self._resolve_topic(request)
 
         attempts: list[GenerationAttempt] = []
@@ -88,6 +96,7 @@ class ReadingService:
                 max_extra_words=request.max_extra_words,
                 model=request.model,
                 topic=request.topic,
+                budget_audience=audience,
                 prior_attempts=prior,
             )
             segmented = self._segmenter.segment(draft.text)
@@ -136,6 +145,19 @@ class ReadingService:
             self._rng,
         )
         return replace(request, topic=resolved.text, topic_generated=resolved.generated)
+
+    async def _budget_audience(self, known_words: frozenset[str]) -> BudgetAudience:
+        try:
+            stats = await self._hsk_source.level_stats()
+        except Exception:
+            _log.exception("reading.budget_audience.hsk_unavailable")
+            return BudgetAudience.INTERMEDIATE
+        known_by_level: dict[int, int] = {}
+        for profile in await self._profiles.list_all():
+            if profile.hsk_level is not None:
+                known_by_level[profile.hsk_level] = known_by_level.get(profile.hsk_level, 0) + 1
+        proficiency = estimate_proficiency(known_by_level, stats.total_by_level)
+        return budget_audience(known_words, stats, proficiency.estimated_level)
 
     async def _build_working_set(self, known_words: frozenset[str]) -> WorkingSet:
         profiles = await self._profiles.list_all()

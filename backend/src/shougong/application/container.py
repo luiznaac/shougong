@@ -127,7 +127,7 @@ class Container:
             settings.gateways.ai.api_key,
         )
         self._reading_history_repository = ReadingHistoryRepository(self.transaction_template)
-        self._hsk_vocabulary_source = HskVocabularySource(self.http_client)
+        self._hsk_vocabulary_source = HskVocabularySource(self.http_client, settings.hsk_dataset_url)
         self._vocabulary_profile_repository = VocabularyProfileRepository(self.transaction_template)
         self._reading_word_usage_repository = ReadingWordUsageRepository(self.transaction_template)
         self._reading_topic_repository = ReadingTopicRepository(self.transaction_template)
@@ -140,6 +140,7 @@ class Container:
             self._vocabulary_profile_repository,
             self._reading_word_usage_repository,
             self._reading_topic_repository,
+            self._hsk_vocabulary_source,
             self.clock,
         )
         self._vocabulary_profile_service = VocabularyProfileService(
