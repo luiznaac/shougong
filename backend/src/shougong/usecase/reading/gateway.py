@@ -15,6 +15,7 @@ from shougong.usecase.reading.model import (
     ReadingTopic,
     SavedReadingText,
 )
+from shougong.usecase.reading.proficiency import BudgetAudience, HskLevelStats
 from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
 from shougong.usecase.reading.working_set import WordUsage, WorkingSet
 
@@ -58,6 +59,7 @@ class IReadingTextGateway(Protocol):
         max_extra_words: int,
         model: str,
         topic: str | None,
+        budget_audience: BudgetAudience,
         prior_attempts: Sequence[RejectedDraft] = (),
     ) -> ReadingDraft: ...
 
@@ -81,6 +83,10 @@ class IHskVocabularySource(Protocol):
 
     async def fetch(self) -> dict[str, HskEntry]:
         """Every listed word → its level and POS tags. Cached after the first call."""
+        ...
+
+    async def level_stats(self) -> HskLevelStats:
+        """Per-HSK-level word totals and the function words at each level."""
         ...
 
 

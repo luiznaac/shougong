@@ -158,12 +158,18 @@ export interface VocabularyProfile {
   gloss: string | null;
 }
 
+export interface Proficiency {
+  coverage_by_level: Record<string, number>; // known / HSK-dataset total per level, 0..1
+  estimated_level: number; // highest HSK level mastered contiguously (0 = pure beginner)
+}
+
 export interface VocabularySummary {
   total: number;
   categorised: number;
   by_category: Record<string, number>;
   by_hsk_level: Record<string, number>; // keyed by str(level) or "none"
   qualifier_shortage: boolean;
+  proficiency: Proficiency;
 }
 
 export interface VocabularyOverview {

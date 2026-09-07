@@ -13,6 +13,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
+from shougong.usecase.reading.proficiency import Proficiency
+
 
 class VocabularyCategory(StrEnum):
     VERB = "verb"
@@ -119,3 +121,4 @@ class VocabularySummary:
     by_category: dict[str, int]
     by_hsk_level: dict[str, int]  # keyed by str(level) or "none"
     qualifier_shortage: bool
+    proficiency: Proficiency

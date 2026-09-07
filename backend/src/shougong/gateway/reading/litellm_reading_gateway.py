@@ -23,9 +23,25 @@ import httpx
 
 from shougong.usecase.reading.gateway import IReadingTextGateway, ReadingDraft, RejectedDraft
 from shougong.usecase.reading.model import ReadingFormat, ReadingGenerationError
+from shougong.usecase.reading.proficiency import BudgetAudience
 from shougong.usecase.reading.working_set import WorkingSet
 
 _TOOL_NAME = "return_reading_text"
+
+# Fills {BUDGET_POLICY} in the system prompt — a learner who already has the
+# function words of their level should spend the extra-word budget on content
+# (spec §3.5); one who doesn't should spend it on the missing particles.
+_BUDGET_POLICY: dict[BudgetAudience, str] = {
+    BudgetAudience.INTERMEDIATE: (
+        "Spend the extra budget on ONE concrete, interesting content word that makes the "
+        "text worth reading — not on connectives or filler. If you are at the limit, "
+        "rewrite with known_words; never exceed the ceiling."
+    ),
+    BudgetAudience.BEGINNER: (
+        "Spend the extra budget on the grammatical particles the text cannot work without. "
+        "If you are at the limit, rewrite with known_words; never exceed the ceiling."
+    ),
+}
 
 # Generous ceiling so a runaway response can't rack up cost — the correction
 # loop can call the model several times per request. Sized well above any
@@ -69,6 +85,7 @@ def _build_messages(
     text_format: ReadingFormat,
     max_extra_words: int,
     topic: str | None,
+    budget_audience: BudgetAudience,
     prior_attempts: Sequence[RejectedDraft],
 ) -> list[dict[str, str]]:
     user_payload: dict[str, Any] = {
@@ -78,8 +95,9 @@ def _build_messages(
         "max_extra_words": max_extra_words,
         "topic": topic or "free choice, something everyday",
     }
+    system_prompt = _SYSTEM_PROMPT.replace("{BUDGET_POLICY}", _BUDGET_POLICY[budget_audience])
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {
             "role": "user",
             "content": "Generate a reading text with these parameters (as JSON):\n"
@@ -119,6 +137,7 @@ class LiteLlmReadingGateway(IReadingTextGateway):
         max_extra_words: int,
         model: str,
         topic: str | None,
+        budget_audience: BudgetAudience,
         prior_attempts: Sequence[RejectedDraft] = (),
     ) -> ReadingDraft:
         payload: dict[str, Any] = {
@@ -128,6 +147,7 @@ class LiteLlmReadingGateway(IReadingTextGateway):
                 text_format=text_format,
                 max_extra_words=max_extra_words,
                 topic=topic,
+                budget_audience=budget_audience,
                 prior_attempts=prior_attempts,
             ),
             "tools": [_TOOL_SCHEMA],

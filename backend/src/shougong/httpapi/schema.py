@@ -351,12 +351,18 @@ class VocabularyProfileResponse(BaseModel):
         )
 
 
+class ProficiencyResponse(BaseModel):
+    coverage_by_level: dict[str, float]  # known / dataset total per HSK level, 0..1
+    estimated_level: int  # highest HSK level mastered contiguously (0 = pure beginner)
+
+
 class VocabularySummaryResponse(BaseModel):
     total: int
     categorised: int
     by_category: dict[str, int]
     by_hsk_level: dict[str, int]
     qualifier_shortage: bool
+    proficiency: ProficiencyResponse
 
     @classmethod
     def from_domain(cls, summary: VocabularySummary) -> VocabularySummaryResponse:
@@ -366,6 +372,10 @@ class VocabularySummaryResponse(BaseModel):
             by_category=summary.by_category,
             by_hsk_level=summary.by_hsk_level,
             qualifier_shortage=summary.qualifier_shortage,
+            proficiency=ProficiencyResponse(
+                coverage_by_level={str(level): cov for level, cov in summary.proficiency.coverage_by_level.items()},
+                estimated_level=summary.proficiency.estimated_level,
+            ),
         )
 
 

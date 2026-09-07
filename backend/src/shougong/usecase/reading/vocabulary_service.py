@@ -9,12 +9,14 @@ Nothing here is on the text-generation path.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import replace
 
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.reading.gateway import IHskVocabularySource, IVocabularyProfileRepository
+from shougong.usecase.reading.proficiency import estimate_proficiency
 from shougong.usecase.reading.vocabulary import (
     QUALIFIER_FLOOR,
     HskEntry,
@@ -53,7 +55,7 @@ class VocabularyProfileService:
             # Upstream unreachable — keep whatever profiles we already have
             # rather than failing the request.
             _log.exception("vocabulary.sync.hsk_unavailable")
-            return _summarise(list(existing.values()))
+            return _summarise(list(existing.values()), await self._level_totals())
 
         resolved: list[VocabularyProfile] = []
         for entry in known:
@@ -81,7 +83,14 @@ class VocabularyProfileService:
         ]
 
     async def summary(self) -> VocabularySummary:
-        return _summarise(await self._profiles.list_all())
+        return _summarise(await self._profiles.list_all(), await self._level_totals())
+
+    async def _level_totals(self) -> dict[int, int]:
+        try:
+            return (await self._hsk.level_stats()).total_by_level
+        except Exception:
+            _log.exception("vocabulary.summary.hsk_unavailable")
+            return {}
 
     async def override(
         self, simplified: str, pos_category: VocabularyCategory, hsk_level: int | None
@@ -116,13 +125,15 @@ def _profile_for(word: str, hsk_entry: HskEntry | None) -> VocabularyProfile:
     )
 
 
-def _summarise(profiles: list[VocabularyProfile]) -> VocabularySummary:
+def _summarise(profiles: list[VocabularyProfile], total_by_level: Mapping[int, int]) -> VocabularySummary:
     by_category = Counter(p.pos_category.value for p in profiles)
     by_level = Counter(str(p.hsk_level) if p.hsk_level is not None else "none" for p in profiles)
+    known_by_level = Counter(p.hsk_level for p in profiles if p.hsk_level is not None)
     return VocabularySummary(
         total=len(profiles),
         categorised=sum(1 for p in profiles if p.source is not ProfileSource.UNKNOWN),
         by_category=dict(by_category),
         by_hsk_level=dict(by_level),
         qualifier_shortage=by_category.get(VocabularyCategory.QUALIFIER.value, 0) < QUALIFIER_FLOOR,
+        proficiency=estimate_proficiency(known_by_level, total_by_level),
     )

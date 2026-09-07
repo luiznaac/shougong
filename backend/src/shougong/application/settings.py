@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     # studied word from the HSK dataset. Off in tests that don't want the fetch.
     vocabulary_profile_autoload: bool = True
 
+    # The HSK 3.0 word list (drkameleon/complete-hsk-vocabulary). Overridden in
+    # tests to point somewhere unreachable so nothing downloads.
+    hsk_dataset_url: str = "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/main/complete.min.json"
+
     # IANA timezone whose midnight is the SRS "day boundary": a day's cards all
     # become due at once (local midnight) rather than through the day.
     study_timezone: str = "UTC"

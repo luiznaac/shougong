@@ -33,6 +33,7 @@ from shougong.usecase.reading.model import (
     ReadingTopic,
     SavedReadingText,
 )
+from shougong.usecase.reading.proficiency import BudgetAudience, HskLevelStats
 from shougong.usecase.reading.vocabulary import HskEntry, VocabularyProfile
 from shougong.usecase.reading.working_set import WordUsage, WorkingSet
 from shougong.usecase.srs.engine import ISrsEngine
@@ -286,6 +287,7 @@ class FakeReadingTextGateway(IReadingTextGateway):
         max_extra_words: int,
         model: str,
         topic: str | None,
+        budget_audience: BudgetAudience,
         prior_attempts: Sequence[RejectedDraft] = (),
     ) -> ReadingDraft:
         self.calls.append(
@@ -295,6 +297,7 @@ class FakeReadingTextGateway(IReadingTextGateway):
                 "max_extra_words": max_extra_words,
                 "model": model,
                 "topic": topic,
+                "budget_audience": budget_audience,
                 "prior_attempts": tuple(prior_attempts),
             }
         )
@@ -333,13 +336,17 @@ class FakeReadingHistoryRepository(IReadingHistoryRepository):
 
 
 class FakeHskVocabularySource(IHskVocabularySource):
-    def __init__(self, entries: dict[str, HskEntry] | None = None) -> None:
+    def __init__(self, entries: dict[str, HskEntry] | None = None, *, stats: HskLevelStats | None = None) -> None:
         self.entries: dict[str, HskEntry] = dict(entries or {})
         self.fetch_calls = 0
+        self.stats = stats or HskLevelStats(total_by_level={}, functional_by_level={})
 
     async def fetch(self) -> dict[str, HskEntry]:
         self.fetch_calls += 1
         return dict(self.entries)
+
+    async def level_stats(self) -> HskLevelStats:
+        return self.stats
 
 
 class FakeVocabularyProfileRepository(IVocabularyProfileRepository):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from shougong.usecase.commons.time import FixedClock
+from shougong.usecase.reading.proficiency import HskLevelStats
 from shougong.usecase.reading.vocabulary import (
     HskEntry,
     ProfileSource,
@@ -27,6 +28,7 @@ def _service(
     hsk: dict[str, HskEntry] | None = None,
     profiles: list[VocabularyProfile] | None = None,
     dictionary: FakeDictionaryRepository | None = None,
+    stats: HskLevelStats | None = None,
 ) -> tuple[VocabularyProfileService, FakeVocabularyProfileRepository]:
     entries = [
         make_dictionary_entry(entry_id=i, simplified=w, pinyin="x", definitions=("g",)) for i, w in enumerate(known, 1)
@@ -36,7 +38,7 @@ def _service(
     service = VocabularyProfileService(
         study,
         dictionary or FakeDictionaryRepository(entries),
-        FakeHskVocabularySource(hsk or {}),
+        FakeHskVocabularySource(hsk or {}, stats=stats),
         profile_repo,
         FixedClock(_NOW),
     )
@@ -93,6 +95,19 @@ async def test_summary_counts_and_flags_qualifier_shortage() -> None:
     assert summary.categorised == 4
     assert summary.by_category["qualifier"] == 1
     assert summary.qualifier_shortage is True  # only 1 adjective, floor is 5
+
+
+async def test_summary_reports_hsk_proficiency() -> None:
+    service, _ = _service(
+        known=["好", "跑", "书"],
+        hsk={"好": HskEntry(1, ("a",)), "跑": HskEntry(1, ("v",)), "书": HskEntry(2, ("n",))},
+        stats=HskLevelStats(total_by_level={1: 2, 2: 10}, functional_by_level={}),
+    )
+
+    summary = await service.sync()
+
+    assert summary.proficiency.coverage_by_level == {1: 1.0, 2: 0.1}  # 2/2 and 1/10
+    assert summary.proficiency.estimated_level == 1
 
 
 async def test_override_stores_a_manual_profile_and_keeps_the_pos_tags() -> None:

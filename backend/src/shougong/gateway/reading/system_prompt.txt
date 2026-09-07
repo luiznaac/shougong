@@ -35,9 +35,7 @@ VOCABULARY RULES
 - max_extra_words is a HARD CEILING on distinct words not in known_words.
   Repeating the same extra word costs nothing extra. If 0, use only
   known_words.
-- Spend the extra budget on ONE concrete, interesting content word that
-  makes the text worth reading — not on connectives or filler. If you are
-  at the limit, rewrite with known_words; never exceed the ceiling.
+- {BUDGET_POLICY}
 - Every word in must_use must appear, used naturally, not crammed in.
 
 PROCESS
