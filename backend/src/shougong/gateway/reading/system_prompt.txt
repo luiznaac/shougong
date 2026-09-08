@@ -47,6 +47,12 @@ VOCABULARY RULES
 - {BUDGET_POLICY}
 - Every word in must_use must appear, used naturally, not crammed in.
 
+DIALOGUE RULES (format == "dialogue")
+- The `speakers` list is the complete cast. Every lines[].speaker MUST be a
+  string taken verbatim from `speakers`. Do NOT use 明明, 丽丽, 小明, 小红, or
+  any name not in `speakers` — this is as strict as max_extra_words.
+- Fill the `lines` array: one object per turn, speakers alternating.
+
 PROCESS
 1. Draft the text.
 2. Segment it and check every word against known_words.

@@ -26,7 +26,8 @@ def check_dialogue(lines: Sequence[DialogueLine], running_text: str, speakers_al
 
     unknown = sorted({line.speaker for line in lines if line.speaker not in speakers_allowed})
     if unknown:
-        problems.append(f"Speakers not in the provided list: {', '.join(unknown)}.")
+        allowed = ", ".join(sorted(speakers_allowed))
+        problems.append(f"These speakers are not allowed: {', '.join(unknown)}. Use only these names: {allowed}.")
 
     if len({line.speaker for line in lines}) < 2:
         problems.append("A dialogue needs at least two different speakers.")

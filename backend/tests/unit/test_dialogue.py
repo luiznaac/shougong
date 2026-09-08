@@ -21,11 +21,11 @@ def test_missing_lines_array_is_a_problem() -> None:
     assert check_dialogue([], "你好。", _ALLOWED) == ["The dialogue has no lines array — return every turn in lines."]
 
 
-def test_a_speaker_outside_the_list_is_flagged() -> None:
+def test_a_speaker_outside_the_list_is_flagged_with_the_allowed_names() -> None:
     lines = _lines(("哥哥", "你好。"), ("小明", "你好。"))
     problems = check_dialogue(lines, "你好。你好。", _ALLOWED)
 
-    assert any("小明" in p for p in problems)
+    assert any("小明" in p and "哥哥" in p and "妹妹" in p for p in problems)
 
 
 def test_a_single_speaker_is_flagged() -> None:
