@@ -47,10 +47,10 @@ docker run --rm -p 8080:8080 -p 8081:8081 \
   luiznaac/shougong:latest
 ```
 
-**Publishing:** every push to `master` that touches `backend/`, `frontend/`,
-`Dockerfile`, or `deploy/` builds and pushes `luiznaac/shougong:latest` and
-`:sha-<short>` to Docker Hub (`.github/workflows/docker-publish.yml`). Needs repo
-secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+**Publishing:** after CI passes on a push to `master`, the `publish` job in
+`.github/workflows/ci.yml` builds and pushes `luiznaac/shougong:latest` and
+`:sha-<short>` to Docker Hub. Needs repo secrets `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN`.
 
 ## Checks
 
@@ -58,7 +58,8 @@ secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 npm run check      # backend `poe check` + frontend typecheck + build
 ```
 
-CI (`.github/workflows/ci.yml`) runs the backend and frontend jobs independently.
+CI (`.github/workflows/ci.yml`) runs the backend and frontend jobs independently,
+then a `publish` job (master pushes only) that gates the Docker image on both.
 
 `package.json` at the repo root is only a script shim (no dependencies) — the real
 toolchains are `uv` in `backend/` and `npm` in `frontend/`.

@@ -29,5 +29,5 @@ One image (repo-root `Dockerfile`, multi-stage) ships backend + frontend togethe
 `supervisord` runs `uvicorn` (API, `API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template`
 — serves the built SPA on `WEB_PORT`/8081 and reverse-proxies `/api` → uvicorn). No DB in
 the image. `docker-compose.yml` at the root adds MySQL for full-stack / DB-only local runs.
-`.github/workflows/docker-publish.yml` pushes `luiznaac/shougong:latest` + `:sha-<short>`
-on master pushes that touch `backend/`, `frontend/`, `Dockerfile`, or `deploy/`.
+The `publish` job in `.github/workflows/ci.yml` (`needs: [backend, frontend]`, push-to-master
+only) pushes `luiznaac/shougong:latest` + `:sha-<short>` — only after a green CI run.
