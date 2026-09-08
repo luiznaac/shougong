@@ -33,6 +33,13 @@ class RejectedDraft:
 
     draft: str
     rejected_words: tuple[str, ...]  # words in the draft that are outside known_words
+    problems: tuple[str, ...] = ()  # other issues to fix (dialogue consistency, …)
+
+
+@dataclass(frozen=True, slots=True)
+class DialogueLine:
+    speaker: str
+    text: str  # the utterance only — no attribution, no quotation marks
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +47,7 @@ class ReadingDraft:
     text: str
     prompt_tokens: int
     completion_tokens: int
+    lines: tuple[DialogueLine, ...] = ()  # the model's turn breakdown, for dialogue
 
 
 class IReadingTextGateway(Protocol):
@@ -59,6 +67,8 @@ class IReadingTextGateway(Protocol):
         model: str,
         topic: str | None,
         budget_audience: BudgetAudience,
+        avoid_openings: Sequence[str] = (),
+        speakers: Sequence[str] = (),
         prior_attempts: Sequence[RejectedDraft] = (),
     ) -> ReadingDraft: ...
 

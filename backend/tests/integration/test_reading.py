@@ -92,6 +92,7 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
         "part_of_speech": "noun",
         "is_extra": False,
         "dictionary_entry_id": entry_id,
+        "speaker": None,
     }
     assert punct == {
         "text": "。",
@@ -101,7 +102,10 @@ async def test_list_history_returns_saved_texts_newest_first(container: Containe
         "part_of_speech": None,
         "is_extra": False,
         "dictionary_entry_id": None,
+        "speaker": None,
     }
+    assert first["max_attempts"] == 3  # server default on rows predating the field
+    assert first["speakers"] == []
 
 
 async def test_list_history_tolerates_a_part_of_speech_from_before_the_enum_changed(
@@ -210,6 +214,38 @@ async def test_list_history_defaults_working_set_and_must_use_on_old_rows(
 
     assert row["working_set"] == {}
     assert row["must_use"] == []
+
+
+async def test_list_history_round_trips_a_dialogue_with_speakers(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO dictionary_entry (simplified, pinyin, definitions) VALUES (:s, :p, :d)"),
+            {"s": "好", "p": "hao3", "d": json.dumps(["good"])},
+        )
+
+        def word(speaker: str) -> dict[str, object]:
+            return {"is_word": True, "text": "好", "part_of_speech": "adjective", "is_extra": False, "speaker": speaker}
+
+        await conn.execute(
+            text(
+                "INSERT INTO reading_text "
+                "(format, max_extra_words, max_attempts, topic, model, known_word_count, tokens, speakers, created_at) "
+                "VALUES ('dialogue', 3, 4, NULL, 'm', 3, :tokens, :speakers, '2026-03-01 00:00:00')"
+            ),
+            {
+                "tokens": json.dumps([word("哥"), {"is_word": False, "text": "\n", "speaker": "哥"}, word("妹")]),
+                "speakers": json.dumps([{"name": "哥", "pinyin": None}, {"name": "妹", "pinyin": None}]),
+            },
+        )
+
+    row = (await client.get("/reading-texts")).json()[0]
+
+    assert row["format"] == "dialogue"
+    assert row["max_attempts"] == 4
+    assert row["speakers"] == [{"name": "哥", "pinyin": None}, {"name": "妹", "pinyin": None}]
+    assert [t["speaker"] for t in row["tokens"]] == ["哥", "哥", "妹"]
 
 
 async def test_list_history_respects_limit_and_offset(container: Container, client: httpx.AsyncClient) -> None:

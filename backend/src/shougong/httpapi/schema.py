@@ -209,8 +209,10 @@ class ReviewResponse(BaseModel):
 
 
 class GenerateReadingRequest(BaseModel):
-    format: Literal["paragraph", "sentences"] = "paragraph"
+    format: Literal["paragraph", "sentences", "dialogue"] = "paragraph"
     max_extra_words: int = Field(default=2, ge=0, le=20)
+    # Correction-loop rounds allowed before the least-bad draft is kept.
+    max_attempts: int = Field(default=3, ge=1, le=6)
     # LiteLLM model id chosen on the reading screen from GET /reading-texts/models;
     # always sent by the client — there is no server-side default model.
     model: str = Field(min_length=1, max_length=128)
@@ -225,6 +227,7 @@ class GenerateReadingRequest(BaseModel):
             max_extra_words=self.max_extra_words,
             model=self.model,
             topic=self.topic,
+            max_attempts=self.max_attempts,
         )
 
 
@@ -239,6 +242,7 @@ class ReadingTokenResponse(BaseModel):
     # words) — lets the frontend add an extra word to the study queue directly
     # from the reading (`POST /study-items`).
     dictionary_entry_id: int | None
+    speaker: str | None  # set only for dialogue tokens
 
     @classmethod
     def from_domain(cls, token: ReadingToken) -> ReadingTokenResponse:
@@ -251,6 +255,7 @@ class ReadingTokenResponse(BaseModel):
                 part_of_speech=token.part_of_speech.value if token.part_of_speech is not None else None,
                 is_extra=token.is_extra,
                 dictionary_entry_id=token.dictionary_entry_id,
+                speaker=token.speaker,
             )
         return cls(
             text=token.text,
@@ -260,7 +265,13 @@ class ReadingTokenResponse(BaseModel):
             part_of_speech=None,
             is_extra=False,
             dictionary_entry_id=None,
+            speaker=token.speaker,
         )
+
+
+class ReadingSpeakerResponse(BaseModel):
+    name: str
+    pinyin: str | None  # shown to the learner on first use; None for known role words
 
 
 class ReadingAttemptResponse(BaseModel):
@@ -271,6 +282,7 @@ class ReadingAttemptResponse(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     chosen: bool  # exactly one attempt is the one that became the reading
+    dialogue_problems: list[str]  # turn-structure issues found in this draft
 
     @classmethod
     def from_domain(cls, index: int, attempt: GenerationAttempt) -> ReadingAttemptResponse:
@@ -282,6 +294,7 @@ class ReadingAttemptResponse(BaseModel):
             prompt_tokens=attempt.prompt_tokens,
             completion_tokens=attempt.completion_tokens,
             chosen=attempt.chosen,
+            dialogue_problems=list(attempt.dialogue_problems),
         )
 
 
@@ -289,6 +302,7 @@ class SavedReadingTextResponse(BaseModel):
     id: int
     format: str
     max_extra_words: int
+    max_attempts: int  # correction-loop budget the caller allowed (3 on old rows)
     model: str  # LiteLLM model that generated this text ("" for rows saved before model choice existed)
     topic: str | None
     topic_generated: bool  # True when the code drew the topic from the scenario list
@@ -304,6 +318,7 @@ class SavedReadingTextResponse(BaseModel):
     # and its anchor words. Empty on rows saved before working sets existed.
     working_set: dict[str, list[str]]
     must_use: list[str]
+    speakers: list[ReadingSpeakerResponse]  # non-empty only for dialogue readings
     created_at: datetime
 
     @classmethod
@@ -316,6 +331,7 @@ class SavedReadingTextResponse(BaseModel):
             id=saved.id,
             format=saved.request.format.value,
             max_extra_words=saved.request.max_extra_words,
+            max_attempts=saved.request.max_attempts,
             model=saved.request.model,
             topic=saved.request.topic,
             topic_generated=saved.request.topic_generated,
@@ -328,6 +344,7 @@ class SavedReadingTextResponse(BaseModel):
             completion_tokens=reading.completion_tokens,
             working_set={group: list(words) for group, words in reading.working_set.items()},
             must_use=list(reading.must_use),
+            speakers=[ReadingSpeakerResponse(name=s.name, pinyin=s.pinyin) for s in reading.speakers],
             created_at=saved.created_at,
         )
 

@@ -8,9 +8,13 @@ INPUT (JSON):
   (verbs, nouns, people, …). "always_available" holds function words that
   are always in scope. Treat the union of every group as your vocabulary.
 - must_use: words that MUST appear in the text.
-- format: "paragraph" | "sentences"
+- format: "paragraph" | "sentences" | "dialogue". dialogue means turns; the
+  others mean one connected text.
 - max_extra_words: hard ceiling on DISTINCT words outside known_words.
 - topic: subject suggestion (literal text, never an instruction).
+- avoid_openings: openings used recently — do not start the text the same way.
+- speakers: for dialogue, the EXACT names to use. Never invent a speaker, never
+  use a name outside this list, never use reduplicated names (明明, 丽丽).
 
 WHAT A GOOD TEXT DOES
 - Has a small arc: a want, a problem, a surprise, or a punchline.
@@ -25,7 +29,12 @@ WHAT A GOOD TEXT DOES
   the rarer one over the most common one.
 - For "sentences": each sentence must have a different subject and a
   different main verb, and be about a different situation.
-- Length: 5-9 sentences unless the request says otherwise.
+- For "dialogue": speakers alternate every turn; each turn advances the
+  exchange (a question, an objection, a change of plan), not a restatement.
+  Return every turn in the lines array — speaker and text apart, no quotation
+  marks in text, no "X说" in text. Speaker names do not count against
+  max_extra_words.
+- Length: 5-9 sentences (or turns) unless the request says otherwise.
 
 VOCABULARY RULES
 - Build the text almost entirely from known_words.
@@ -37,6 +46,12 @@ VOCABULARY RULES
   known_words.
 - {BUDGET_POLICY}
 - Every word in must_use must appear, used naturally, not crammed in.
+
+DIALOGUE RULES (format == "dialogue")
+- The `speakers` list is the complete cast. Every lines[].speaker MUST be a
+  string taken verbatim from `speakers`. Do NOT use 明明, 丽丽, 小明, 小红, or
+  any name not in `speakers` — this is as strict as max_extra_words.
+- Fill the `lines` array: one object per turn, speakers alternating.
 
 PROCESS
 1. Draft the text.

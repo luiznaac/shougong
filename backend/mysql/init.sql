@@ -93,11 +93,13 @@ CREATE TABLE IF NOT EXISTS study_item_history (
 -- `working_set` is the vocabulary offered to the model for this generation
 -- ({group: [words]}), `must_use` its anchor words (`{}`/`[]` on old rows).
 -- `topic_generated` is 1 when the code drew the topic from `reading_topic`
--- (the free-text topic was blank).
+-- (the free-text topic was blank). `max_attempts` is the correction-loop budget
+-- the caller allowed. `speakers` ([{name, pinyin}]) is filled only for dialogue.
 CREATE TABLE IF NOT EXISTS reading_text (
     id                       BIGINT       NOT NULL AUTO_INCREMENT,
     format                   VARCHAR(16)  NOT NULL,
     max_extra_words          INT          NOT NULL,
+    max_attempts             INT          NOT NULL DEFAULT 3,
     topic                    VARCHAR(255) NULL,
     topic_generated          TINYINT(1)   NOT NULL DEFAULT 0,
     model                    VARCHAR(128) NOT NULL DEFAULT '',
@@ -106,6 +108,7 @@ CREATE TABLE IF NOT EXISTS reading_text (
     attempts                 JSON         NOT NULL DEFAULT (JSON_ARRAY()),
     working_set              JSON         NOT NULL DEFAULT (JSON_OBJECT()),
     must_use                 JSON         NOT NULL DEFAULT (JSON_ARRAY()),
+    speakers                 JSON         NOT NULL DEFAULT (JSON_ARRAY()),
     created_at               DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),
     KEY ix_reading_text_created_at (created_at)

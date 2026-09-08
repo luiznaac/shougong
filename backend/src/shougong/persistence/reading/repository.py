@@ -30,10 +30,15 @@ from shougong.usecase.reading.model import (
     ReadingFormat,
     ReadingPunctuation,
     ReadingRequest,
+    ReadingSpeaker,
     ReadingToken,
     ReadingWord,
     SavedReadingText,
 )
+
+
+def _optional_str(value: Any) -> str | None:
+    return None if value is None else str(value)
 
 
 def _naive_utc(value: datetime) -> datetime:
@@ -46,13 +51,17 @@ def _as_utc(value: datetime) -> datetime:
 
 def _token_to_json(token: ReadingToken) -> dict[str, Any]:
     if isinstance(token, ReadingWord):
-        return {
+        row: dict[str, Any] = {
             "is_word": True,
             "text": token.text,
             "part_of_speech": token.part_of_speech.value if token.part_of_speech is not None else None,
             "is_extra": token.is_extra,
         }
-    return {"is_word": False, "text": token.text}
+    else:
+        row = {"is_word": False, "text": token.text}
+    if token.speaker is not None:
+        row["speaker"] = token.speaker
+    return row
 
 
 def _parse_part_of_speech(value: str | None) -> PartOfSpeech | None:
@@ -67,8 +76,9 @@ def _parse_part_of_speech(value: str | None) -> PartOfSpeech | None:
 
 
 def _token_from_json(row: dict[str, Any]) -> ReadingToken:
+    speaker = row.get("speaker")
     if not row["is_word"]:
-        return ReadingPunctuation(text=row["text"])
+        return ReadingPunctuation(text=row["text"], speaker=speaker)
     return ReadingWord(
         text=row["text"],
         # Not stored — ReadingService re-resolves these from the dictionary
@@ -78,6 +88,7 @@ def _token_from_json(row: dict[str, Any]) -> ReadingToken:
         part_of_speech=_parse_part_of_speech(row["part_of_speech"]),
         is_extra=row["is_extra"],
         dictionary_entry_id=None,
+        speaker=speaker,
     )
 
 
@@ -90,6 +101,7 @@ def _attempt_to_json(index: int, attempt: GenerationAttempt) -> dict[str, Any]:
         "prompt_tokens": attempt.prompt_tokens,
         "completion_tokens": attempt.completion_tokens,
         "chosen": attempt.chosen,
+        "dialogue_problems": list(attempt.dialogue_problems),
     }
 
 
@@ -101,6 +113,7 @@ def _attempt_from_json(row: dict[str, Any]) -> GenerationAttempt:
         prompt_tokens=row["prompt_tokens"],
         completion_tokens=row["completion_tokens"],
         chosen=row["chosen"],
+        dialogue_problems=tuple(row.get("dialogue_problems") or []),
     )
 
 
@@ -111,6 +124,7 @@ def to_domain(row: ReadingTextEntity) -> SavedReadingText:
         model=row.model,
         topic=row.topic,
         topic_generated=row.topic_generated,
+        max_attempts=row.max_attempts,
     )
     reading = GeneratedReading(
         format=ReadingFormat(row.format),
@@ -119,6 +133,9 @@ def to_domain(row: ReadingTextEntity) -> SavedReadingText:
         attempts=tuple(_attempt_from_json(a) for a in (row.attempts or [])),
         working_set={group: tuple(words) for group, words in (row.working_set or {}).items()},
         must_use=tuple(row.must_use or []),
+        speakers=tuple(
+            ReadingSpeaker(name=str(s["name"]), pinyin=_optional_str(s.get("pinyin"))) for s in (row.speakers or [])
+        ),
     )
     return SavedReadingText(id=row.id, request=request, reading=reading, created_at=_as_utc(row.created_at))
 
@@ -133,6 +150,7 @@ class ReadingHistoryRepository(IReadingHistoryRepository):
             row = ReadingTextEntity(
                 format=request.format.value,
                 max_extra_words=request.max_extra_words,
+                max_attempts=request.max_attempts,
                 topic=request.topic,
                 topic_generated=request.topic_generated,
                 model=request.model,
@@ -141,6 +159,7 @@ class ReadingHistoryRepository(IReadingHistoryRepository):
                 attempts=[_attempt_to_json(i, a) for i, a in enumerate(reading.attempts)],
                 working_set={group: list(words) for group, words in reading.working_set.items()},
                 must_use=list(reading.must_use),
+                speakers=[{"name": s.name, "pinyin": s.pinyin} for s in reading.speakers],
                 created_at=_naive_utc(created_at),
             )
             session.add(row)

@@ -2,8 +2,9 @@
 self-hosted LiteLLM proxy (OpenAI-compatible `/chat/completions`).
 
 Structured output is forced via tool calling instead of a "respond in JSON"
-instruction: the model is required to call `return_reading_text`, which only
-has a `text` property — no overall translation is ever requested or returned.
+instruction: the model is required to call `return_reading_text` (a `text`
+property, plus a `lines` turn breakdown for dialogue) — no overall translation
+is ever requested or returned.
 
 The system prompt lives in `system_prompt.txt`, next to this file, rather than
 as a Python string literal — content a non-engineer might want to tune (or
@@ -21,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from shougong.usecase.reading.gateway import IReadingTextGateway, ReadingDraft, RejectedDraft
+from shougong.usecase.reading.gateway import DialogueLine, IReadingTextGateway, ReadingDraft, RejectedDraft
 from shougong.usecase.reading.model import ReadingFormat, ReadingGenerationError
 from shougong.usecase.reading.proficiency import BudgetAudience
 from shougong.usecase.reading.working_set import WorkingSet
@@ -58,7 +59,29 @@ _TOOL_SCHEMA = {
             "properties": {
                 "text": {
                     "type": "string",
-                    "description": "The complete Mandarin text (hanzi), with no pinyin or translation mixed in.",
+                    "description": (
+                        "The complete Mandarin text (hanzi), with no pinyin or translation mixed in. "
+                        "For dialogue, the running text of every turn joined together."
+                    ),
+                },
+                "lines": {
+                    "type": "array",
+                    "description": ("Required for dialogue: one entry per turn, in order. Omit for other formats."),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "speaker": {
+                                "type": "string",
+                                "description": "Exactly one of the provided speakers — never invented.",
+                            },
+                            "text": {
+                                "type": "string",
+                                "description": "The utterance only — no quotation marks, no 'X说'.",
+                            },
+                        },
+                        "required": ["speaker", "text"],
+                        "additionalProperties": False,
+                    },
                 },
             },
             "required": ["text"],
@@ -70,13 +93,18 @@ _TOOL_SCHEMA = {
 _SYSTEM_PROMPT = Path(__file__).with_name("system_prompt.txt").read_text(encoding="utf-8").strip()
 
 
-def _revision_instruction(rejected_words: Sequence[str], max_extra_words: int) -> str:
-    return (
-        f"These words are not in known_words: {', '.join(rejected_words)}. "
-        "Rewrite the whole text so none of them appear. Keep the meaning and the "
-        "narrative arc — rewrite sentences, don't drop them. "
-        f"You may keep at most {max_extra_words} of them."
-    )
+def _revision_instruction(attempt: RejectedDraft, max_extra_words: int) -> str:
+    parts: list[str] = []
+    if attempt.rejected_words:
+        parts.append(
+            f"These words are not in known_words: {', '.join(attempt.rejected_words)}. "
+            "Rewrite the whole text so none of them appear. Keep the meaning and the "
+            "narrative arc — rewrite sentences, don't drop them. "
+            f"You may keep at most {max_extra_words} of them."
+        )
+    if attempt.problems:
+        parts.append("Also fix: " + "; ".join(attempt.problems))
+    return " ".join(parts) or "Revise the text."
 
 
 def _build_messages(
@@ -86,6 +114,8 @@ def _build_messages(
     max_extra_words: int,
     topic: str | None,
     budget_audience: BudgetAudience,
+    avoid_openings: Sequence[str],
+    speakers: Sequence[str],
     prior_attempts: Sequence[RejectedDraft],
 ) -> list[dict[str, str]]:
     user_payload: dict[str, Any] = {
@@ -94,7 +124,10 @@ def _build_messages(
         "format": text_format.value,
         "max_extra_words": max_extra_words,
         "topic": topic or "free choice, something everyday",
+        "avoid_openings": list(avoid_openings),
     }
+    if text_format is ReadingFormat.DIALOGUE:
+        user_payload["speakers"] = list(speakers)
     system_prompt = _SYSTEM_PROMPT.replace("{BUDGET_POLICY}", _BUDGET_POLICY[budget_audience])
     messages: list[dict[str, str]] = [
         {"role": "system", "content": system_prompt},
@@ -106,7 +139,7 @@ def _build_messages(
     ]
     for attempt in prior_attempts:
         messages.append({"role": "assistant", "content": attempt.draft})
-        messages.append({"role": "user", "content": _revision_instruction(attempt.rejected_words, max_extra_words)})
+        messages.append({"role": "user", "content": _revision_instruction(attempt, max_extra_words)})
     return messages
 
 
@@ -138,6 +171,8 @@ class LiteLlmReadingGateway(IReadingTextGateway):
         model: str,
         topic: str | None,
         budget_audience: BudgetAudience,
+        avoid_openings: Sequence[str] = (),
+        speakers: Sequence[str] = (),
         prior_attempts: Sequence[RejectedDraft] = (),
     ) -> ReadingDraft:
         payload: dict[str, Any] = {
@@ -148,6 +183,8 @@ class LiteLlmReadingGateway(IReadingTextGateway):
                 max_extra_words=max_extra_words,
                 topic=topic,
                 budget_audience=budget_audience,
+                avoid_openings=avoid_openings,
+                speakers=speakers,
                 prior_attempts=prior_attempts,
             ),
             "tools": [_TOOL_SCHEMA],
@@ -163,10 +200,28 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             body = response.json()
             arguments = json.loads(body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])
             usage = body.get("usage") or {}
+            lines = _parse_lines(arguments.get("lines"))
+            # `text` is required by the schema, but models frequently omit it for
+            # dialogue and just fill `lines` — rebuild the running text from the
+            # turns rather than failing the whole generation.
+            text = str(arguments.get("text") or "").strip() or "".join(line.text for line in lines)
+            if not text:
+                raise ReadingGenerationError("ai gateway returned an empty reading text")
             return ReadingDraft(
-                text=str(arguments["text"]),
+                text=text,
                 prompt_tokens=int(usage.get("prompt_tokens", 0)),
                 completion_tokens=int(usage.get("completion_tokens", 0)),
+                lines=lines,
             )
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
             raise ReadingGenerationError(f"ai gateway request failed: {exc}") from exc
+
+
+def _parse_lines(raw: Any) -> tuple[DialogueLine, ...]:
+    if not isinstance(raw, list):
+        return ()
+    lines: list[DialogueLine] = []
+    for entry in raw:
+        if isinstance(entry, dict) and entry.get("speaker") and entry.get("text"):
+            lines.append(DialogueLine(speaker=str(entry["speaker"]), text=str(entry["text"])))
+    return tuple(lines)
