@@ -81,7 +81,7 @@ jobs:
           images: luiznaac/shougong
           tags: |
             type=raw,value=latest
-            type=sha,prefix=sha-,format=short
+            type=raw,value=v${{ github.run_number }}
 
       - uses: docker/build-push-action@v6
         with:
