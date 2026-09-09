@@ -16,6 +16,7 @@ dependencies = [
     "fsrs>=6.3,<7",
     "tzdata>=2026.3",
     "jieba>=0.42",
+    "alembic>=1.13",
 ]
 
 [dependency-groups]
@@ -56,6 +57,12 @@ test = "pytest"
 # integration suite. CI runs `test` (full) because the runner has a daemon.
 check = ["lint", "format-check", "typecheck", "contracts", "test-unit"]
 run = "uvicorn shougong.application.boot:app --reload --port 8080"
+
+# ---------------------------------------------------------------------------
+# Database migrations (Alembic) — see backend/CLAUDE.md §3.5.
+# ---------------------------------------------------------------------------
+migrate = "python scripts/migrate.py"
+"migrate:generate" = "alembic revision --autogenerate"
 
 # ---------------------------------------------------------------------------
 # Lint / format — Ruff replaces Detekt + detekt-formatting.

@@ -6,6 +6,9 @@
 #
 # The published image (docker.io/luiznaac/shougong) is the `app` service only —
 # in production the database is a separate, externally provisioned container.
+#
+# The schema is NOT seeded here: backend/alembic/versions/*.py is applied by
+# `python scripts/migrate.py` from deploy/entrypoint.sh before the app starts.
 
 services:
   mysql:
@@ -17,7 +20,6 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./backend/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
       - shougong-mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]

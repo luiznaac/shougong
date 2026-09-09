@@ -1,7 +1,8 @@
 """Declarative base for ORM entities.
 
-No tables yet. Add an entity here and a matching `CREATE TABLE` in
-`mysql/init.sql` when the first table-backed feature lands.
+Add a new entity here, then write the migration for it (`uv run poe migrate:generate` — see
+backend/CLAUDE.md §3.5) and register its module in `alembic/env.py` so `Base.metadata` picks it
+up for autogenerate.
 """
 
 from __future__ import annotations
