@@ -61,6 +61,8 @@ Import it and set the `baseUrl` variable.
 | `test-unit`        | unit tests only (no Docker)                             |
 | `test-integration` | integration tests (needs a Docker daemon)              |
 | `check`            | everything CI runs                                      |
+| `migrate`          | apply pending Alembic migrations, baselining if needed  |
+| `migrate:generate` | autogenerate a migration from entity changes            |
 
 ## The dictionary
 
@@ -78,22 +80,10 @@ Right after that, a second one-off pass downloads the
 `simplified`. It is skipped once any row carries an `hsk_level`. Set `HSK_ENRICH_AUTOLOAD=false`
 to disable it; to re-run, `UPDATE dictionary_entry SET hsk_level = NULL` and restart.
 
-There is no migration runner. On a database created before these columns existed, apply once by
-hand:
-
-```sql
-ALTER TABLE dictionary_entry
-  ADD COLUMN hsk_level INT NULL,
-  ADD COLUMN pos_tags JSON NOT NULL DEFAULT (JSON_ARRAY()),
-  ADD KEY ix_dictionary_entry_hsk_level (hsk_level);
-```
-
-The `reading_text` table has grown the same way; on an older database apply:
-
-```sql
-ALTER TABLE reading_text
-  ADD COLUMN max_attempts INT NOT NULL DEFAULT 3,
-  ADD COLUMN speakers JSON NOT NULL DEFAULT (JSON_ARRAY());
-```
+The schema is versioned Alembic migrations under `alembic/versions/` — the `hsk_level`/`pos_tags`
+columns and the `reading_*` tables each arrived as their own migration (`0002_dictionary_hsk`,
+`0003_reading`) rather than a manual `ALTER TABLE`. `uv run poe migrate` applies pending
+migrations, baselining a database that predates them; `deploy/entrypoint.sh` runs the same command
+in the container, before the app starts. See [CLAUDE.md](CLAUDE.md) §3.5.
 
 See [CLAUDE.md](CLAUDE.md) for the architecture and the rules for evolving it.

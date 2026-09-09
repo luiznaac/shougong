@@ -1,18 +1,22 @@
 """ORM entity for the `reading_word_usage` table.
 
-Keep this in sync with `mysql/init.sql`. One row per word that has appeared in a
-generated reading: how many times, and when it last did — the working-set
-sampler down-weights recently used words.
+One row per word that has appeared in a generated reading: how many times, and when it last
+did — the working-set sampler down-weights recently used words. Add a migration
+(`uv run poe migrate:generate`) alongside any change here — see backend/CLAUDE.md §3.5.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, text
+from sqlalchemy import Integer, String, text
+from sqlalchemy.dialects.mysql import DATETIME
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shougong.persistence.configuration.base import Base
+
+# microsecond precision, matching the DATETIME(6) columns Alembic's migrations declare.
+_Timestamp = DATETIME(fsp=6)
 
 
 class ReadingWordUsageEntity(Base):
@@ -20,4 +24,4 @@ class ReadingWordUsageEntity(Base):
 
     simplified: Mapped[str] = mapped_column(String(64), primary_key=True)
     uses: Mapped[int] = mapped_column(Integer, server_default=text("0"))
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_used_at: Mapped[datetime | None] = mapped_column(_Timestamp)

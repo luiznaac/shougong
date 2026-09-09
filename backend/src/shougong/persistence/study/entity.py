@@ -1,17 +1,17 @@
-"""ORM entities for the `study_item` and `review_log` tables. Keep in sync with
-`mysql/init.sql`.
+"""ORM entities for the `study_item` and `review_log` tables.
 
 The FSRS card is flattened into `study_item.card_*` columns; `card_due` is indexed
 for the "what's due now" query. `review_log` is the append-only history of grades.
 The `study_item_history` trail lives in `persistence/study_item_history/`.
-Datetimes are stored as naive UTC (MySQL has no tz).
+Datetimes are stored as naive UTC (MySQL has no tz). Add a migration alongside any change here —
+see backend/CLAUDE.md §3.5.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Double, ForeignKey, SmallInteger
+from sqlalchemy import BigInteger, Double, ForeignKey, Index, SmallInteger
 from sqlalchemy.dialects.mysql import DATETIME
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,10 +42,8 @@ class ReviewLogEntity(Base):
     __tablename__ = "review_log"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    study_item_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("study_item.id"),
-        index=True,
-    )
+    study_item_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("study_item.id"))
     rating: Mapped[int] = mapped_column(SmallInteger)
     review_datetime: Mapped[datetime] = mapped_column(_Timestamp)
+
+    __table_args__ = (Index("ix_review_log_study_item", "study_item_id"),)

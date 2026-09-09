@@ -1,20 +1,23 @@
 """ORM entity for the `reading_text` table.
 
-Keep this in sync with `mysql/init.sql`. `tokens` is a JSON array of the fully
-resolved per-token result (word or punctuation) — stored as shown, not
-recomputed against the live dictionary/vocabulary on every read, so a saved
-reading stays exactly as it was generated even if the learner's vocabulary
-changes later.
+`tokens` is a JSON array of the fully resolved per-token result (word or punctuation) — stored as
+shown, not recomputed against the live dictionary/vocabulary on every read, so a saved reading
+stays exactly as it was generated even if the learner's vocabulary changes later. Add a migration
+(`uv run poe migrate:generate`) alongside any change here — see backend/CLAUDE.md §3.5.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Integer, String, text
+from sqlalchemy import JSON, BigInteger, Boolean, Integer, String, text
+from sqlalchemy.dialects.mysql import DATETIME
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shougong.persistence.configuration.base import Base
+
+# microsecond precision, matching the DATETIME(6) columns Alembic's migrations declare.
+_Timestamp = DATETIME(fsp=6)
 
 
 class ReadingTextEntity(Base):
@@ -23,19 +26,19 @@ class ReadingTextEntity(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     format: Mapped[str] = mapped_column(String(16))
     max_extra_words: Mapped[int] = mapped_column(Integer)
-    # Correction-loop rounds the caller allowed (matches `DEFAULT 3` in init.sql).
+    # Correction-loop rounds the caller allowed (matches the migration's DEFAULT 3).
     max_attempts: Mapped[int] = mapped_column(Integer, server_default=text("3"))
     topic: Mapped[str | None] = mapped_column(String(255))
     # True when the service drew the topic from `reading_topic` (blank free text).
     topic_generated: Mapped[bool] = mapped_column(Boolean, server_default=text("0"))
     # Empty string on rows written before per-request model choice existed
-    # (matches the `DEFAULT ''` in mysql/init.sql).
+    # (matches the migration's DEFAULT '').
     model: Mapped[str] = mapped_column(String(128), server_default=text("''"))
     known_word_count: Mapped[int] = mapped_column(Integer)
     tokens: Mapped[list[dict[str, object]]] = mapped_column(JSON)
     # The full generation trail: every draft the correction loop produced (kept
     # even when discarded), one flagged `chosen`. Empty `[]` on rows written
-    # before the loop existed (matches `DEFAULT (JSON_ARRAY())` in init.sql).
+    # before the loop existed (matches the migration's DEFAULT).
     attempts: Mapped[list[dict[str, object]]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
     # The vocabulary offered to the model: {group label: [words]} plus the
     # must-use anchors. Empty on rows written before working sets existed.
@@ -43,4 +46,4 @@ class ReadingTextEntity(Base):
     must_use: Mapped[list[str]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
     # Dialogue speakers: [{name, pinyin}]. Empty for non-dialogue readings.
     speakers: Mapped[list[dict[str, object]]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    created_at: Mapped[datetime] = mapped_column(_Timestamp, index=True)

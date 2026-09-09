@@ -49,8 +49,8 @@ docker run --rm -p 8080:8080 -p 8081:8081 \
 
 **Publishing:** after CI passes on a push to `master`, the `publish` job in
 `.github/workflows/ci.yml` builds and pushes `luiznaac/shougong:latest` and
-`:sha-<short>` to Docker Hub. Needs repo secrets `DOCKERHUB_USERNAME` and
-`DOCKERHUB_TOKEN`.
+`:v<run-number>` (a sequential build number) to Docker Hub. Needs repo secrets
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
 ## Checks
 

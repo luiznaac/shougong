@@ -13,6 +13,8 @@
     "fe:typecheck": "npm --prefix frontend run typecheck",
     "check": "npm run be:check && npm run fe:typecheck && npm run fe:build",
     "db": "docker compose up -d mysql",
+    "db:migrate": "cd backend && uv run poe migrate",
+    "db:generate": "cd backend && uv run poe migrate:generate",
     "up": "docker compose up --build",
     "down": "docker compose down"
   }
