@@ -84,6 +84,6 @@ The schema is versioned Alembic migrations under `alembic/versions/` — the `hs
 columns and the `reading_*` tables each arrived as their own migration (`0002_dictionary_hsk`,
 `0003_reading`) rather than a manual `ALTER TABLE`. `uv run poe migrate` applies pending
 migrations, baselining a database that predates them; `deploy/entrypoint.sh` runs the same command
-in the container, before the app starts. See [CLAUDE.md](CLAUDE.md) §3.5.
+in the container, before the app starts. See [AGENTS.md](AGENTS.md).
 
-See [CLAUDE.md](CLAUDE.md) for the architecture and the rules for evolving it.
+See [AGENTS.md](AGENTS.md) for the architecture and the rules for evolving it.

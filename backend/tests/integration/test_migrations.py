@@ -1,5 +1,5 @@
 """The guard that keeps alembic/versions/ and the SQLAlchemy entities from drifting apart — the
-failure mode that made `mysql/init.sql` unmaintainable (see backend/CLAUDE.md §3.5). Migrates a
+failure mode that made `mysql/init.sql` unmaintainable (see backend/AGENTS.md). Migrates a
 throwaway MySQL to head, then asks Alembic's own autogenerate machinery what would still have to
 change for it to match `Base.metadata`. Anything non-empty means an entity changed without a
 matching migration, or vice versa.

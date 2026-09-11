@@ -4,11 +4,17 @@ Monorepo for the Chinese handwriting SRS.
 
 | Path         | What                                                                        |
 | ------------ | -------------------------------------------------------------------------- |
-| [`backend/`](backend/)   | FastAPI + hexagonal service (uv, SQLAlchemy/MySQL, FSRS). See [backend/README.md](backend/README.md) and [backend/CLAUDE.md](backend/CLAUDE.md). |
+| [`backend/`](backend/)   | FastAPI + hexagonal service (uv, SQLAlchemy/MySQL, FSRS). See [backend/README.md](backend/README.md) and [backend/AGENTS.md](backend/AGENTS.md). |
 | [`frontend/`](frontend/) | React + Vite SPA — the inverted-review handwriting trainer. See [frontend/README.md](frontend/README.md). |
 
 The frontend's `src/api/types.ts` mirrors the backend's `httpapi/schema.py`; keep
 them in sync in the same change — that's the reason these two live in one repo.
+
+## Documentation
+
+`docs/` holds the business overview, technical architecture, data model, API
+reference, reading-engine explainer, desktop UI/UX proposal, and a backlog of
+proposed endpoints. Start at [docs/README.md](docs/README.md).
 
 ## Dev
 

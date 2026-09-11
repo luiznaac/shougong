@@ -3,7 +3,7 @@
 `character` is the primary key (not an autoincrement id) since lookups are always by character.
 `has_data=False` rows are a negative cache — a character with no stroke data upstream (e.g.
 punctuation) — so a repeat lookup never re-hits the source. Add a migration
-(`uv run poe migrate:generate`) alongside any change here — see backend/CLAUDE.md §3.5.
+(`uv run poe migrate:generate`) alongside any change here — see backend/AGENTS.md.
 """
 
 from __future__ import annotations

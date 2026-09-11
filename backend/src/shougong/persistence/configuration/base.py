@@ -1,7 +1,7 @@
 """Declarative base for ORM entities.
 
 Add a new entity here, then write the migration for it (`uv run poe migrate:generate` — see
-backend/CLAUDE.md §3.5) and register its module in `alembic/env.py` so `Base.metadata` picks it
+backend/AGENTS.md) and register its module in `alembic/env.py` so `Base.metadata` picks it
 up for autogenerate.
 """
 

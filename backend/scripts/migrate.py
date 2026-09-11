@@ -11,7 +11,7 @@ Three cases:
      other migration.
 
 Run via `uv run poe migrate` locally, or from `deploy/entrypoint.sh` in the container — never from
-the app itself; see backend/CLAUDE.md §3.5 for why the app's own startup can't safely do this.
+the app itself; see backend/AGENTS.md for why the app's own startup can't safely do this.
 """
 
 from __future__ import annotations

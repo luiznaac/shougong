@@ -3,7 +3,7 @@
 `study_item_history` is an append-only trail of `study_item` state — the card columns
 copied from `study_item` plus this row's own `created_at` — written when the item is
 created and after every change. Datetimes are stored as naive UTC (MySQL has no tz). Add a
-migration alongside any change here — see backend/CLAUDE.md §3.5.
+migration alongside any change here — see backend/AGENTS.md.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ The FSRS card is flattened into `study_item.card_*` columns; `card_due` is index
 for the "what's due now" query. `review_log` is the append-only history of grades.
 The `study_item_history` trail lives in `persistence/study_item_history/`.
 Datetimes are stored as naive UTC (MySQL has no tz). Add a migration alongside any change here —
-see backend/CLAUDE.md §3.5.
+see backend/AGENTS.md.
 """
 
 from __future__ import annotations
