@@ -26,7 +26,8 @@ even for a small or "obviously safe" change.
 Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:build`,
 `npm run check`, `npm run db`, `npm run db:migrate`, `npm run db:generate`, `npm run up`). It has
 no dependencies and is not a real package. `.pre-commit-config.yaml` lives at the root and scopes
-hooks by path (`^backend/`, `^frontend/`).
+hooks by path (`^backend/`, `^frontend/`), and carries `no-commit-to-branch` — the "never commit
+directly to master" rule above is enforced there, not merely stated.
 
 ## Docker
 
