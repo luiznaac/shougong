@@ -3,7 +3,7 @@
 `definitions` is a JSON array of English glosses; `pos_tags` a JSON array of raw HSK POS tags.
 `hsk_level` and `pos_tags` are filled by the one-off HSK enrichment pass and are the same on
 every row that shares a `simplified`. Add a migration (`uv run poe migrate:generate`) alongside
-any change here — see backend/CLAUDE.md §3.5.
+any change here — see backend/AGENTS.md.
 """
 
 from __future__ import annotations

@@ -59,7 +59,7 @@ check = ["lint", "format-check", "typecheck", "contracts", "test-unit"]
 run = "uvicorn shougong.application.boot:app --reload --port 8080"
 
 # ---------------------------------------------------------------------------
-# Database migrations (Alembic) — see backend/CLAUDE.md §3.5.
+# Database migrations (Alembic) — see backend/AGENTS.md.
 # ---------------------------------------------------------------------------
 migrate = "python scripts/migrate.py"
 "migrate:generate" = "alembic revision --autogenerate"

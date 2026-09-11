@@ -3,7 +3,7 @@
 `tokens` is a JSON array of the fully resolved per-token result (word or punctuation) — stored as
 shown, not recomputed against the live dictionary/vocabulary on every read, so a saved reading
 stays exactly as it was generated even if the learner's vocabulary changes later. Add a migration
-(`uv run poe migrate:generate`) alongside any change here — see backend/CLAUDE.md §3.5.
+(`uv run poe migrate:generate`) alongside any change here — see backend/AGENTS.md.
 """
 
 from __future__ import annotations

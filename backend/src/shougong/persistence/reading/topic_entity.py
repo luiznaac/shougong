@@ -2,7 +2,7 @@
 
 Each row is one scenario the generator can draw from when the free-text topic is blank;
 `active=0` keeps a scenario in the list but out of the draw. The starter scenarios are seeded by
-migration `0003_reading`; add a migration alongside any change here — see backend/CLAUDE.md §3.5.
+migration `0003_reading`; add a migration alongside any change here — see backend/AGENTS.md.
 """
 
 from __future__ import annotations

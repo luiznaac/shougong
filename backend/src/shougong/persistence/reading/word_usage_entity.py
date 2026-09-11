@@ -2,7 +2,7 @@
 
 One row per word that has appeared in a generated reading: how many times, and when it last
 did — the working-set sampler down-weights recently used words. Add a migration
-(`uv run poe migrate:generate`) alongside any change here — see backend/CLAUDE.md §3.5.
+(`uv run poe migrate:generate`) alongside any change here — see backend/AGENTS.md.
 """
 
 from __future__ import annotations
