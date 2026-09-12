@@ -66,7 +66,4 @@ uv run poe migrate            # apply pending migrations locally
 - Anything touching SRS scheduling/FSRS → `../docs/02-architecture.md`'s "grade a review" sequence
   diagram, then `srs/fsrs_engine.py` directly.
 
-## Git
-
-**Do not commit directly to `master`.** Always create a feature branch and open a PR, even for a
-small or "obviously safe" change. This applies to all contributors.
+Git/PR conventions: see `salgadinhos/global/AGENTS.md`.
