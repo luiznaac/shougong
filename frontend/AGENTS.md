@@ -37,7 +37,4 @@ npm run build         # tsc -b && vite build
 - Changing what the UI shows for a backend enum → `i18n/`, and check `../docs/03-data-model.md`
   for the enum's full value set before assuming you've covered every case.
 
-## Git
-
-**Do not commit directly to `master`.** Always create a feature branch and open a PR, even for a
-small or "obviously safe" change. This applies to all contributors.
+Git/PR conventions: see `salgadinhos/global/AGENTS.md`.

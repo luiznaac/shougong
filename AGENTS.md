@@ -16,18 +16,13 @@ Two projects, one repo:
 `backend/src/shougong/httpapi/schema.py`. Any change to a response/request DTO on
 one side must update the other in the same commit.
 
-## Git workflow
-
-**AI agents: never commit directly to `master`.** Always create a feature branch and open a PR,
-even for a small or "obviously safe" change.
-
 ## Tooling
 
 Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:build`,
 `npm run check`, `npm run db`, `npm run db:migrate`, `npm run db:generate`, `npm run up`). It has
 no dependencies and is not a real package. `.pre-commit-config.yaml` lives at the root and scopes
-hooks by path (`^backend/`, `^frontend/`), and carries `no-commit-to-branch` — the "never commit
-directly to master" rule above is enforced there, not merely stated.
+hooks by path (`^backend/`, `^frontend/`), and carries `no-commit-to-branch` — the git/PR
+conventions are enforced there, not merely stated (see `salgadinhos/global/AGENTS.md`).
 
 ## Docker
 
