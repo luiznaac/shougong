@@ -13,6 +13,12 @@ Two projects, one repo:
 
 Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:build`, `npm run check`, `npm run db`, `npm run db:migrate`, `npm run db:generate`, `npm run up`). It has no dependencies and is not a real package. `.pre-commit-config.yaml` lives at the root and scopes hooks by path (`^backend/`, `^frontend/`), and carries `no-commit-to-branch` — the git/PR conventions are enforced there, not merely stated (see `salgadinhos/global/AGENTS.md`).
 
+## Config & secrets
+
+All backend config is env vars (`pydantic-settings`, nested keys with `__`); the reference is in [docs/02-architecture.md](docs/02-architecture.md) §Configuration, and the versioned [backend/.env.example](backend/.env.example) records the env vars and their dev fixtures. Copy it to `backend/.env` (gitignored) — pydantic-settings loads that file for `cd backend && uv run poe run`. `docker compose up` reads the gitignored repo-root `.env` instead, for the `GATEWAYS_AI_*` values it substitutes into `docker-compose.yml`.
+
+No real secret value is committed or defaulted in code: `MYSQL__PASSWORD` and `GATEWAYS__AI__API_KEY` default to empty, and there is no `dev-*` token yet because shougong registers no app-Bearer in code. The single secrets doc is `docs/salgadinhos/secrets.md` in the salgadinhos repo.
+
 ## Docker
 
 One image (repo-root `Dockerfile`, multi-stage) ships backend + frontend together: `supervisord` runs `uvicorn` (API, `API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the built SPA on `WEB_PORT`/8081 and reverse-proxies `/api` → uvicorn). No DB in the image. `docker-compose.yml` at the root adds MySQL for full-stack / DB-only local runs. The schema comes from `backend/alembic/versions/*.py`, applied by `python scripts/migrate.py` from `deploy/entrypoint.sh` before the app starts — see [backend/AGENTS.md](backend/AGENTS.md) §3.5. The `publish` job in `.github/workflows/ci.yml` (`needs: [backend, frontend]`, push-to-master only) pushes `luiznaac/shougong:latest` + `:v<run-number>` (a sequential build number, `github.run_number`) — only after a green CI run.
