@@ -2,17 +2,13 @@
 
 ## Stack
 
-- **Backend**: Python 3.12, FastAPI, SQLAlchemy 2 async, asyncmy, MySQL 8,
-  FSRS (`py-fsrs`), jieba, Alembic, httpx, structlog, pydantic-settings.
-- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS v4, TanStack Query,
-  react-router, hanzi-writer.
-- **Deployment**: one Docker image with supervisord running uvicorn + nginx;
-  external MySQL; external LiteLLM proxy for AI.
+- **Backend**: Python 3.12, FastAPI, SQLAlchemy 2 async, asyncmy, MySQL 8, FSRS (`py-fsrs`), jieba, Alembic, httpx, structlog, pydantic-settings.
+- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS v4, TanStack Query, react-router, hanzi-writer.
+- **Deployment**: one Docker image with supervisord running uvicorn + nginx; external MySQL; external LiteLLM proxy for AI.
 
 ## Hexagonal layering
 
-The backend follows a layered hexagonal architecture. Dependencies point inward
-and are enforced by import-linter in CI.
+The backend follows a layered hexagonal architecture. Dependencies point inward and are enforced by import-linter in CI.
 
 ```mermaid
 flowchart TB
@@ -42,15 +38,10 @@ flowchart TB
 
 Rules that keep the architecture honest:
 
-- `usecase/` contains frozen dataclasses, `typing.Protocol` ports (`I*`), and
-  services. It must never import `fastapi`, `sqlalchemy`, `httpx`, `pydantic`,
-  `uvicorn`, `fsrs`, or `jieba`.
-- Pydantic DTOs live only in `httpapi/schema.py`; `application/settings.py`
-  uses `pydantic-settings` for configuration.
-- The composition root (`application/container.py`) knows every concrete class
-  and wires the object graph; tests build their own containers with fakes.
-- Adapters explicitly inherit their port interfaces so the IDE and mypy can
-  jump between contract and implementation.
+- `usecase/` contains frozen dataclasses, `typing.Protocol` ports (`I*`), and services. It must never import `fastapi`, `sqlalchemy`, `httpx`, `pydantic`, `uvicorn`, `fsrs`, or `jieba`.
+- Pydantic DTOs live only in `httpapi/schema.py`; `application/settings.py` uses `pydantic-settings` for configuration.
+- The composition root (`application/container.py`) knows every concrete class and wires the object graph; tests build their own containers with fakes.
+- Adapters explicitly inherit their port interfaces so the IDE and mypy can jump between contract and implementation.
 
 ## Component inventory
 
@@ -81,10 +72,7 @@ sequenceDiagram
     end
 ```
 
-Dictionary population is fire-and-forget: the API serves immediately and search
-results appear once the background pass finishes. Both autoload passes are
-idempotent and guarded by table state (`count() == 0` for CEDICT, any row with
-`hsk_level` for enrichment).
+Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent and guarded by table state (`count() == 0` for CEDICT, any row with `hsk_level` for enrichment).
 
 ## Key request flows
 
@@ -153,19 +141,14 @@ flowchart LR
     Uvicorn --> HZW[Hanzi Writer source]
 ```
 
-- One image (`Dockerfile`) builds the SPA, resolves backend deps, then ships
-  both processes under supervisord.
-- `deploy/entrypoint.sh` renders the nginx config from a template, applies
-  Alembic migrations, then starts supervisord. A failed migration aborts boot.
-- The API is exposed directly on `API_PORT` (8080) and through nginx on
-  `WEB_PORT` (8081) at `/api`.
-- CI (`backend` + `frontend` jobs) gates the Docker publish job, which only runs
-  on `master` pushes and pushes `luiznaac/shougong:latest` + `:v<run-number>`.
+- One image (`Dockerfile`) builds the SPA, resolves backend deps, then ships both processes under supervisord.
+- `deploy/entrypoint.sh` renders the nginx config from a template, applies Alembic migrations, then starts supervisord. A failed migration aborts boot.
+- The API is exposed directly on `API_PORT` (8080) and through nginx on `WEB_PORT` (8081) at `/api`.
+- CI (`backend` + `frontend` jobs) gates the Docker publish job, which only runs on `master` pushes and pushes `luiznaac/shougong:latest` + `:v<run-number>`.
 
 ## Configuration
 
-All configuration is environment-based (`pydantic-settings`); nested keys use
-`__`:
+All configuration is environment-based (`pydantic-settings`); nested keys use `__`:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -185,12 +168,9 @@ All configuration is environment-based (`pydantic-settings`); nested keys use
 - mypy `--strict`.
 - import-linter for architecture contracts.
 - pytest: unit tests (no Docker) + integration tests (Testcontainers MySQL).
-- Alembic `compare_metadata` guard in integration tests keeps entities and
-  migrations in sync.
+- Alembic `compare_metadata` guard in integration tests keeps entities and migrations in sync.
 - Frontend `tsc -b` + Vite production build.
 
 ## Cross-cutting contract
 
-`frontend/src/api/types.ts` is a hand-maintained mirror of
-`backend/src/shougong/httpapi/schema.py`. Every DTO change must update both
-sides in the same commit; this is the reason both projects live in one monorepo.
+`frontend/src/api/types.ts` is a hand-maintained mirror of `backend/src/shougong/httpapi/schema.py`. Every DTO change must update both sides in the same commit; this is the reason both projects live in one monorepo.

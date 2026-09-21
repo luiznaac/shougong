@@ -2,38 +2,19 @@
 
 ## Scope
 
-This document deliberately **ignores the current React implementation** and
-considers only the stack: the backend API capabilities, the frontend toolkit
-(React + Vite + TypeScript + Tailwind + hanzi-writer), and the data model. It
-proposes desktop-first web interfaces, no mobile.
+This document deliberately **ignores the current React implementation** and considers only the stack: the backend API capabilities, the frontend toolkit (React + Vite + TypeScript + Tailwind + hanzi-writer), and the data model. It proposes desktop-first web interfaces, no mobile.
 
-The goal is to make the three study loops (add/import, lesson/review, reading)
-feel like one coherent workflow: a learner should know what to do now, why a
-card is scheduled, and how to move between practice and reference without losing
-context.
+The goal is to make the three study loops (add/import, lesson/review, reading) feel like one coherent workflow: a learner should know what to do now, why a card is scheduled, and how to move between practice and reference without losing context.
 
 ## Design principles
 
-1. **Today first.** The primary surface answers "what should I study right now"
-   with one obvious action, not a wall of widgets.
-2. **Progressive disclosure.** Advanced details (FSRS curves, generation
-   attempts, working sets, CSV diagnostics) live behind expandable sections,
-   drawers, or item pages, not in the first viewport.
-3. **Context preservation.** Clicking a word in a reading or a tile on the board
-   should never destroy the current session; use side panels and overlay
-   drawers for drill-downs.
-4. **Keyboard-first practice.** Handwriting recall benefits from full-screen
-   focus with predictable keys: grade 1-4, space/enter to advance, `z`/backspace
-   to undo, `esc` to exit. Key hints are visible but quiet.
-5. **Legible scheduling.** Surface FSRS state as plain language: "New",
-   "Learning", "Due today", "Next due in 4 days", plus stability/difficulty in
-   an item detail view. Color encodes level, never information on its own.
-6. **No decorative density.** Use tables, dense lists, and focused panels for
-   operational views; reserve expressive layout for the practice screens where
-   the hanzi needs room.
-7. **Empty states are guidance.** A new learner sees a clear "add your first
-   words" path; a finished session sees a calm completion summary, not a blank
-   screen.
+1. **Today first.** The primary surface answers "what should I study right now" with one obvious action, not a wall of widgets.
+2. **Progressive disclosure.** Advanced details (FSRS curves, generation attempts, working sets, CSV diagnostics) live behind expandable sections, drawers, or item pages, not in the first viewport.
+3. **Context preservation.** Clicking a word in a reading or a tile on the board should never destroy the current session; use side panels and overlay drawers for drill-downs.
+4. **Keyboard-first practice.** Handwriting recall benefits from full-screen focus with predictable keys: grade 1-4, space/enter to advance, `z`/backspace to undo, `esc` to exit. Key hints are visible but quiet.
+5. **Legible scheduling.** Surface FSRS state as plain language: "New", "Learning", "Due today", "Next due in 4 days", plus stability/difficulty in an item detail view. Color encodes level, never information on its own.
+6. **No decorative density.** Use tables, dense lists, and focused panels for operational views; reserve expressive layout for the practice screens where the hanzi needs room.
+7. **Empty states are guidance.** A new learner sees a clear "add your first words" path; a finished session sees a calm completion summary, not a blank screen.
 
 ## Information architecture
 
@@ -57,16 +38,11 @@ flowchart TB
     Progress --> Activity[Activity charts]
 ```
 
-Global navigation lives in a persistent top bar or left rail (desktop): brand,
-primary actions ("Start review", "New lesson", "Generate reading"), module
-navigation, and session status. Keyboard shortcuts are consistent across
-modules.
+Global navigation lives in a persistent top bar or left rail (desktop): brand, primary actions ("Start review", "New lesson", "Generate reading"), module navigation, and session status. Keyboard shortcuts are consistent across modules.
 
 ## Option A - Study Command Center (recommended)
 
-A calm, daily-loop hub. The first screen is a single "Do this now" surface: one
-large start button for whatever is due, a compact queue, and progress context
-around it. This is the strongest default for the single-learner workflow.
+A calm, daily-loop hub. The first screen is a single "Do this now" surface: one large start button for whatever is due, a compact queue, and progress context around it. This is the strongest default for the single-learner workflow.
 
 ### Layout
 
@@ -118,16 +94,11 @@ flowchart LR
     G --> A
 ```
 
-**Strengths**: lowest cognitive load, strongest habit loop, easy to learn.
-**Tradeoff**: less useful for power users who want batch operations and filters
-on the first screen.
+**Strengths**: lowest cognitive load, strongest habit loop, easy to learn. **Tradeoff**: less useful for power users who want batch operations and filters on the first screen.
 
 ## Option B - SRS Pipeline Board
 
-A visual kanban/board view of the SRS pipeline. Cards move New -> Learning ->
-Review as they graduate; the board is the primary surface and practice starts
-from any column. Modeled after WaniKani/HanziHero ladders but optimized for
-desktop density and batch management.
+A visual kanban/board view of the SRS pipeline. Cards move New -> Learning -> Review as they graduate; the board is the primary surface and practice starts from any column. Modeled after WaniKani/HanziHero ladders but optimized for desktop density and batch management.
 
 ### Layout
 
@@ -170,18 +141,11 @@ flowchart LR
     F --> A
 ```
 
-**Strengths**: excellent for power users, transparent about scheduling, natural
-home for filters and batch actions.
-**Tradeoff**: more visual complexity; a beginner may need a "Today" fallback or
-the board can feel overwhelming with hundreds of cards.
+**Strengths**: excellent for power users, transparent about scheduling, natural home for filters and batch actions. **Tradeoff**: more visual complexity; a beginner may need a "Today" fallback or the board can feel overwhelming with hundreds of cards.
 
 ## Option C - Practice Studio
 
-A desktop workbench where practice, reference, and reading share one screen.
-The center column is the active task (lesson, review, or reading), the left
-column is the queue/library, and the right column is context (dictionary,
-stroke order, FSRS, related words). Designed for long, focused sessions and for
-learners who want to inspect every character deeply.
+A desktop workbench where practice, reference, and reading share one screen. The center column is the active task (lesson, review, or reading), the left column is the queue/library, and the right column is context (dictionary, stroke order, FSRS, related words). Designed for long, focused sessions and for learners who want to inspect every character deeply.
 
 ### Layout
 
@@ -224,10 +188,7 @@ flowchart LR
     C --> F[Session summary]
 ```
 
-**Strengths**: maximum context, ideal for deliberate study and for reading +
-vocabulary reinforcement in one place.
-**Tradeoff**: the most complex surface; needs disciplined use of space and
-keyboard shortcuts, and can feel dense for casual daily use.
+**Strengths**: maximum context, ideal for deliberate study and for reading + vocabulary reinforcement in one place. **Tradeoff**: the most complex surface; needs disciplined use of space and keyboard shortcuts, and can feel dense for casual daily use.
 
 ## Cross-cutting UX patterns
 
@@ -236,22 +197,16 @@ keyboard shortcuts, and can feel dense for casual daily use.
 Shared by all options:
 
 1. Session opens full-screen, outside app chrome, with a subtle exit affordance.
-2. Lesson mode: present the item (hanzi + pinyin + meaning + stroke order),
-   then flip to recall.
-3. Review mode: show pinyin + meaning; learner handwrites; flip reveals the
-   hanzi; grade with 1-4; next card advances.
-4. Undo (`z`/backspace) rolls back the selected grade or the reveal; `esc`
-   exits with a confirmation.
-5. Session summary: cards reviewed, accuracy, rating distribution, time, next
-   due snapshot, and a single "back to today" action.
+2. Lesson mode: present the item (hanzi + pinyin + meaning + stroke order), then flip to recall.
+3. Review mode: show pinyin + meaning; learner handwrites; flip reveals the hanzi; grade with 1-4; next card advances.
+4. Undo (`z`/backspace) rolls back the selected grade or the reveal; `esc` exits with a confirmation.
+5. Session summary: cards reviewed, accuracy, rating distribution, time, next due snapshot, and a single "back to today" action.
 
 ### Word lookup in reading
 
 - Inline popover on hover/click: pinyin, POS, definitions, and "add to study".
-- Extra words (over known vocabulary) are visually distinguished with a dotted
-  underline and a legend, not a bright color alone.
-- Dialogue mode renders turns as a chat-like split layout with speaker labels;
-  first-use speaker names show pinyin.
+- Extra words (over known vocabulary) are visually distinguished with a dotted underline and a legend, not a bright color alone.
+- Dialogue mode renders turns as a chat-like split layout with speaker labels; first-use speaker names show pinyin.
 
 ### Item detail
 
@@ -266,25 +221,19 @@ Shared by all options:
 - Search + filters (state, HSK, POS, due range) on Library/Board.
 - Batch actions: select multiple rows, then add, remove, or reschedule.
 - Destructive actions use an inline confirmation or undo toast.
-- CSV import shows a live per-row status table with candidate picker for
-  ambiguous rows (already supported by the API shape).
+- CSV import shows a live per-row status table with candidate picker for ambiguous rows (already supported by the API shape).
 
 ### Progress and reading insight
 
-- SRS distribution and stability ladder, aggregated client-side from card data
-  or from a proposed summary endpoint.
+- SRS distribution and stability ladder, aggregated client-side from card data or from a proposed summary endpoint.
 - HSK coverage per level and estimated level from `reading-vocabulary`.
-- Reading history with format, model, extra-word count, attempts, and token
-  usage in a compact table; expand for the full attempt trail.
+- Reading history with format, model, extra-word count, attempts, and token usage in a compact table; expand for the full attempt trail.
 
 ### States and accessibility
 
-- Skeleton loading for first render; inline errors with retry; calm empty
-  states with the next best action.
-- Color never carries meaning alone: SRS levels pair color with labels, rating
-  buttons pair numbers with text.
-- All practice actions keyboard-reachable; focus stays in the session until
-  exit.
+- Skeleton loading for first render; inline errors with retry; calm empty states with the next best action.
+- Color never carries meaning alone: SRS levels pair color with labels, rating buttons pair numbers with text.
+- All practice actions keyboard-reachable; focus stays in the session until exit.
 - `prefers-reduced-motion` disables flip/stroke animations.
 
 ## Component inventory (frontend stack)
@@ -308,15 +257,6 @@ Shared by all options:
 
 ## Recommendation
 
-Ship **Option A (Study Command Center)** first: it directly supports the core
-habit loop with the least UI risk, and its screens (Today, Library, Item,
-Session, Reading) map cleanly onto the existing API. Then layer **Option B**
-features (board columns, filters, batch operations) as a Library view, and
-adopt the **Option C** three-column studio only for the reading workflow, where
-context switching matters most.
+Ship **Option A (Study Command Center)** first: it directly supports the core habit loop with the least UI risk, and its screens (Today, Library, Item, Session, Reading) map cleanly onto the existing API. Then layer **Option B** features (board columns, filters, batch operations) as a Library view, and adopt the **Option C** three-column studio only for the reading workflow, where context switching matters most.
 
-The implementation should also add the proposed endpoints from
-[07-api-gaps.md](07-api-gaps.md) in two waves: wave 1 for aggregate counts and
-queue filtering (Today, Library, Board), wave 2 for single-reading fetch,
-global review stats, and stroke batch preloading (item details and session
-performance).
+The implementation should also add the proposed endpoints from [07-api-gaps.md](07-api-gaps.md) in two waves: wave 1 for aggregate counts and queue filtering (Today, Library, Board), wave 2 for single-reading fetch, global review stats, and stroke batch preloading (item details and session performance).

@@ -1,7 +1,6 @@
 # HTTP API Reference
 
-All routes live under the FastAPI app; in the Docker deployment nginx exposes
-them at `/api/...`.
+All routes live under the FastAPI app; in the Docker deployment nginx exposes them at `/api/...`.
 
 ## Endpoint map
 
@@ -91,13 +90,11 @@ them at `/api/...`.
 { "rating": "again" }
 ```
 
-Ratings: `again | hard | good | easy`. Response is `ReviewResponse` with the
-rescheduled item and the log entry.
+Ratings: `again | hard | good | easy`. Response is `ReviewResponse` with the rescheduled item and the log entry.
 
 ### Batch import
 
-Request: `{ "rows": [ { "hanzi": "学习", "pinyin": "xue2 xi2" } ] }` (1-1000
-rows). Response:
+Request: `{ "rows": [ { "hanzi": "学习", "pinyin": "xue2 xi2" } ] }` (1-1000 rows). Response:
 
 ```json
 {
@@ -118,9 +115,7 @@ rows). Response:
 }
 ```
 
-`status` is `created | skipped | error`. An `error` row with `candidates`
-populated means the row was ambiguous or the pinyin did not match exactly; the
-client can offer those dictionary entries and resolve via `POST /study-items`.
+`status` is `created | skipped | error`. An `error` row with `candidates` populated means the row was ambiguous or the pinyin did not match exactly; the client can offer those dictionary entries and resolve via `POST /study-items`.
 
 ### Reading tokens
 
@@ -139,8 +134,7 @@ client can offer those dictionary entries and resolve via `POST /study-items`.
 }
 ```
 
-For dialogue readings, words carry a `speaker`; `speakers` at the reading level
-gives the cast and pinyin for first-use names.
+For dialogue readings, words carry a `speaker`; `speakers` at the reading level gives the cast and pinyin for first-use names.
 
 ## Error model
 
@@ -160,19 +154,12 @@ The app maps domain exceptions to a consistent problem shape:
 
 ## Conventions
 
-- **Pagination**: `limit` (defaults vary, caps at 100-200 depending on route) +
-  `offset`. Clients page through until a short page is returned.
-- **Ordering**: study items by due date then id; review/history newest first;
-  readings newest first.
+- **Pagination**: `limit` (defaults vary, caps at 100-200 depending on route) + `offset`. Clients page through until a short page is returned.
+- **Ordering**: study items by due date then id; review/history newest first; readings newest first.
 - **`Location` headers** are set on created resources.
-- **Idempotency**: dictionary autoload and HSK enrichment are idempotent; adding
-  the same entry twice is a conflict, not a duplicate insert.
-- **Freshness**: reading history stores token text only and hydrates pinyin,
-  definitions, and `dictionary_entry_id` on read against the current dictionary
-  and study queue, so listed readings reflect the live vocabulary.
+- **Idempotency**: dictionary autoload and HSK enrichment are idempotent; adding the same entry twice is a conflict, not a duplicate insert.
+- **Freshness**: reading history stores token text only and hydrates pinyin, definitions, and `dictionary_entry_id` on read against the current dictionary and study queue, so listed readings reflect the live vocabulary.
 
 ## Suggested additions
 
-Endpoints that would unlock the interface proposals in
-[06-ui-ux-proposal.md](06-ui-ux-proposal.md) are catalogued separately in
-[07-api-gaps.md](07-api-gaps.md).
+Endpoints that would unlock the interface proposals in [06-ui-ux-proposal.md](06-ui-ux-proposal.md) are catalogued separately in [07-api-gaps.md](07-api-gaps.md).

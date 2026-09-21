@@ -1,13 +1,8 @@
 # shougong (手工)
 
-A backend for learning to hand-write Chinese characters with a spaced-repetition system
-(FSRS, via [`py-fsrs`](https://pypi.org/project/fsrs/)). Built on a layered hexagonal
-architecture: FastAPI HTTP layer, a hand-written composition root instead of a DI framework,
-async database access (SQLAlchemy 2 / MySQL), outbound HTTP (httpx), Docker, Ruff, mypy
-`--strict`, import-linter, and a Testcontainers integration harness.
+A backend for learning to hand-write Chinese characters with a spaced-repetition system (FSRS, via [`py-fsrs`](https://pypi.org/project/fsrs/)). Built on a layered hexagonal architecture: FastAPI HTTP layer, a hand-written composition root instead of a DI framework, async database access (SQLAlchemy 2 / MySQL), outbound HTTP (httpx), Docker, Ruff, mypy `--strict`, import-linter, and a Testcontainers integration harness.
 
-Three things it does: look up characters in a dictionary, enqueue entries as study items, and
-run the review loop — grade a due item `again | hard | good | easy` and FSRS reschedules it.
+Three things it does: look up characters in a dictionary, enqueue entries as study items, and run the review loop — grade a due item `again | hard | good | easy` and FSRS reschedules it.
 
 ## Quick start
 
@@ -18,36 +13,19 @@ uv run poe run                # start the service on http://localhost:8080
 curl localhost:8080/health
 ```
 
-`docker compose` lives at the **repo root** now — `docker compose up -d mysql` is
-the DB-only helper for this workflow, and `docker compose up --build` runs the
-full stack (combined backend + frontend image + MySQL). See the
-[root README](../README.md#docker) for the image layout and publishing.
+`docker compose` lives at the **repo root** now — `docker compose up -d mysql` is the DB-only helper for this workflow, and `docker compose up --build` runs the full stack (combined backend + frontend image + MySQL). See the [root README](../README.md#docker) for the image layout and publishing.
 
-All config is via env vars (`APP_ENV`, `HTTP_PORT`, `LOG_LEVEL`, `MYSQL__*`,
-`GATEWAYS__APP__HOST`, `DICTIONARY_AUTOLOAD`, `STUDY_TIMEZONE`) — see `.env.example`.
-Nested keys use `__`.
+All config is via env vars (`APP_ENV`, `HTTP_PORT`, `LOG_LEVEL`, `MYSQL__*`, `GATEWAYS__APP__HOST`, `DICTIONARY_AUTOLOAD`, `STUDY_TIMEZONE`) — see `.env.example`. Nested keys use `__`.
 
-`STUDY_TIMEZONE` (an IANA name like `America/Sao_Paulo`, default `UTC`) sets the SRS day
-boundary: every card's due time is rounded down to that timezone's midnight, so a whole day's
-cards become due at once instead of trickling in through the day.
+`STUDY_TIMEZONE` (an IANA name like `America/Sao_Paulo`, default `UTC`) sets the SRS day boundary: every card's due time is rounded down to that timezone's midnight, so a whole day's cards become due at once instead of trickling in through the day.
 
 ## The review loop
 
-`GET /study-items?due=true` is the queue to practise now. For each item, `POST
-/study-items/{id}/reviews` with `{"rating": "again|hard|good|easy"}` hands the grade to FSRS,
-which advances the card and pushes `due` out (snapped to the day boundary). The item drops out
-of the due list until then, and reviewing it again before it comes due is rejected with `409`.
-`GET /study-items/{id}/reviews` returns the grade history, newest first.
-`GET /study-items/{id}/history` returns the study item's history, newest first — a row saved when
-the item is created and after every change, each with its own `created_at`.
-`GET /study-items/history/learning-to-review` returns, across every study item, the single history
-row that moved it from learning into review (a card graduates once its first review lands), newest
-first and paginated with `limit` / `offset`.
+`GET /study-items?due=true` is the queue to practise now. For each item, `POST /study-items/{id}/reviews` with `{"rating": "again|hard|good|easy"}` hands the grade to FSRS, which advances the card and pushes `due` out (snapped to the day boundary). The item drops out of the due list until then, and reviewing it again before it comes due is rejected with `409`. `GET /study-items/{id}/reviews` returns the grade history, newest first. `GET /study-items/{id}/history` returns the study item's history, newest first — a row saved when the item is created and after every change, each with its own `created_at`. `GET /study-items/history/learning-to-review` returns, across every study item, the single history row that moved it from learning into review (a card graduates once its first review lands), newest first and paginated with `limit` / `offset`.
 
 ## API collection
 
-`postman/shougong.postman_collection.json` — a Postman collection covering every endpoint.
-Import it and set the `baseUrl` variable.
+`postman/shougong.postman_collection.json` — a Postman collection covering every endpoint. Import it and set the `baseUrl` variable.
 
 ## Tasks (`uv run poe <task>`)
 
@@ -66,24 +44,12 @@ Import it and set the `baseUrl` variable.
 
 ## The dictionary
 
-On startup the app downloads [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict)
-(licensed CC BY-SA 4.0) from MDBG and fills `dictionary_entry` — **once**, only when the table
-is empty. It runs in the background, so search results appear a few seconds after boot.
+On startup the app downloads [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict) (licensed CC BY-SA 4.0) from MDBG and fills `dictionary_entry` — **once**, only when the table is empty. It runs in the background, so search results appear a few seconds after boot.
 
-Set `DICTIONARY_AUTOLOAD=false` to disable it. To force a refresh, clear the table
-(`TRUNCATE dictionary_entry`) and restart. Traditional forms are ignored — this trainer only
-drills simplified handwriting.
+Set `DICTIONARY_AUTOLOAD=false` to disable it. To force a refresh, clear the table (`TRUNCATE dictionary_entry`) and restart. Traditional forms are ignored — this trainer only drills simplified handwriting.
 
-Right after that, a second one-off pass downloads the
-[HSK 3.0 word list](https://github.com/drkameleon/complete-hsk-vocabulary) (MIT) and stamps
-`hsk_level` + `pos_tags` onto `dictionary_entry` — the same values on every row that shares a
-`simplified`. It is skipped once any row carries an `hsk_level`. Set `HSK_ENRICH_AUTOLOAD=false`
-to disable it; to re-run, `UPDATE dictionary_entry SET hsk_level = NULL` and restart.
+Right after that, a second one-off pass downloads the [HSK 3.0 word list](https://github.com/drkameleon/complete-hsk-vocabulary) (MIT) and stamps `hsk_level` + `pos_tags` onto `dictionary_entry` — the same values on every row that shares a `simplified`. It is skipped once any row carries an `hsk_level`. Set `HSK_ENRICH_AUTOLOAD=false` to disable it; to re-run, `UPDATE dictionary_entry SET hsk_level = NULL` and restart.
 
-The schema is versioned Alembic migrations under `alembic/versions/` — the `hsk_level`/`pos_tags`
-columns and the `reading_*` tables each arrived as their own migration (`0002_dictionary_hsk`,
-`0003_reading`) rather than a manual `ALTER TABLE`. `uv run poe migrate` applies pending
-migrations, baselining a database that predates them; `deploy/entrypoint.sh` runs the same command
-in the container, before the app starts. See [AGENTS.md](AGENTS.md).
+The schema is versioned Alembic migrations under `alembic/versions/` — the `hsk_level`/`pos_tags` columns and the `reading_*` tables each arrived as their own migration (`0002_dictionary_hsk`, `0003_reading`) rather than a manual `ALTER TABLE`. `uv run poe migrate` applies pending migrations, baselining a database that predates them; `deploy/entrypoint.sh` runs the same command in the container, before the app starts. See [AGENTS.md](AGENTS.md).
 
 See [AGENTS.md](AGENTS.md) for the architecture and the rules for evolving it.

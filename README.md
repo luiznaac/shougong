@@ -7,14 +7,11 @@ Monorepo for the Chinese handwriting SRS.
 | [`backend/`](backend/)   | FastAPI + hexagonal service (uv, SQLAlchemy/MySQL, FSRS). See [backend/README.md](backend/README.md) and [backend/AGENTS.md](backend/AGENTS.md). |
 | [`frontend/`](frontend/) | React + Vite SPA — the inverted-review handwriting trainer. See [frontend/README.md](frontend/README.md). |
 
-The frontend's `src/api/types.ts` mirrors the backend's `httpapi/schema.py`; keep
-them in sync in the same change — that's the reason these two live in one repo.
+The frontend's `src/api/types.ts` mirrors the backend's `httpapi/schema.py`; keep them in sync in the same change — that's the reason these two live in one repo.
 
 ## Documentation
 
-`docs/` holds the business overview, technical architecture, data model, API
-reference, reading-engine explainer, desktop UI/UX proposal, and a backlog of
-proposed endpoints. Start at [docs/README.md](docs/README.md).
+`docs/` holds the business overview, technical architecture, data model, API reference, reading-engine explainer, desktop UI/UX proposal, and a backlog of proposed endpoints. Start at [docs/README.md](docs/README.md).
 
 ## Dev
 
@@ -32,9 +29,7 @@ npm run fe:dev     # frontend -> http://localhost:5273  (proxies /api -> :8080)
 
 ## Docker
 
-One image holds both processes — `uvicorn` (API) and `nginx` (the built SPA,
-which also reverse-proxies `/api` to uvicorn) — supervised by `supervisord`, on
-separate ports. The database is **not** in the image.
+One image holds both processes — `uvicorn` (API) and `nginx` (the built SPA, which also reverse-proxies `/api` to uvicorn) — supervised by `supervisord`, on separate ports. The database is **not** in the image.
 
 ```bash
 docker compose up --build     # app + MySQL, full stack
@@ -43,8 +38,7 @@ docker compose up --build     # app + MySQL, full stack
 docker compose up -d mysql    # just the DB, for local `cd backend && uv run poe run`
 ```
 
-Ports are configurable with `API_PORT` / `WEB_PORT`. For a standalone run against
-an external database:
+Ports are configurable with `API_PORT` / `WEB_PORT`. For a standalone run against an external database:
 
 ```bash
 docker run --rm -p 8080:8080 -p 8081:8081 \
@@ -53,10 +47,7 @@ docker run --rm -p 8080:8080 -p 8081:8081 \
   luiznaac/shougong:latest
 ```
 
-**Publishing:** after CI passes on a push to `master`, the `publish` job in
-`.github/workflows/ci.yml` builds and pushes `luiznaac/shougong:latest` and
-`:v<run-number>` (a sequential build number) to Docker Hub. Needs repo secrets
-`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+**Publishing:** after CI passes on a push to `master`, the `publish` job in `.github/workflows/ci.yml` builds and pushes `luiznaac/shougong:latest` and `:v<run-number>` (a sequential build number) to Docker Hub. Needs repo secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
 ## Checks
 
@@ -64,8 +55,6 @@ docker run --rm -p 8080:8080 -p 8081:8081 \
 npm run check      # backend `poe check` + frontend typecheck + build
 ```
 
-CI (`.github/workflows/ci.yml`) runs the backend and frontend jobs independently,
-then a `publish` job (master pushes only) that gates the Docker image on both.
+CI (`.github/workflows/ci.yml`) runs the backend and frontend jobs independently, then a `publish` job (master pushes only) that gates the Docker image on both.
 
-`package.json` at the repo root is only a script shim (no dependencies) — the real
-toolchains are `uv` in `backend/` and `npm` in `frontend/`.
+`package.json` at the repo root is only a script shim (no dependencies) — the real toolchains are `uv` in `backend/` and `npm` in `frontend/`.
