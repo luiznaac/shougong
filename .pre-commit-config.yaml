@@ -1,12 +1,12 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: no-commit-to-branch
-        args: [--branch, master]
+        args: [--branch, master, --branch, main]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.1
+    rev: v0.16.4
     hooks:
       - id: ruff
         args: [--fix]
@@ -33,4 +33,10 @@ repos:
         entry: sh -c 'cd frontend && npm run typecheck'
         language: system
         files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false
+      - id: test-backend
+        name: test (pytest)
+        entry: sh -c 'cd backend && uv run poe test'
+        language: system
+        files: ^backend/.*\.py$
         pass_filenames: false
