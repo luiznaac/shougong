@@ -4,10 +4,10 @@ import type {
   CharacterStrokes,
   DictionaryEntry,
   GenerateReadingRequest,
-  ReviewResult,
-  ReviewLog,
-  SavedReadingText,
   ReadingTopic,
+  ReviewLog,
+  ReviewResult,
+  SavedReadingText,
   SrsRating,
   StudyItem,
   StudyItemHistory,
@@ -60,7 +60,9 @@ export const api = {
   },
 
   // --- study items ---
-  listStudyItems(opts: { due?: boolean; limit?: number; offset?: number } = {}): Promise<StudyItem[]> {
+  listStudyItems(
+    opts: { due?: boolean; limit?: number; offset?: number } = {},
+  ): Promise<StudyItem[]> {
     // Backend caps limit at 200; page through when more are needed.
     const pageSize = Math.min(opts.limit ?? 200, 200);
     const p = new URLSearchParams();
@@ -82,13 +84,13 @@ export const api = {
     return request(`/study-items/${id}`);
   },
   addStudyItem(dictionaryEntryId: number): Promise<StudyItem> {
-    return request(`/study-items`, {
+    return request("/study-items", {
       method: "POST",
       body: JSON.stringify({ dictionary_entry_id: dictionaryEntryId }),
     });
   },
   batchImportStudyItems(rows: BatchImportRowRequest[]): Promise<BatchImportResponse> {
-    return request(`/study-items/batch`, {
+    return request("/study-items/batch", {
       method: "POST",
       body: JSON.stringify({ rows }),
     });
@@ -120,26 +122,26 @@ export const api = {
 
   // --- reading ---
   generateReading(req: GenerateReadingRequest): Promise<SavedReadingText> {
-    return request(`/reading-texts`, { method: "POST", body: JSON.stringify(req) });
+    return request("/reading-texts", { method: "POST", body: JSON.stringify(req) });
   },
   listReadingHistory(limit = 20, offset = 0): Promise<SavedReadingText[]> {
     return request(`/reading-texts?limit=${limit}&offset=${offset}`);
   },
   listReadingModels(): Promise<string[]> {
-    return request(`/reading-texts/models`);
+    return request("/reading-texts/models");
   },
 
   // --- reading vocabulary overview ---
   getVocabularyProfile(): Promise<VocabularyOverview> {
-    return request(`/reading-vocabulary`);
+    return request("/reading-vocabulary");
   },
 
   // --- reading topic scenarios ---
   listReadingTopics(): Promise<ReadingTopic[]> {
-    return request(`/reading-topics`);
+    return request("/reading-topics");
   },
   addReadingTopic(scenario: string): Promise<ReadingTopic> {
-    return request(`/reading-topics`, { method: "POST", body: JSON.stringify({ scenario }) });
+    return request("/reading-topics", { method: "POST", body: JSON.stringify({ scenario }) });
   },
   setReadingTopicActive(id: number, active: boolean): Promise<ReadingTopic> {
     return request(`/reading-topics/${id}`, { method: "PATCH", body: JSON.stringify({ active }) });

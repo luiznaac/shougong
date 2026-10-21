@@ -31,10 +31,7 @@ export function ItemMetricChart({ history }: { history: StudyItemHistory[] }) {
     const t0 = rows[0].t;
     const t1 = rows[rows.length - 1].t;
     const span = Math.max(1, t1 - t0);
-    const maxStability = Math.max(
-      1,
-      ...rows.map((r) => r.stability ?? 0),
-    );
+    const maxStability = Math.max(1, ...rows.map((r) => r.stability ?? 0));
 
     const x = (t: number) => PAD.left + ((t - t0) / span) * PW;
     const yStab = (v: number) => PAD.top + PH - (v / maxStability) * PH;
@@ -62,8 +59,14 @@ export function ItemMetricChart({ history }: { history: StudyItemHistory[] }) {
       single: rows.length === 1,
       lastPoint: {
         x: x(t1),
-        stab: rows[rows.length - 1].stability != null ? yStab(rows[rows.length - 1].stability as number) : null,
-        diff: rows[rows.length - 1].difficulty != null ? yDiff(rows[rows.length - 1].difficulty as number) : null,
+        stab:
+          rows[rows.length - 1].stability != null
+            ? yStab(rows[rows.length - 1].stability as number)
+            : null,
+        diff:
+          rows[rows.length - 1].difficulty != null
+            ? yDiff(rows[rows.length - 1].difficulty as number)
+            : null,
       },
     };
   }, [history]);
@@ -75,11 +78,15 @@ export function ItemMetricChart({ history }: { history: StudyItemHistory[] }) {
   return (
     <div>
       <div className="mb-2 flex flex-wrap gap-x-5 gap-y-1 text-xs">
-        <Legend color={STABILITY_COLOR} label={`Estabilidade (0–${model.maxStability.toFixed(0)} d)`} />
+        <Legend
+          color={STABILITY_COLOR}
+          label={`Estabilidade (0–${model.maxStability.toFixed(0)} d)`}
+        />
         <Legend color={DIFFICULTY_COLOR} label={`Dificuldade (0–${DIFFICULTY_MAX})`} />
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+        <title>Estabilidade e dificuldade ao longo do tempo</title>
         {[0.25, 0.5, 0.75].map((f) => (
           <line
             key={f}
@@ -116,10 +123,20 @@ export function ItemMetricChart({ history }: { history: StudyItemHistory[] }) {
         {model.single && (
           <>
             {model.lastPoint.stab != null && (
-              <circle cx={model.lastPoint.x} cy={model.lastPoint.stab} r="3.5" fill={STABILITY_COLOR} />
+              <circle
+                cx={model.lastPoint.x}
+                cy={model.lastPoint.stab}
+                r="3.5"
+                fill={STABILITY_COLOR}
+              />
             )}
             {model.lastPoint.diff != null && (
-              <circle cx={model.lastPoint.x} cy={model.lastPoint.diff} r="3.5" fill={DIFFICULTY_COLOR} />
+              <circle
+                cx={model.lastPoint.x}
+                cy={model.lastPoint.diff}
+                r="3.5"
+                fill={DIFFICULTY_COLOR}
+              />
             )}
           </>
         )}

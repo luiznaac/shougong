@@ -1,13 +1,14 @@
 import { Link, useParams } from "react-router-dom";
 import { useItemHistory, useStudyItem } from "../api/queries.ts";
-import { Pinyin } from "../components/Pinyin.tsx";
+import type { SrsState } from "../api/types.ts";
 import { Hanzi } from "../components/Hanzi.tsx";
 import { ItemMetricChart } from "../components/ItemMetricChart.tsx";
+import { Pinyin } from "../components/Pinyin.tsx";
 import { RelatedEntries } from "../components/RelatedEntries.tsx";
 import { StrokeOrderPanel } from "../components/StrokeOrderPanel.tsx";
 import { formatDate, formatDateTime } from "../lib/format.ts";
+import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
-import type { SrsState } from "../api/types.ts";
 
 const FSRS_STATE_LABEL: Record<SrsState, string> = {
   learning: "Aprendendo",
@@ -61,8 +62,8 @@ export function StudyItemPage() {
           Significados
         </h2>
         <ul className="list-inside list-disc space-y-1 text-slate-200">
-          {item.entry.definitions.map((d, i) => (
-            <li key={i}>{d}</li>
+          {keyedOccurrences(item.entry.definitions, (d) => d).map(({ key, item: d }) => (
+            <li key={key}>{d}</li>
           ))}
         </ul>
       </section>

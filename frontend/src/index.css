@@ -40,8 +40,18 @@
 }
 
 /* tone-coloured pinyin syllables */
-.tone-1 { color: var(--color-tone-1); }
-.tone-2 { color: var(--color-tone-2); }
-.tone-3 { color: var(--color-tone-3); }
-.tone-4 { color: var(--color-tone-4); }
-.tone-5 { color: var(--color-tone-5); }
+.tone-1 {
+  color: var(--color-tone-1);
+}
+.tone-2 {
+  color: var(--color-tone-2);
+}
+.tone-3 {
+  color: var(--color-tone-3);
+}
+.tone-4 {
+  color: var(--color-tone-4);
+}
+.tone-5 {
+  color: var(--color-tone-5);
+}

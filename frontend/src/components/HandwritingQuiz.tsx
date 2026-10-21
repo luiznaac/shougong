@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
 import HanziWriter from "hanzi-writer";
+import { useEffect, useRef } from "react";
 import { useCharacterStrokes } from "../api/queries.ts";
 import { allowedMistakes } from "../lib/localSettings.ts";
 
@@ -28,9 +28,7 @@ export function HandwritingQuiz({
   onResultRef.current = onResult;
 
   const sentRef = useRef(false);
-  useEffect(() => {
-    sentRef.current = false;
-  }, [character]);
+  const lastCharacterRef = useRef(character);
 
   // No stroke data for this character (e.g. punctuation) — skip it rather
   // than blocking the sequence, same as StrokeOrder.tsx hiding itself.
@@ -44,6 +42,10 @@ export function HandwritingQuiz({
   const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (lastCharacterRef.current !== character) {
+      lastCharacterRef.current = character;
+      sentRef.current = false;
+    }
     if (!data || !mountRef.current) return;
 
     const allowed = allowedMistakes(data.strokes.length, tolerancePercent);
@@ -76,5 +78,11 @@ export function HandwritingQuiz({
   if (isLoading) return <div style={{ width: sizePx, height: sizePx }} />;
   if (error || !data) return null;
 
-  return <div ref={mountRef} style={{ width: sizePx, height: sizePx, touchAction: "none" }} className="rounded-lg bg-slate-800/40" />;
+  return (
+    <div
+      ref={mountRef}
+      style={{ width: sizePx, height: sizePx, touchAction: "none" }}
+      className="rounded-lg bg-slate-800/40"
+    />
+  );
 }

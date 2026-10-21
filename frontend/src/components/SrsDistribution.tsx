@@ -16,9 +16,7 @@ export function SrsDistribution({ tally }: { tally: Record<SrsGroup, number> }) 
               style={{ width: `${(tally[g] / max) * 100}%`, background: GROUP_COLOR[g] }}
             />
           </div>
-          <span className="col-span-1 text-right tabular-nums text-slate-300">
-            {tally[g]}
-          </span>
+          <span className="col-span-1 text-right tabular-nums text-slate-300">{tally[g]}</span>
         </div>
       ))}
       <p className="pt-1 text-right text-xs text-slate-500">{total} itens</p>

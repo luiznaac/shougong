@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, ApiError } from "../api/client.ts";
+import { ApiError, api } from "../api/client.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
+import {
+  TOLERANCE_PRESETS,
+  useHandwritingEnabled,
+  useHandwritingTolerance,
+} from "../lib/localSettings.ts";
+import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 import { HandwritingQuiz } from "./HandwritingQuiz.tsx";
 import { Pinyin } from "./Pinyin.tsx";
 import { StrokeOrderPanel } from "./StrokeOrderPanel.tsx";
-import { TOLERANCE_PRESETS, useHandwritingEnabled, useHandwritingTolerance } from "../lib/localSettings.ts";
 
 export const RATINGS: {
   key: SrsRating;
@@ -65,14 +70,13 @@ export function Quiz({
 
   const current = items[idx];
   const chars = current ? [...current.entry.simplified] : [];
+  const charSlots = keyedOccurrences(chars, (char) => char);
   const remaining = items.length - idx;
   const accuracy = done > 0 ? Math.round((correct / done) * 100) : 100;
   const finished = idx >= items.length;
 
   const bandClass =
-    mode === "lesson"
-      ? "from-violet-600 to-violet-800"
-      : "from-rose-500 to-accent-600";
+    mode === "lesson" ? "from-violet-600 to-violet-800" : "from-rose-500 to-accent-600";
 
   const advance = useCallback(() => {
     setSelected(null);
@@ -134,8 +138,7 @@ export function Quiz({
     [drawIdx, chars.length],
   );
 
-  const canRollback =
-    phase === "revealed" || (phase === "prompt" && mode === "lesson");
+  const canRollback = phase === "revealed" || (phase === "prompt" && mode === "lesson");
   const canGoNext = phase !== "revealed" || selected != null;
 
   const stateRef = useRef({ phase, selected, canRollback });
@@ -168,12 +171,12 @@ export function Quiz({
 
   // Reset the drawing sequence every time a "write from memory" step begins
   // (a new item, or rolling back into "prompt") so it always starts fresh.
+  const promptedItemId = phase === "prompt" ? current?.id : undefined;
   useEffect(() => {
-    if (phase === "prompt") {
-      setDrawIdx(0);
-      drawFailedRef.current = false;
-    }
-  }, [phase, current?.id]);
+    if (promptedItemId === undefined) return;
+    setDrawIdx(0);
+    drawFailedRef.current = false;
+  }, [promptedItemId]);
 
   useEffect(() => {
     if (!toast) return;
@@ -183,7 +186,12 @@ export function Quiz({
 
   const topBar = (
     <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-4 py-2.5 text-sm text-white/90">
-      <button onClick={() => navigate("/")} className="hover:text-white" title="Sair (Esc)">
+      <button
+        type="button"
+        onClick={() => navigate("/")}
+        className="hover:text-white"
+        title="Sair (Esc)"
+      >
         ← Sair
       </button>
       <span className="text-xs uppercase tracking-widest text-white/60">
@@ -252,15 +260,12 @@ export function Quiz({
         {topBar}
 
         <div className="rounded-full bg-slate-950/40 px-5 py-1.5 backdrop-blur-sm">
-          <Pinyin
-            value={current.entry.pinyin}
-            className="text-2xl font-medium sm:text-3xl"
-          />
+          <Pinyin value={current.entry.pinyin} className="text-2xl font-medium sm:text-3xl" />
         </div>
 
         <div key={current.id} className="flex flex-wrap items-center justify-center gap-3">
-          {chars.map((ch, i) => (
-            <FlipCard key={i} char={ch} hidden={phase === "prompt"} sizePx={sizePx} />
+          {charSlots.map(({ key, item: ch }) => (
+            <FlipCard key={key} char={ch} hidden={phase === "prompt"} sizePx={sizePx} />
           ))}
         </div>
 
@@ -310,12 +315,11 @@ export function Quiz({
               const dim = selected != null && !isOn;
               return (
                 <button
+                  type="button"
                   key={r.key}
                   onClick={() => setSelected(r.key)}
                   className={`rounded-lg px-4 py-3 font-semibold transition ${
-                    dim
-                      ? "bg-slate-800 text-slate-500"
-                      : `${r.className} text-white`
+                    dim ? "bg-slate-800 text-slate-500" : `${r.className} text-white`
                   } ${isOn ? "ring-2 ring-white ring-offset-2 ring-offset-slate-950" : ""}`}
                 >
                   {r.label}
@@ -330,6 +334,7 @@ export function Quiz({
       {/* toolbar */}
       <div className="flex items-center gap-3 border-t border-white/10 bg-slate-900/70 px-4 py-3">
         <button
+          type="button"
           onClick={rollback}
           disabled={!canRollback || submitting}
           className="rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-30"
@@ -339,15 +344,13 @@ export function Quiz({
         </button>
 
         {phase === "revealed" && (
-          <Link
-            to={`/items/${current.id}`}
-            className="text-xs text-slate-500 hover:text-slate-300"
-          >
+          <Link to={`/items/${current.id}`} className="text-xs text-slate-500 hover:text-slate-300">
             ver página do item
           </Link>
         )}
 
         <button
+          type="button"
           onClick={() => void goNext()}
           disabled={!canGoNext || submitting}
           className="ml-auto rounded-md bg-accent-500 px-6 py-2 font-semibold text-white transition hover:bg-accent-600 disabled:opacity-40"

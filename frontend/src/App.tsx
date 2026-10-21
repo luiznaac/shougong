@@ -1,12 +1,12 @@
 import type { RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout.tsx";
-import { Dashboard } from "./pages/Dashboard.tsx";
-import { Review } from "./pages/Review.tsx";
-import { Lesson } from "./pages/Lesson.tsx";
-import { StudyItemPage } from "./pages/StudyItemPage.tsx";
 import { AddItems } from "./pages/AddItems.tsx";
 import { BatchImport } from "./pages/BatchImport.tsx";
+import { Dashboard } from "./pages/Dashboard.tsx";
+import { Lesson } from "./pages/Lesson.tsx";
 import { Reading } from "./pages/Reading.tsx";
+import { Review } from "./pages/Review.tsx";
+import { StudyItemPage } from "./pages/StudyItemPage.tsx";
 
 export const routes: RouteObject[] = [
   {

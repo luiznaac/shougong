@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import { useEffect, useState } from "react";
 import { ApiError } from "../api/client.ts";
 import {
   useAddStudyItem,
@@ -8,11 +8,18 @@ import {
   useReadingModels,
   useStudyItems,
 } from "../api/queries.ts";
-import type { ReadingAttempt, ReadingFormat, ReadingSpeaker, ReadingToken, SavedReadingText } from "../api/types.ts";
+import type {
+  ReadingAttempt,
+  ReadingFormat,
+  ReadingSpeaker,
+  ReadingToken,
+  SavedReadingText,
+} from "../api/types.ts";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { ReadingTopicsPanel } from "../components/ReadingTopicsPanel.tsx";
 import { VocabularyPanel } from "../components/VocabularyPanel.tsx";
 import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
+import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 
 const FORMAT_LABELS: Record<ReadingFormat, string> = {
   paragraph: "Parágrafo",
@@ -119,7 +126,9 @@ export function Reading() {
           >
             {modelsLoading && <option value="">Carregando…</option>}
             {modelsError && <option value="">Erro ao carregar modelos</option>}
-            {!modelsLoading && !modelsError && !models?.length && <option value="">Nenhum modelo disponível</option>}
+            {!modelsLoading && !modelsError && !models?.length && (
+              <option value="">Nenhum modelo disponível</option>
+            )}
             {(models ?? []).map((m) => (
               <option key={m} value={m}>
                 {m}
@@ -165,6 +174,7 @@ export function Reading() {
         </label>
 
         <button
+          type="button"
           onClick={generate}
           disabled={generateMutation.isPending || !model}
           className="rounded-md bg-accent-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
@@ -235,6 +245,7 @@ export function Reading() {
           {(history ?? []).map((item) => (
             <li key={item.id}>
               <button
+                type="button"
                 onClick={() => setCurrent(item)}
                 className={`w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-white/5 ${
                   current?.id === item.id ? "bg-white/5" : ""
@@ -270,7 +281,9 @@ export function Reading() {
                       <span className="text-amber-400">{item.extra_words.length} extra(s)</span>
                     </>
                   )}
-                  <span className="ml-auto shrink-0">{new Date(item.created_at).toLocaleString()}</span>
+                  <span className="ml-auto shrink-0">
+                    {new Date(item.created_at).toLocaleString()}
+                  </span>
                 </div>
                 <p className="font-hanzi mt-1 truncate text-sm text-slate-200">
                   {item.tokens.map((t) => t.text).join("")}
@@ -301,11 +314,14 @@ function AttemptTrail({ attempts }: { attempts: ReadingAttempt[] }) {
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span>#{attempt.attempt}</span>
                 {attempt.chosen && (
-                  <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-emerald-300">escolhido</span>
+                  <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-emerald-300">
+                    escolhido
+                  </span>
                 )}
                 {attempt.extra_words.length > 0 && (
                   <span className="text-amber-400">
-                    {attempt.extra_words.length} fora do vocabulário: {attempt.extra_words.join(" ")}
+                    {attempt.extra_words.length} fora do vocabulário:{" "}
+                    {attempt.extra_words.join(" ")}
                   </span>
                 )}
                 <span className="ml-auto">
@@ -313,23 +329,30 @@ function AttemptTrail({ attempts }: { attempts: ReadingAttempt[] }) {
                 </span>
               </div>
               {attempt.dialogue_problems.length > 0 && (
-                <p className="mt-1 text-xs text-amber-400">{attempt.dialogue_problems.join(" · ")}</p>
+                <p className="mt-1 text-xs text-amber-400">
+                  {attempt.dialogue_problems.join(" · ")}
+                </p>
               )}
               {/* Segmented view: each chip is exactly what the segmenter produced — lets a
                   mis-segmentation that got flagged as "extra" be spotted at a glance. */}
-              <p lang="zh-Hans" className="font-hanzi mt-2 flex flex-wrap gap-x-1 gap-y-1 text-lg leading-snug">
-                {attempt.segmentation.map((seg, i) => (
-                  <span
-                    key={i}
-                    className={
-                      flagged.has(seg)
-                        ? "rounded bg-amber-400/10 px-0.5 text-amber-400"
-                        : "text-slate-300"
-                    }
-                  >
-                    {seg}
-                  </span>
-                ))}
+              <p
+                lang="zh-Hans"
+                className="font-hanzi mt-2 flex flex-wrap gap-x-1 gap-y-1 text-lg leading-snug"
+              >
+                {keyedOccurrences(attempt.segmentation, (segment) => segment).map(
+                  ({ key, item: seg }) => (
+                    <span
+                      key={key}
+                      className={
+                        flagged.has(seg)
+                          ? "rounded bg-amber-400/10 px-0.5 text-amber-400"
+                          : "text-slate-300"
+                      }
+                    >
+                      {seg}
+                    </span>
+                  ),
+                )}
               </p>
             </li>
           );
@@ -379,8 +402,11 @@ function OfferedVocabulary({
               {WORKING_SET_GROUP_LABELS[group] ?? group}
             </span>
             <p lang="zh-Hans" className="font-hanzi mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
-              {words.map((word, i) => (
-                <span key={i} className={anchors.has(word) ? "text-emerald-300" : "text-slate-300"}>
+              {keyedOccurrences(words, (word) => word).map(({ key, item: word }) => (
+                <span
+                  key={key}
+                  className={anchors.has(word) ? "text-emerald-300" : "text-slate-300"}
+                >
                   {word}
                 </span>
               ))}
@@ -392,20 +418,34 @@ function OfferedVocabulary({
   );
 }
 
-function ReadingTokens({ tokens, speakers }: { tokens: ReadingToken[]; speakers: ReadingSpeaker[] }) {
+function ReadingTokens({
+  tokens,
+  speakers,
+}: { tokens: ReadingToken[]; speakers: ReadingSpeaker[] }) {
   if (tokens.some((t) => t.speaker != null)) {
     return <DialogueView tokens={tokens} speakers={speakers} />;
   }
   return (
     <p lang="zh-Hans" className="font-hanzi whitespace-pre-wrap text-2xl leading-loose">
-      {tokens.map((token, i) =>
-        token.is_word ? <WordToken key={i} token={token} /> : <span key={i}>{token.text}</span>,
-      )}
+      <TokenSpans tokens={tokens} />
     </p>
   );
 }
 
-function DialogueView({ tokens, speakers }: { tokens: ReadingToken[]; speakers: ReadingSpeaker[] }) {
+function TokenSpans({ tokens }: { tokens: ReadingToken[] }) {
+  return (
+    <>
+      {keyedOccurrences(tokens, (token) => token.text).map(({ key, item: token }) =>
+        token.is_word ? <WordToken key={key} token={token} /> : <span key={key}>{token.text}</span>,
+      )}
+    </>
+  );
+}
+
+function DialogueView({
+  tokens,
+  speakers,
+}: { tokens: ReadingToken[]; speakers: ReadingSpeaker[] }) {
   const pinyinByName = new Map(speakers.map((s) => [s.name, s.pinyin]));
   const order = speakers.map((s) => s.name);
 
@@ -422,13 +462,13 @@ function DialogueView({ tokens, speakers }: { tokens: ReadingToken[]; speakers: 
   const seen = new Set<string>();
   return (
     <div className="space-y-3">
-      {turns.map((turn, i) => {
+      {keyedOccurrences(turns, (turn) => turn.speaker).map(({ key, item: turn }) => {
         const left = order.indexOf(turn.speaker) % 2 === 0;
         const firstTime = !seen.has(turn.speaker);
         seen.add(turn.speaker);
         const pinyin = pinyinByName.get(turn.speaker);
         return (
-          <div key={i} className={`flex flex-col ${left ? "items-start" : "items-end"}`}>
+          <div key={key} className={`flex flex-col ${left ? "items-start" : "items-end"}`}>
             <span className="mb-0.5 text-xs text-slate-500">
               <span className="font-hanzi">{turn.speaker}</span>
               {firstTime && pinyin && <span className="ml-1">{pinyin}</span>}
@@ -439,9 +479,7 @@ function DialogueView({ tokens, speakers }: { tokens: ReadingToken[]; speakers: 
                 left ? "bg-slate-800" : "bg-accent-500/15"
               }`}
             >
-              {turn.tokens.map((token, j) =>
-                token.is_word ? <WordToken key={j} token={token} /> : <span key={j}>{token.text}</span>,
-              )}
+              <TokenSpans tokens={turn.tokens} />
             </p>
           </div>
         );
@@ -503,7 +541,9 @@ function WordToken({ token }: { token: ReadingToken }) {
           {token.definitions.length > 0 && (
             <p className="mt-1 text-slate-300">{token.definitions.join("; ")}</p>
           )}
-          {token.is_extra && <p className="mt-1 text-xs text-amber-400">Fora do vocabulário conhecido</p>}
+          {token.is_extra && (
+            <p className="mt-1 text-xs text-amber-400">Fora do vocabulário conhecido</p>
+          )}
           {token.is_extra && token.dictionary_entry_id != null && (
             <button
               type="button"
@@ -511,7 +551,11 @@ function WordToken({ token }: { token: ReadingToken }) {
               disabled={addMutation.isPending || alreadyQueued}
               className="mt-2 w-full rounded-md bg-accent-500 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
             >
-              {alreadyQueued ? "Já está na fila" : addMutation.isPending ? "Adicionando…" : "Adicionar ao estudo"}
+              {alreadyQueued
+                ? "Já está na fila"
+                : addMutation.isPending
+                  ? "Adicionando…"
+                  : "Adicionar ao estudo"}
             </button>
           )}
           {addError && <p className="mt-1 text-xs text-rose-400">{addError}</p>}

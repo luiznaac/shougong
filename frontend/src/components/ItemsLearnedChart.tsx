@@ -8,12 +8,9 @@ import type { StudyItemHistory } from "../api/types.ts";
  */
 export function ItemsLearnedChart({ history }: { history: StudyItemHistory[] }) {
   const { points, total, firstLabel, lastLabel } = useMemo(() => {
-    if (history.length === 0)
-      return { points: "", total: 0, firstLabel: "", lastLabel: "" };
+    if (history.length === 0) return { points: "", total: 0, firstLabel: "", lastLabel: "" };
 
-    const dates = history
-      .map((h) => new Date(h.created_at).getTime())
-      .sort((a, b) => a - b);
+    const dates = history.map((h) => new Date(h.created_at).getTime()).sort((a, b) => a - b);
     const start = startOfDay(dates[0]);
     const end = startOfDay(Date.now());
     const dayMs = 86_400_000;
@@ -25,12 +22,14 @@ export function ItemsLearnedChart({ history }: { history: StudyItemHistory[] }) 
       daily[idx] += 1;
     }
     let run = 0;
-    const cum = daily.map((d) => (run += d));
+    const cum: number[] = [];
+    for (const d of daily) {
+      run += d;
+      cum.push(run);
+    }
     const maxY = run;
 
-    const pts = cum
-      .map((y, i) => `${(i / spanDays) * 100},${100 - (y / maxY) * 100}`)
-      .join(" ");
+    const pts = cum.map((y, i) => `${(i / spanDays) * 100},${100 - (y / maxY) * 100}`).join(" ");
 
     return {
       points: pts,
@@ -49,6 +48,7 @@ export function ItemsLearnedChart({ history }: { history: StudyItemHistory[] }) 
         <span className="font-semibold tabular-nums text-slate-100">{total}</span> itens aprendidos
       </div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-32 w-full">
+        <title>Itens aprendidos ao longo do tempo</title>
         <polygon
           points={`0,100 ${points} 100,100`}
           fill="var(--color-accent-500)"

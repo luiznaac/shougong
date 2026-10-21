@@ -7,7 +7,7 @@ const TONE_MARKS: Record<string, string[]> = {
   i: ["i", "ī", "í", "ǐ", "ì", "i"],
   o: ["o", "ō", "ó", "ǒ", "ò", "o"],
   u: ["u", "ū", "ú", "ǔ", "ù", "u"],
-  "ü": ["ü", "ǖ", "ǘ", "ǚ", "ǜ", "ü"],
+  ü: ["ü", "ǖ", "ǘ", "ǚ", "ǜ", "ü"],
 };
 
 export interface PinyinSyllable {
@@ -21,7 +21,7 @@ function placeToneMark(syllable: string, tone: number): string {
   if (tone < 1 || tone > 4) return syllable;
 
   // Normalise ü spellings.
-  let s = syllable.replace(/u:/g, "ü").replace(/v/g, "ü");
+  const s = syllable.replace(/u:/g, "ü").replace(/v/g, "ü");
 
   // Standard rule: a or e always take the mark; then "ou"; otherwise the last vowel.
   const lower = s.toLowerCase();

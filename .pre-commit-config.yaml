@@ -34,6 +34,12 @@ repos:
         language: system
         files: ^frontend/.*\.(ts|tsx)$
         pass_filenames: false
+      - id: test-frontend
+        name: test (vitest)
+        entry: sh -c 'cd frontend && npm test'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|mjs|cjs)$
+        pass_filenames: false
       - id: test-backend
         name: test (pytest)
         entry: sh -c 'cd backend && uv run poe test'

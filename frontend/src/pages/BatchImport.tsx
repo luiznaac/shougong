@@ -1,9 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "../api/client.ts";
-import { parseStudyItemsCsv } from "../lib/csv.ts";
+import { ApiError, api } from "../api/client.ts";
 import type { BatchImportOutcome, BatchImportRowRequest, DictionaryEntry } from "../api/types.ts";
+import { parseStudyItemsCsv } from "../lib/csv.ts";
+import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 
 // Client-only states layered on top of the backend's row status: a row starts
 // "pending" (not sent yet), becomes "loading" while its request is in flight,
@@ -192,6 +193,7 @@ export function BatchImport() {
 
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={run}
           disabled={parsed.rows.length === 0 || running}
           className="rounded-md bg-accent-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-40"
@@ -240,6 +242,7 @@ function ResultsPanel({
   skipped: number;
   errors: number;
 }) {
+  const rowSlots = keyedOccurrences(rows, (row) => `${row.hanzi}\u0000${row.pinyin}`);
   return (
     <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -258,16 +261,21 @@ function ResultsPanel({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => {
+            {rowSlots.map(({ key, item: row }, i) => {
               const outcome = outcomes[i];
-              const status: DisplayStatus = outcome ? outcome.status : i === currentIndex ? "loading" : "pending";
+              const status: DisplayStatus = outcome
+                ? outcome.status
+                : i === currentIndex
+                  ? "loading"
+                  : "pending";
               const style = STATUS_STYLE[status];
               // an "error" row that still carries candidates: either several
               // entries matched exactly, or none did but the hanzi has other
               // readings — offer them so the user can add one by hand anyway.
-              const hasCandidates = status === "error" && (outcome?.candidates.length ?? 0) > 0;
+              const candidates = status === "error" ? (outcome?.candidates ?? []) : [];
+              const hasCandidates = candidates.length > 0;
               return (
-                <tr key={i} className="border-t border-white/5 align-top">
+                <tr key={key} className="border-t border-white/5 align-top">
                   <td className="py-1.5 pr-3 tabular-nums text-slate-500">{i + 1}</td>
                   <td className="py-1.5 pr-3 font-hanzi text-slate-100" lang="zh-Hans">
                     {row.hanzi || "—"}
@@ -284,13 +292,13 @@ function ResultsPanel({
                   <td className="py-1.5 text-slate-400">
                     {hasCandidates ? (
                       <CandidatePicker
-                        detail={outcome!.detail}
-                        candidates={outcome!.candidates}
+                        detail={outcome?.detail}
+                        candidates={candidates}
                         resolving={resolvingRow === i}
                         onPick={(entryId) => onPickCandidate(i, entryId)}
                       />
                     ) : (
-                      outcome?.detail ?? ""
+                      (outcome?.detail ?? "")
                     )}
                   </td>
                 </tr>
@@ -323,12 +331,14 @@ function CandidatePicker({
       <div className="flex flex-wrap gap-1.5">
         {candidates.map((c) => (
           <button
+            type="button"
             key={c.id}
             disabled={resolving}
             onClick={() => onPick(c.id)}
             className="inline-flex items-center gap-1 rounded border border-white/10 bg-slate-800 px-2 py-1 text-xs text-slate-200 transition-colors hover:border-accent-500 hover:text-accent-400 disabled:opacity-50"
           >
-            {resolving && <Spinner />}#{c.id} {c.pinyin} — {c.definitions.slice(0, 2).join("; ") || "sem definição"}
+            {resolving && <Spinner />}#{c.id} {c.pinyin} —{" "}
+            {c.definitions.slice(0, 2).join("; ") || "sem definição"}
           </button>
         ))}
       </div>

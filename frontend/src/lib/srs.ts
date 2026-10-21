@@ -38,16 +38,10 @@ export const LEVELS: LevelSpec[] = [
   { level: "expert-1", group: "expert", label: "Expert I", maxStabilityDays: 120 },
   { level: "expert-2", group: "expert", label: "Expert II", maxStabilityDays: 240 },
   { level: "expert-3", group: "expert", label: "Expert III", maxStabilityDays: 365 },
-  { level: "master", group: "master", label: "Master", maxStabilityDays: Infinity },
+  { level: "master", group: "master", label: "Master", maxStabilityDays: Number.POSITIVE_INFINITY },
 ];
 
-export const GROUP_ORDER: SrsGroup[] = [
-  "novice",
-  "apprentice",
-  "journeyman",
-  "expert",
-  "master",
-];
+export const GROUP_ORDER: SrsGroup[] = ["novice", "apprentice", "journeyman", "expert", "master"];
 
 export const GROUP_LABEL: Record<SrsGroup, string> = {
   novice: "Novice",

@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useLearningToReviewHistory, useStudyItems } from "../api/queries.ts";
-import { tallyGroups } from "../lib/srs.ts";
-import { SrsDistribution } from "../components/SrsDistribution.tsx";
-import { UpcomingReviews } from "../components/UpcomingReviews.tsx";
 import { ItemsLearnedChart } from "../components/ItemsLearnedChart.tsx";
 import { ProgressTiles } from "../components/ProgressTiles.tsx";
+import { SrsDistribution } from "../components/SrsDistribution.tsx";
+import { UpcomingReviews } from "../components/UpcomingReviews.tsx";
+import { tallyGroups } from "../lib/srs.ts";
 
 export function Dashboard() {
   const { data: items, isLoading, error } = useStudyItems();
@@ -59,7 +59,11 @@ export function Dashboard() {
       <Panel title={`Caracteres (${items.length})`}>
         {items.length === 0 ? (
           <p className="text-sm text-slate-500">
-            Nada ainda. <Link to="/add" className="text-accent-500 hover:underline">Adicione itens</Link>.
+            Nada ainda.{" "}
+            <Link to="/add" className="text-accent-500 hover:underline">
+              Adicione itens
+            </Link>
+            .
           </p>
         ) : (
           <ProgressTiles items={items} />
@@ -98,9 +102,7 @@ function BigButton({
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
-        {title}
-      </h2>
+      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
       {children}
     </section>
   );
