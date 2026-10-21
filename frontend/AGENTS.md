@@ -5,10 +5,16 @@ React 19 + Vite + TypeScript + Tailwind v4 + TanStack Query + React Router SPA f
 ## Commands
 
 ```bash
-npm run dev         # vite dev server
-npm run typecheck    # tsc -b --noEmit — the only check that exists today, no lint/test yet
-npm run build         # tsc -b && vite build
+npm run dev          # vite dev server
+npm run typecheck    # tsc -b --noEmit
+npm run lint         # biome check
+npm run lint:fix     # biome check --write
+npm run test         # vitest run — src/lib/**/*.test.ts, pure helpers only
+npm run check        # typecheck + lint + test — run before considering a change done
+npm run build        # tsc -b && vite build
 ```
+
+Tests live in `src/lib/**/*.test.ts` (Vitest, node environment) and cover pure helpers only — there are no component/render tests yet.
 
 ## Shougong-specific pieces
 
@@ -21,5 +27,9 @@ npm run build         # tsc -b && vite build
 
 - Adding a page in the review/lesson flow → look at `Review.tsx`/`Lesson.tsx` first, they're intentionally outside `Layout`.
 - Changing what the UI shows for a backend enum → `i18n/`, and check `../docs/03-data-model.md` for the enum's full value set before assuming you've covered every case.
+
+## Coding standards
+
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md)
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.

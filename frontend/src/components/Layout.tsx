@@ -15,9 +15,7 @@ export function Layout() {
             <span lang="zh-Hans" className="text-xl font-hanzi text-accent-500">
               手工
             </span>
-            <span className="text-sm font-semibold tracking-wide text-slate-300">
-              shougong
-            </span>
+            <span className="text-sm font-semibold tracking-wide text-slate-300">shougong</span>
           </NavLink>
           <nav className="flex items-center gap-1">
             <NavLink to="/" end className={linkClass}>

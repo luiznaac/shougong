@@ -11,17 +11,14 @@ export function Lesson() {
       const all = await api.listAllStudyItems();
       return all.filter((i) => i.card.state === "learning");
     },
-    staleTime: Infinity,
+    staleTime: Number.POSITIVE_INFINITY,
     gcTime: 0,
   });
 
   if (isLoading) return <FullScreenMsg text="Carregando lição…" />;
-  if (error)
-    return <FullScreenMsg text={`Falha ao carregar: ${String(error)}`} tone="error" />;
+  if (error) return <FullScreenMsg text={`Falha ao carregar: ${String(error)}`} tone="error" />;
 
-  return (
-    <Quiz items={data ?? []} mode="lesson" emptyMessage="Nenhum item novo para aprender." />
-  );
+  return <Quiz items={data ?? []} mode="lesson" emptyMessage="Nenhum item novo para aprender." />;
 }
 
 function FullScreenMsg({ text, tone }: { text: string; tone?: "error" }) {

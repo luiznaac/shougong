@@ -45,8 +45,8 @@ export function ReadingTopicsPanel() {
 
       <div className="space-y-3 px-4 pb-4">
         <p className="text-xs text-slate-500">
-          Quando você gera um texto sem preencher o tópico, o app sorteia um destes cenários (só os ativos),
-          evitando os usados recentemente.
+          Quando você gera um texto sem preencher o tópico, o app sorteia um destes cenários (só os
+          ativos), evitando os usados recentemente.
         </p>
 
         <div className="flex gap-2">
@@ -60,6 +60,7 @@ export function ReadingTopicsPanel() {
             className="flex-1 rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
           />
           <button
+            type="button"
             onClick={submit}
             disabled={add.isPending || !draft.trim()}
             className="rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
@@ -80,10 +81,15 @@ export function ReadingTopicsPanel() {
                 className="accent-accent-500"
                 aria-label="ativo"
               />
-              <span className={topic.active ? "flex-1 text-slate-200" : "flex-1 text-slate-500 line-through"}>
+              <span
+                className={
+                  topic.active ? "flex-1 text-slate-200" : "flex-1 text-slate-500 line-through"
+                }
+              >
                 {topic.scenario}
               </span>
               <button
+                type="button"
                 onClick={() => remove.mutate(topic.id)}
                 className="text-xs text-slate-500 transition-colors hover:text-rose-400"
               >

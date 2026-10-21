@@ -19,7 +19,9 @@ function readNumber(key: string, fallback: number): number {
     const raw = localStorage.getItem(key);
     if (raw === null) return fallback;
     const parsed = JSON.parse(raw) as number;
-    return TOLERANCE_PRESETS.includes(parsed as (typeof TOLERANCE_PRESETS)[number]) ? parsed : fallback;
+    return TOLERANCE_PRESETS.includes(parsed as (typeof TOLERANCE_PRESETS)[number])
+      ? parsed
+      : fallback;
   } catch {
     return fallback;
   }

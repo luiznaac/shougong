@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useCharacterStrokes } from "../api/queries.ts";
+import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 
 const VIEWBOX_SIZE = 1024;
 // hanzi-writer-data's raw coordinate space has Y increasing upward, with the
@@ -33,18 +34,22 @@ export function StrokeOrder({
         style={{ width: sizePx, height: sizePx }}
         className="rounded-lg bg-slate-800/40"
       >
+        <title>Ordem dos traços de {character}</title>
         <g transform={`scale(1,-1) translate(0,-${RAW_Y_OFFSET})`}>
-          {data.strokes.map((d, i) => (
-            <path key={`bg-${i}`} d={d} className="fill-slate-400/20" />
+          {keyedOccurrences(data.strokes, (stroke) => stroke).map(({ key, item: d }) => (
+            <path key={`bg-${key}`} d={d} className="fill-slate-400/20" />
           ))}
-          {data.strokes.slice(0, revealed).map((d, i) => (
-            <path key={`fg-${i}`} d={d} className="fill-accent-500" />
-          ))}
+          {keyedOccurrences(data.strokes.slice(0, revealed), (stroke) => stroke).map(
+            ({ key, item: d }) => (
+              <path key={`fg-${key}`} d={d} className="fill-accent-500" />
+            ),
+          )}
         </g>
       </svg>
 
       <div className="flex items-center gap-2 text-sm">
         <button
+          type="button"
           onClick={() => setRevealed((r) => Math.max(0, r - 1))}
           disabled={revealed === 0}
           className="rounded-md bg-slate-800 px-2.5 py-1 text-slate-300 disabled:opacity-30"
@@ -55,16 +60,25 @@ export function StrokeOrder({
           traço {revealed}/{total}
         </span>
         <button
+          type="button"
           onClick={() => setRevealed((r) => Math.min(total, r + 1))}
           disabled={revealed === total}
           className="rounded-md bg-slate-800 px-2.5 py-1 text-slate-300 disabled:opacity-30"
         >
           Próximo →
         </button>
-        <button onClick={() => setRevealed(0)} className="ml-1 text-xs text-slate-500 hover:text-slate-300">
+        <button
+          type="button"
+          onClick={() => setRevealed(0)}
+          className="ml-1 text-xs text-slate-500 hover:text-slate-300"
+        >
           reiniciar
         </button>
-        <button onClick={() => setRevealed(total)} className="text-xs text-slate-500 hover:text-slate-300">
+        <button
+          type="button"
+          onClick={() => setRevealed(total)}
+          className="text-xs text-slate-500 hover:text-slate-300"
+        >
           mostrar tudo
         </button>
       </div>

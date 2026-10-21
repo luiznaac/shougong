@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 import { StrokeOrder } from "./StrokeOrder.tsx";
 
 /**
@@ -12,20 +13,23 @@ export function StrokeOrderPanel({
   word: string;
   sizePx?: number;
 }) {
-  const chars = useMemo(() => [...word], [word]);
+  const chars = useMemo(() => keyedOccurrences([...word], (char) => char), [word]);
   const [activeIdx, setActiveIdx] = useState(0);
-  const active = chars[Math.min(activeIdx, chars.length - 1)] ?? chars[0];
+  const active = chars[Math.min(activeIdx, chars.length - 1)]?.item ?? chars[0]?.item ?? "";
 
   return (
     <div className="flex flex-col items-center gap-3">
       {chars.length > 1 && (
         <div className="flex flex-wrap justify-center gap-2">
-          {chars.map((c, i) => (
+          {chars.map(({ key, item: c }, i) => (
             <button
-              key={i}
+              type="button"
+              key={key}
               onClick={() => setActiveIdx(i)}
               className={`font-hanzi rounded-md px-3 py-1 text-lg transition-colors ${
-                i === activeIdx ? "bg-accent-500 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                i === activeIdx
+                  ? "bg-accent-500 text-white"
+                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
               }`}
             >
               {c}

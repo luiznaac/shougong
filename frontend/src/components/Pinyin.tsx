@@ -1,3 +1,4 @@
+import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 import { parsePinyin } from "../lib/pinyin.ts";
 
 interface Props {
@@ -9,11 +10,11 @@ interface Props {
 }
 
 export function Pinyin({ value, className = "", coloured = true }: Props) {
-  const syllables = parsePinyin(value);
+  const syllables = keyedOccurrences(parsePinyin(value), (s) => `${s.text}-${s.tone}`);
   return (
     <span className={className} lang="zh-Latn">
-      {syllables.map((s, i) => (
-        <span key={i}>
+      {syllables.map(({ key, item: s }, i) => (
+        <span key={key}>
           <span className={coloured ? `tone-${s.tone}` : undefined}>{s.text}</span>
           {i < syllables.length - 1 ? " " : ""}
         </span>

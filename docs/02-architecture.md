@@ -169,7 +169,7 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 - import-linter for architecture contracts.
 - pytest: unit tests (no Docker) + integration tests (Testcontainers MySQL).
 - Alembic `compare_metadata` guard in integration tests keeps entities and migrations in sync.
-- Frontend `tsc -b` + Vite production build.
+- Frontend `npm run check` (TypeScript, Biome lint/format, Vitest) + Vite production build.
 
 ## Cross-cutting contract
 

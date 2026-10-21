@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useAddStudyItem, useDictionarySearch, useStudyItems } from "../api/queries.ts";
 import type { DictionaryEntry } from "../api/types.ts";
-import { Pinyin } from "./Pinyin.tsx";
 import { Hanzi } from "./Hanzi.tsx";
+import { Pinyin } from "./Pinyin.tsx";
 
 /**
  * Dictionary entries that come up when searching for this item's hanzi —
@@ -29,13 +29,10 @@ export function RelatedEntries({
 
   // Drop the item itself and any other entry for the exact same hanzi
   // (alternate readings/notes) — "related" means other words.
-  const related = (results ?? []).filter(
-    (e) => e.id !== excludeEntryId && e.simplified !== query,
-  );
+  const related = (results ?? []).filter((e) => e.id !== excludeEntryId && e.simplified !== query);
 
   if (isLoading) return <p className="text-sm text-slate-500">Carregando…</p>;
-  if (error)
-    return <p className="text-sm text-rose-400">Falha ao buscar relacionados.</p>;
+  if (error) return <p className="text-sm text-rose-400">Falha ao buscar relacionados.</p>;
   if (related.length === 0)
     return <p className="text-sm text-slate-500">Nenhum item relacionado.</p>;
 
@@ -107,6 +104,7 @@ function Row({
 function AddButton({ onAdd, adding }: { onAdd: () => void; adding: boolean }) {
   return (
     <button
+      type="button"
       onClick={onAdd}
       disabled={adding}
       className="ml-auto shrink-0 rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"

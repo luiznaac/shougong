@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAddStudyItem, useDictionarySearch, useStudyItems } from "../api/queries.ts";
-import { Pinyin } from "../components/Pinyin.tsx";
-import { Hanzi } from "../components/Hanzi.tsx";
 import { ApiError } from "../api/client.ts";
+import { useAddStudyItem, useDictionarySearch, useStudyItems } from "../api/queries.ts";
+import { Hanzi } from "../components/Hanzi.tsx";
+import { Pinyin } from "../components/Pinyin.tsx";
 
 export function AddItems() {
   const [q, setQ] = useState("");
@@ -57,7 +57,6 @@ export function AddItems() {
       </div>
 
       <input
-        autoFocus
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="你好, ni3hao3, hello…"
@@ -79,14 +78,13 @@ export function AddItems() {
               />
               <div className="min-w-0">
                 <Pinyin value={entry.pinyin} className="text-sm" />
-                <p className="truncate text-sm text-slate-400">
-                  {entry.definitions.join("; ")}
-                </p>
+                <p className="truncate text-sm text-slate-400">{entry.definitions.join("; ")}</p>
                 {errorFor[entry.id] && (
                   <p className="text-xs text-rose-400">{errorFor[entry.id]}</p>
                 )}
               </div>
               <button
+                type="button"
                 disabled={enqueued || addMutation.isPending}
                 onClick={() => add(entry.id)}
                 className={`ml-auto shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${

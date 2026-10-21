@@ -1,14 +1,12 @@
 import { Link } from "react-router-dom";
 import type { StudyItem } from "../api/types.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
-import { Pinyin } from "./Pinyin.tsx";
 import { Hanzi } from "./Hanzi.tsx";
+import { Pinyin } from "./Pinyin.tsx";
 
 /** HanziHero-style progress tiles: hanzi + pinyin + meaning, border by SRS level. */
 export function ProgressTiles({ items }: { items: StudyItem[] }) {
-  const sorted = [...items].sort(
-    (a, b) => (b.card.stability ?? 0) - (a.card.stability ?? 0),
-  );
+  const sorted = [...items].sort((a, b) => (b.card.stability ?? 0) - (a.card.stability ?? 0));
 
   return (
     <div className="flex flex-wrap gap-2">

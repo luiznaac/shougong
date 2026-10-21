@@ -6,7 +6,7 @@ Estética inspirada no HanziHero (painel, bandas coloridas do quiz, pinyin com t
 
 ## Pré-requisitos
 
-- **Node.js 20+** (não estava instalado na máquina quando o projeto foi criado — instale via `winget install OpenJS.NodeJS.LTS` ou <https://nodejs.org>).
+- **Node.js 22.12+** (não estava instalado na máquina quando o projeto foi criado — instale via `winget install OpenJS.NodeJS.LTS` ou <https://nodejs.org>).
 - O backend `shougong` rodando (`uv run poe run` → `http://localhost:8080`).
 
 ## Rodar em dev

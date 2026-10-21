@@ -7,11 +7,7 @@ import type { StudyItem } from "../api/types.ts";
  */
 export function UpcomingReviews({ items, days = 7 }: { items: StudyItem[]; days?: number }) {
   const now = new Date();
-  const startOfTomorrow = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1,
-  );
+  const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
   const rows = Array.from({ length: days }, (_, i) => {
     const dayStart = new Date(startOfTomorrow.getTime() + i * 86_400_000);
@@ -21,6 +17,7 @@ export function UpcomingReviews({ items, days = 7 }: { items: StudyItem[]; days?
       return t >= dayStart.getTime() && t < dayEnd.getTime();
     }).length;
     return {
+      id: dayStart.toISOString(),
       label: dayStart.toLocaleDateString("pt-BR", { weekday: "long" }),
       count,
     };
@@ -31,9 +28,9 @@ export function UpcomingReviews({ items, days = 7 }: { items: StudyItem[]; days?
 
   return (
     <div>
-      {rows.map((r, i) => (
+      {rows.map((r) => (
         <div
-          key={i}
+          key={r.id}
           className="my-2 grid grid-cols-12 items-center gap-2 text-sm text-slate-300"
         >
           <span className="col-span-3 truncate capitalize text-slate-400">{r.label}</span>

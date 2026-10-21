@@ -34,19 +34,24 @@ export function VocabularyPanel() {
                 .sort((a, b) => b[1] - a[1])
                 .map(([cat, n]) => (
                   <span key={cat}>
-                    {vocabularyCategoryLabel(cat as VocabularyCategory)}: <span className="text-slate-200">{n}</span>
+                    {vocabularyCategoryLabel(cat as VocabularyCategory)}:{" "}
+                    <span className="text-slate-200">{n}</span>
                   </span>
                 ))}
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
               {Object.entries(summary.by_hsk_level)
-                .sort((a, b) => (a[0] === "none" ? 1 : b[0] === "none" ? -1 : Number(a[0]) - Number(b[0])))
+                .sort((a, b) =>
+                  a[0] === "none" ? 1 : b[0] === "none" ? -1 : Number(a[0]) - Number(b[0]),
+                )
                 .map(([level, n]) => {
                   const cov = summary.proficiency.coverage_by_level[level];
                   return (
                     <span key={level}>
                       {level === "none" ? "sem HSK" : `HSK ${level}`}: {n}
-                      {cov != null && <span className="text-slate-600"> ({Math.round(cov * 100)}%)</span>}
+                      {cov != null && (
+                        <span className="text-slate-600"> ({Math.round(cov * 100)}%)</span>
+                      )}
                     </span>
                   );
                 })}
@@ -55,14 +60,16 @@ export function VocabularyPanel() {
             <div className="text-xs text-slate-400">
               Nível estimado:{" "}
               <span className="text-slate-200">
-                {summary.proficiency.estimated_level > 0 ? `HSK ${summary.proficiency.estimated_level}` : "iniciante"}
+                {summary.proficiency.estimated_level > 0
+                  ? `HSK ${summary.proficiency.estimated_level}`
+                  : "iniciante"}
               </span>
             </div>
 
             {summary.qualifier_shortage && (
               <p className="rounded-md bg-amber-400/10 px-3 py-2 text-xs text-amber-400">
-                Poucos adjetivos no seu vocabulário — os textos vão sair descritivamente pobres. Vale estudar mais
-                qualificadores.
+                Poucos adjetivos no seu vocabulário — os textos vão sair descritivamente pobres.
+                Vale estudar mais qualificadores.
               </p>
             )}
 
@@ -99,7 +106,8 @@ function VocabularyRow({ profile }: { profile: VocabularyProfile }) {
       </td>
       <td className="px-3 py-1.5 text-slate-400">{profile.hsk_level ?? "—"}</td>
       <td className="px-3 py-1.5 text-xs text-slate-300">
-        {profile.pos_categories.map((category) => vocabularyCategoryLabel(category)).join(" · ") || "—"}
+        {profile.pos_categories.map((category) => vocabularyCategoryLabel(category)).join(" · ") ||
+          "—"}
       </td>
     </tr>
   );

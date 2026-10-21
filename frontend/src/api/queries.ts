@@ -60,7 +60,7 @@ export function useCharacterStrokes(character: string) {
     queryFn: () => api.getCharacterStrokes(character),
     enabled: character.length > 0,
     retry: false, // a 404 means "no stroke data for this char" — a permanent, expected outcome
-    staleTime: Infinity, // stroke data for a given character never changes
+    staleTime: Number.POSITIVE_INFINITY, // stroke data for a given character never changes
   });
 }
 
@@ -133,7 +133,8 @@ export function useAddReadingTopic() {
 export function useSetReadingTopicActive() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: number; active: boolean }) => api.setReadingTopicActive(args.id, args.active),
+    mutationFn: (args: { id: number; active: boolean }) =>
+      api.setReadingTopicActive(args.id, args.active),
     onSuccess: () => qc.invalidateQueries({ queryKey: readingTopicsKey }),
   });
 }

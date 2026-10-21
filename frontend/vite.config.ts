@@ -1,6 +1,6 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 // The app is served under `/shougong/` behind the unified dashboard reverse proxy,
 // but runs at `/` in local dev. Override with VITE_BASE if needed.
