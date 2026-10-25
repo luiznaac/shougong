@@ -2,6 +2,10 @@
 
 FastAPI hexagonal service for the Chinese-handwriting SRS. Deep architecture, component inventory, request-flow diagrams, and configuration reference live in [`../docs/02-architecture.md`](../docs/02-architecture.md) — read that before a non-trivial change, this file only covers what an agent needs on every task.
 
+## Code map
+
+- [`docs/code-map.md`](docs/code-map.md)
+
 ## Map
 
 ```

@@ -2,6 +2,10 @@
 
 React 19 + Vite + TypeScript + Tailwind v4 + TanStack Query + React Router SPA for the handwriting-SRS trainer — same stack and conventions across all of luiznaac's frontends, see salgadinhos' `react-spa-screen` skill for the shared parts (Tailwind v4-in-CSS, TanStack Query v5 object syntax, the `api/`→`components/`→`pages/`→`lib/` layout, the dev proxy/base-path setup). This file only covers what's specific to shougong.
 
+## Code map
+
+- [`docs/code-map.md`](docs/code-map.md)
+
 ## Commands
 
 ```bash
