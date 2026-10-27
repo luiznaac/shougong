@@ -54,4 +54,8 @@ uv run poe migrate            # apply pending migrations locally
 - Adding or changing an HTTP endpoint → [`../docs/04-api.md`](../docs/04-api.md), and check [`../docs/07-api-gaps.md`](../docs/07-api-gaps.md) for known-missing endpoints before assuming one doesn't exist for a reason.
 - Anything touching SRS scheduling/FSRS → `../docs/02-architecture.md`'s "grade a review" sequence diagram, then `srs/fsrs_engine.py` directly.
 
+## Coding standards
+
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
+
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.

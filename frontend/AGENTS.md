@@ -34,6 +34,6 @@ Tests live in `src/lib/**/*.test.ts` (Vitest, node environment) and cover pure h
 
 ## Coding standards
 
-- [`CODING_STANDARDS.md`](CODING_STANDARDS.md)
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.
