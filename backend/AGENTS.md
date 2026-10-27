@@ -47,6 +47,10 @@ uv run poe migrate            # apply pending migrations locally
 - A health check never raises — catch `Exception`, return `is_healthy=False`.
 - See salgadinhos' `python-hexagonal-feature` and `exposed-v1`-equivalent stack skills for the walkthrough shape shared with the `environments/python` scaffold this was generated from.
 
+## Coding standards
+
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
+
 ## Read when…
 
 - Adding/changing a reading-generation feature or the LLM prompt → [`../docs/05-reading-engine.md`](../docs/05-reading-engine.md).
