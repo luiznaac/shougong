@@ -40,7 +40,8 @@ from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsStat
 from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeRepository
 from shougong.usecase.strokes.model import CharacterStrokes, StrokeLookupResult
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import StudyItem
+from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem
+from shougong.usecase.study.shuffler import IShuffler
 from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
 from shougong.usecase.study_item_history.model import StudyItemHistory
 
@@ -68,8 +69,13 @@ def make_dictionary_entry(
     )
 
 
-def make_srs_card(*, due: datetime = _EPOCH) -> SrsCard:
-    return SrsCard(state=SrsState.LEARNING, stability=None, difficulty=None, due=due, last_review=None)
+def make_srs_card(
+    *,
+    state: SrsState = SrsState.LEARNING,
+    due: datetime = _EPOCH,
+    last_review: datetime | None = None,
+) -> SrsCard:
+    return SrsCard(state=state, stability=None, difficulty=None, due=due, last_review=last_review)
 
 
 def make_study_item(
@@ -78,12 +84,14 @@ def make_study_item(
     entry: DictionaryEntry | None = None,
     card: SrsCard | None = None,
     created_at: datetime = _EPOCH,
+    priority_position: int | None = None,
 ) -> StudyItem:
     return StudyItem(
         id=item_id,
         entry=entry or make_dictionary_entry(),
         card=card or make_srs_card(),
         created_at=created_at,
+        priority_position=priority_position,
     )
 
 
@@ -238,6 +246,17 @@ class FakeStudyItemHistoryRepository(IStudyItemHistoryRepository):
         return self._newest_first(transitions)[offset : offset + limit]
 
 
+class DeterministicShuffler(IShuffler):
+    """Reverses its input, so an ordering test can see the shuffler ran and on what."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[int]] = []
+
+    def shuffle(self, items: Sequence[StudyItem]) -> list[StudyItem]:
+        self.calls.append([item.id for item in items])
+        return list(reversed(items))
+
+
 class FakeStudyItemRepository(IStudyItemRepository):
     def __init__(
         self,
@@ -247,8 +266,12 @@ class FakeStudyItemRepository(IStudyItemRepository):
     ) -> None:
         self.items: list[StudyItem] = list(items or [])
         self.review_logs: dict[int, list[SrsReviewLog]] = {}
+        self.priorities: dict[int, int] = {}
         self.history = history or FakeStudyItemHistoryRepository()
         self._ids = count(1)
+
+    def _with_priority(self, item: StudyItem) -> StudyItem:
+        return replace(item, priority_position=self.priorities.get(item.id))
 
     async def create(self, entry: DictionaryEntry, card: SrsCard, created_at: datetime) -> StudyItem:
         item = StudyItem(id=next(self._ids), entry=entry, card=card, created_at=created_at)
@@ -257,7 +280,8 @@ class FakeStudyItemRepository(IStudyItemRepository):
         return item
 
     async def get(self, item_id: int) -> StudyItem | None:
-        return next((i for i in self.items if i.id == item_id), None)
+        found = next((i for i in self.items if i.id == item_id), None)
+        return self._with_priority(found) if found is not None else None
 
     async def exists_for_entry(self, entry_id: int) -> bool:
         return any(i.entry.id == entry_id for i in self.items)
@@ -265,8 +289,31 @@ class FakeStudyItemRepository(IStudyItemRepository):
     async def list_known_entries(self) -> list[DictionaryEntry]:
         return [item.entry for item in self.items]
 
+    async def prioritise(self, item_id: int, edge: PriorityEdge) -> StudyItem:
+        item = await self.get(item_id)
+        if item is None:
+            raise KeyError(item_id)
+        if self.priorities:
+            extreme = min(self.priorities.values()) if edge is PriorityEdge.FRONT else max(self.priorities.values())
+            position = extreme - 1 if edge is PriorityEdge.FRONT else extreme + 1
+        else:
+            position = 0
+        self.priorities[item_id] = position
+        return replace(item, priority_position=position)
+
+    async def deprioritise(self, item_id: int) -> None:
+        self.priorities.pop(item_id, None)
+
+    async def list_for_session(self, kind: SessionKind, *, now: datetime) -> list[StudyItem]:
+        if kind is SessionKind.LESSON:
+            matching = [i for i in self.items if i.card.state is SrsState.LEARNING]
+        else:
+            matching = [i for i in self.items if i.card.state is not SrsState.LEARNING and i.card.due <= now]
+        rows = [self._with_priority(i) for i in matching]
+        return sorted(rows, key=lambda i: (i.priority_position is None, i.priority_position or 0, i.id))
+
     async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]:
-        rows = sorted(self.items, key=lambda i: (i.card.due, i.id))
+        rows = sorted((self._with_priority(i) for i in self.items), key=lambda i: (i.card.due, i.id))
         if due_before is not None:
             rows = [i for i in rows if i.card.due <= due_before]
         return rows[offset : offset + limit]
@@ -274,7 +321,9 @@ class FakeStudyItemRepository(IStudyItemRepository):
     async def update_card(self, item_id: int, card: SrsCard, changed_at: datetime) -> StudyItem:
         for index, item in enumerate(self.items):
             if item.id == item_id:
-                updated = StudyItem(id=item.id, entry=item.entry, card=card, created_at=item.created_at)
+                if item.card.state is SrsState.LEARNING and card.state is not SrsState.LEARNING:
+                    self.priorities.pop(item_id, None)
+                updated = replace(item, card=card, priority_position=self.priorities.get(item_id))
                 self.items[index] = updated
                 await self.history.record(updated, changed_at)
                 return updated

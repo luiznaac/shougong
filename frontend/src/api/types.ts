@@ -32,6 +32,28 @@ export interface StudyItem {
   entry: DictionaryEntry;
   card: SrsCard;
   created_at: string;
+  // Opaque display-ordering key for the lesson queue; null when not pinned.
+  // Never render raw — only compare/sort by it.
+  priority_position: number | null;
+}
+
+export type PriorityEdge = "front" | "back";
+
+export interface PriorityRequest {
+  position: PriorityEdge;
+}
+
+export type SessionKind = "lesson" | "review";
+
+/**
+ * One request's lesson or review selection, in the order the client must present
+ * it. `session_id` is opaque and informational only — never an ordering input or a
+ * resume key; every request produces a fresh shuffle.
+ */
+export interface StudySession {
+  session_id: string;
+  kind: SessionKind;
+  items: StudyItem[];
 }
 
 export interface ReviewLog {

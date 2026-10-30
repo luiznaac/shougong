@@ -9,6 +9,7 @@ erDiagram
     DICTIONARY_ENTRY ||--o{ CHARACTER_STROKES : "per character"
     STUDY_ITEM ||--o{ REVIEW_LOG : "has grades"
     STUDY_ITEM ||--o{ STUDY_ITEM_HISTORY : "has trail"
+    STUDY_ITEM ||--o| STUDY_ITEM_PRIORITY : "pinned by"
     DICTIONARY_ENTRY ||--o{ READING_TEXT : "hydrated from"
     READING_TOPIC ||--o{ READING_TEXT : "topic source"
     READING_WORD_USAGE ||--o{ READING_TEXT : "tracks recency"
@@ -42,6 +43,10 @@ erDiagram
         bigint study_item_id FK
         smallint rating
         datetime review_datetime
+    }
+    STUDY_ITEM_PRIORITY {
+        bigint study_item_id PK,FK
+        int position
     }
     STUDY_ITEM_HISTORY {
         bigint id PK
@@ -83,7 +88,7 @@ erDiagram
     }
 ```
 
-> Some edges are conceptual, not foreign keys: `reading_text` references `reading_topic` by topic text, `reading_word_usage` is keyed by simplified word text, and `character_strokes` is keyed by character. The hard FKs are `study_item -> dictionary_entry`, `review_log/study_item_history -> study_item`, and `study_item_history -> dictionary_entry`.
+> Some edges are conceptual, not foreign keys: `reading_text` references `reading_topic` by topic text, `reading_word_usage` is keyed by simplified word text, and `character_strokes` is keyed by character. The hard FKs are `study_item -> dictionary_entry`, `review_log/study_item_history/study_item_priority -> study_item`, and `study_item_history -> dictionary_entry`.
 
 ## Tables
 
@@ -107,6 +112,15 @@ One row per dictionary entry the learner has queued; unique on `entry_id`. The F
 ### `review_log`
 
 Append-only grade history: `again | hard | good | easy` mapped to smallints. Newest first when read back.
+
+### `study_item_priority`
+
+One row per pinned study item — **row presence is membership**. `study_item_id` is the primary key and a foreign key to `study_item` with `ON DELETE CASCADE`; `position` is a signed integer indexed for the min/max edge reads.
+
+- Push-back is `max + 1`, push-front is `min - 1`, an empty queue starts at `0`. The min/max read and the write share one transaction with a locking read.
+- No renumbering, insert-between or drag reorder; there is no unique constraint on `position`, so a duplicate from a write race still orders deterministically by position then id.
+- Priority is learning-only. A review that moves a card from `learning` to `review` deletes its row in the same transaction.
+- `position` is an opaque display-ordering key — never rendered raw.
 
 ### `study_item_history`
 

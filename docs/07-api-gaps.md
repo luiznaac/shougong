@@ -14,7 +14,7 @@ These endpoints are suggestions to support the desktop interface proposals in [0
 | 6 | `GET /review-logs` | Medium | Global accuracy/streak analytics |
 | 7 | `POST /characters/strokes/batch` | Medium | Preload stroke data for sessions |
 | 8 | `GET /dictionary-entries/{id}/related` | Low | Related entries without client search |
-| 9 | `GET /study-items/next` | Medium | Lean quiz clients (one card at a time) |
+| 9 | ~~`GET /study-items/next`~~ | Superseded | Session endpoint (`GET /study/session`) covers lean quiz clients |
 
 ## 1. `GET /dashboard` - aggregate today state
 
@@ -89,9 +89,9 @@ Quiz sessions and multi-character words need stroke data for several characters 
 
 The item page currently derives related entries by searching the dictionary for the character and filtering client-side. A server endpoint would return entries sharing any character in `simplified`, excluding the item itself, with `is_studied` flags.
 
-## 9. `GET /study-items/next?mode=lesson|review`
+## 9. `GET /study-items/next?mode=lesson|review` — superseded
 
-For lean quiz clients: return one due item at a time with a stable session token, so the browser never holds the whole queue and the backend can enforce due-ness and skip 409 races. Response: the next `StudyItemResponse` plus `remaining_count` and optional `session_id`.
+**Superseded by `GET /study/session?kind=lesson|review`** (see [04-api.md](04-api.md#study-session)). The session endpoint returns the whole selection in presentation order — pinned-first unshuffled lessons and fully shuffled reviews — so the browser never has to hold or re-sort the queue itself, while the backend remains authoritative about ordering. There is deliberately no one-card-at-a-time cursor: the session response is the selection, and no session state is persisted.
 
 ## Non-endpoint suggestions
 

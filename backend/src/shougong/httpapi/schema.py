@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +24,14 @@ from shougong.usecase.reading.vocabulary import (
 )
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
 from shougong.usecase.strokes.model import CharacterStrokes
-from shougong.usecase.study.model import BatchImportOutcome, BatchImportReport, ReviewResult, StudyItem
+from shougong.usecase.study.model import (
+    BatchImportOutcome,
+    BatchImportReport,
+    PriorityEdge,
+    ReviewResult,
+    StudyItem,
+    StudySession,
+)
 from shougong.usecase.study_item_history.model import StudyItemHistory
 
 
@@ -99,14 +106,38 @@ class StudyItemResponse(BaseModel):
     entry: DictionaryEntryResponse
     card: SrsCardResponse
     created_at: datetime
+    # Opaque display-ordering key for the lesson queue; null when not pinned.
+    priority_position: int | None
 
     @classmethod
-    def from_domain(cls, item: StudyItem) -> StudyItemResponse:
+    def from_domain(cls, item: StudyItem) -> Self:
         return cls(
             id=item.id,
             entry=DictionaryEntryResponse.from_domain(item.entry),
             card=SrsCardResponse.from_domain(item.card),
             created_at=item.created_at,
+            priority_position=item.priority_position,
+        )
+
+
+class PriorityRequest(BaseModel):
+    position: Literal["front", "back"]
+
+    def to_domain(self) -> PriorityEdge:
+        return PriorityEdge(self.position)
+
+
+class StudySessionResponse(BaseModel):
+    session_id: str
+    kind: Literal["lesson", "review"]
+    items: list[StudyItemResponse]
+
+    @classmethod
+    def from_domain(cls, session: StudySession) -> Self:
+        return cls(
+            session_id=session.session_id,
+            kind=session.kind.value,
+            items=[StudyItemResponse.from_domain(item) for item in session.items],
         )
 
 

@@ -6,13 +6,14 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 
 ### `usecase` — domain, ports and services
 **Purpose**: the pure core — frozen dataclasses, `typing.Protocol` ports (`I*` prefix) and the services per slice: dictionary, study + SRS, strokes, reading/vocabulary, study-item history, plus `commons/` and the transaction port. It must not import `fastapi`, `sqlalchemy`, `httpx`, `uvicorn`, `pydantic`, `fsrs` or `jieba`; import-linter enforces it.
-**Files**: `backend/src/shougong/usecase/dictionary/{model,pinyin,service,gateway}.py`; `usecase/study/{model,service,gateway}.py`; `usecase/srs/{model,engine,day_boundary}.py`; `usecase/strokes/{model,service,gateway}.py`; `usecase/reading/{model,service,topic_service,vocabulary_service,gateway,dialogue,speakers,topics,proficiency,validation,working_set,vocabulary}.py`; `usecase/study_item_history/{model,service,gateway}.py`; `usecase/health/{checker,gateway}.py`; `usecase/configuration/transaction.py`; `usecase/commons/{asyncx,exceptions,logging,time}.py`
+**Files**: `backend/src/shougong/usecase/dictionary/{model,pinyin,service,gateway}.py`; `usecase/study/{model,service,gateway,shuffler}.py`; `usecase/srs/{model,engine,day_boundary}.py`; `usecase/strokes/{model,service,gateway}.py`; `usecase/reading/{model,service,topic_service,vocabulary_service,gateway,dialogue,speakers,topics,proficiency,validation,working_set,vocabulary}.py`; `usecase/study_item_history/{model,service,gateway}.py`; `usecase/health/{checker,gateway}.py`; `usecase/configuration/transaction.py`; `usecase/commons/{asyncx,exceptions,logging,time}.py`
 **Seam(s)**:
-- **Ports (`I*` Protocol)** — `IDictionaryRepository`/`ICedictSource`/`IHskDatasetSource` (`dictionary/gateway.py`), `IStudyItemRepository` (`study/gateway.py`), `ISrsEngine` (`srs/engine.py`), `IStrokeRepository`/`IHanziStrokeSource` (`strokes/gateway.py`), `IReadingTextGateway`/`ISegmenter`/`IReadingHistoryRepository`/`IReadingWordUsageRepository`/`IReadingTopicRepository` (`reading/gateway.py`), `IStudyItemHistoryRepository` (`study_item_history/gateway.py`), `IHealthChecker`/`IHealthGateway` (`health/`), `IClock` (`commons/time.py`). Every adapter explicitly inherits its port, so mypy and the IDE can jump port ↔ implementation.
+- **Ports (`I*` Protocol)** — `IDictionaryRepository`/`ICedictSource`/`IHskDatasetSource` (`dictionary/gateway.py`), `IStudyItemRepository` (`study/gateway.py`; `prioritise`/`deprioritise`/`list_for_session` above the `list` method that must stay last), `IShuffler` (`study/shuffler.py`), `ISrsEngine` (`srs/engine.py`), `IStrokeRepository`/`IHanziStrokeSource` (`strokes/gateway.py`), `IReadingTextGateway`/`ISegmenter`/`IReadingHistoryRepository`/`IReadingWordUsageRepository`/`IReadingTopicRepository` (`reading/gateway.py`), `IStudyItemHistoryRepository` (`study_item_history/gateway.py`), `IHealthChecker`/`IHealthGateway` (`health/`), `IClock` (`commons/time.py`). Every adapter explicitly inherits its port, so mypy and the IDE can jump port ↔ implementation.
 - **`ITransactionTemplate.execute(...)`** (`usecase/configuration/transaction.py`) — lets a service compose several repository calls atomically without importing SQLAlchemy; nested calls join the outer transaction.
 - **Domain errors** (`usecase/commons/exceptions.py`) — `DomainError` and its `InvalidArgumentError`/`ResourceNotFoundError`/`ConflictError` subclasses map to 4xx at `httpapi`'s exception handlers; nothing raises an HTTP type here.
 - **Clock seam** (`usecase/commons/time.py`) — logic reads time through `IClock`, never `datetime.now()`; tests pass a fixed clock into `Container(settings, clock=...)`.
 - **Reading behaviour** (`usecase/reading/`) — `ReadingService` orchestrates the LLM gateway + segmenter + repositories; the LLM prompt itself is the product-behaviour file `gateway/reading/system_prompt.txt`.
+- **Queue priority and sessions** (`usecase/study/`) — `StudyService.prioritise`/`deprioritise`/`session`; the domain carries `priority_position` as an opaque key, and `IShuffler` is injected so ordering tests substitute a deterministic double instead of patching randomness.
 
 ### `persistence` — SQLAlchemy adapters and migrations
 **Purpose**: async SQLAlchemy 2 repositories, one sub-package per usecase slice, over MySQL via `asyncmy`.
@@ -21,6 +22,7 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 - **Declarative base** (`configuration/base.py`) — every entity module must be imported in `alembic/env.py` so `Base.metadata` is complete; there is no aggregate models module.
 - **Transaction adapter** (`configuration/transaction.py`) — `SqlAlchemyTransactionTemplate` implements `ITransactionTemplate`; repositories obtain the bound session via `current_session()`, which raises outside a transaction.
 - **Entity/repository seam** — a new table is a `persistence/<slice>/entity.py` + registration in `alembic/env.py`; a repository always receives the transaction template, never a session factory.
+- **Priority edge maths** (`persistence/study/repository.py`) — `prioritise` reads the min/max position under `FOR UPDATE` and writes the pin in the same transaction; `update_card` deletes the pin on a `learning`→`review` graduation; `get`/`list`/`list_for_session` outer-join `study_item_priority` so `priority_position` is populated.
 - **Health adapter** (`health/mysql_health_check.py`) — implements `IHealthChecker` over the shared engine and never raises.
 
 ### `gateway` — outbound HTTP integrations
@@ -41,9 +43,14 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 **Files**: `backend/src/shougong/segmentation/{jieba_segmenter,jieba_pos}.py`
 **Seam(s)**: **`JiebaSegmenter`** (`segmentation/jieba_segmenter.py`) implements `ISegmenter`; `jieba_pos.py` adds POS tags. Import-linter keeps jieba out of `usecase/`.
 
+### `randomization` — system-random adapter
+**Purpose**: the production shuffle source for lesson/review sessions.
+**Files**: `backend/src/shougong/randomization/random_shuffler.py`
+**Seam(s)**: **`RandomShuffler`** implements `IShuffler` over `random.SystemRandom`; inject it through `Container`, and substitute a deterministic double in tests.
+
 ### `httpapi` — FastAPI controllers and DTOs
 **Purpose**: the HTTP surface — controllers returning `APIRouter`s, Pydantic transport DTOs, the app factory and the domain-exception handlers.
-**Files**: `backend/src/shougong/httpapi/controller/base.py`, `controller/{health,dictionary,strokes,study,study_item_history,reading,reading_topic,vocabulary}_controller.py`; `httpapi/schema.py`; `httpapi/configuration/server.py`
+**Files**: `backend/src/shougong/httpapi/controller/base.py`, `controller/{health,dictionary,strokes,study,study_session,study_item_history,reading,reading_topic,vocabulary}_controller.py`; `httpapi/schema.py`; `httpapi/configuration/server.py`
 **Seam(s)**:
 - **`IController.router()`** (`controller/base.py`) — the `ControllerTemplate` equivalent; `Container` builds the controller list and `build_app` mounts each router, so adding an endpoint never edits the server wiring.
 - **DTO seam** (`schema.py`) — Pydantic lives only here (and in `application/settings.py`); every response has a `from_domain(...)` classmethod, and the shapes are mirrored in `frontend/src/api/types.ts` in the same commit.
@@ -53,13 +60,13 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 **Purpose**: the one place that knows every concrete class, plus typed settings and the ASGI entry.
 **Files**: `backend/src/shougong/application/{container,settings,boot}.py`
 **Seam(s)**:
-- **`Container`** (`application/container.py`) — builds the engine, HTTP client, every adapter/service and the `controllers`/`health_checkers` lists, then `build_app(..., lifespan=...)`; adding a slice is a class plus one wiring line here. Tests construct their own `Container` with fakes/fixed clock.
+- **`Container`** (`application/container.py`) — builds the engine, HTTP client, every adapter/service (including the `RandomShuffler`) and the `controllers`/`health_checkers` lists, then `build_app(..., lifespan=...)`; adding a slice is a class plus one wiring line here. Tests construct their own `Container` with fakes/fixed clock.
 - **Lifespan** (`application/container.py`) — the async lifespan starts the dictionary/HSK autoload and the jieba warm-up, and cancels them plus `aclose()` on shutdown.
 - **Settings** (`application/settings.py`) — `pydantic-settings`, `__`-nested env vars, `APP_ENV` profile; `MySqlConfig.url` is the one DB URL shape.
 
 ### `alembic`, tests and packaging
 **Purpose**: the migration chain and its baseline logic, the unit/integration suites, and the image/CI story.
-**Files**: `backend/alembic/env.py`, `alembic/versions/{0001_baseline,0002_dictionary_hsk,0003_reading}.py`; `backend/scripts/migrate.py`; `backend/tests/unit/*`, `backend/tests/integration/*`, `tests/{conftest,fixtures}.py`; `backend/pyproject.toml`; `deploy/{entrypoint.sh,nginx.conf.template,supervisord.conf}`, `Dockerfile`, `docker-compose.yml`, `.github/workflows/*`
+**Files**: `backend/alembic/env.py`, `alembic/versions/{0001_baseline,0002_dictionary_hsk,0003_reading,0004_study_item_priority}.py`; `backend/scripts/migrate.py`; `backend/tests/unit/*`, `backend/tests/integration/*`, `tests/{conftest,fixtures}.py`; `backend/pyproject.toml`; `deploy/{entrypoint.sh,nginx.conf.template,supervisord.conf}`, `Dockerfile`, `docker-compose.yml`, `.github/workflows/*`
 **Seam(s)**:
 - **Migration guard** (`alembic/env.py`, `scripts/migrate.py`) — autogenerate + `compare_metadata` against `Base.metadata`; `migrate.py` baselines a pre-migration database by stamping `0001_baseline`, then upgrades to head. Never hand-write SQL.
 - **Deploy entry** (`deploy/entrypoint.sh`) — renders nginx, runs `scripts/migrate.py`, then `exec supervisord`; a failed migration aborts the container.

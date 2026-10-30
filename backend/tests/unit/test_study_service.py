@@ -7,11 +7,12 @@ import pytest
 from shougong.usecase.commons.exceptions import ConflictError, ResourceNotFoundError
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.dictionary.model import DictionaryEntry
-from shougong.usecase.srs.model import SrsRating, SrsReviewLog
+from shougong.usecase.srs.model import SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.strokes.service import StrokeService
-from shougong.usecase.study.model import BatchImportRow, BatchRowStatus
+from shougong.usecase.study.model import BatchImportRow, BatchRowStatus, PriorityEdge, SessionKind
 from shougong.usecase.study.service import StudyService
 from tests.fixtures import (
+    DeterministicShuffler,
     FakeDictionaryRepository,
     FakeHanziStrokeSource,
     FakeStrokeRepository,
@@ -32,6 +33,7 @@ def _service(
     dictionary: FakeDictionaryRepository | None = None,
     study: FakeStudyItemRepository | None = None,
     strokes: StrokeService | None = None,
+    shuffler: DeterministicShuffler | None = None,
 ) -> StudyService:
     return StudyService(
         study or FakeStudyItemRepository(),
@@ -40,6 +42,7 @@ def _service(
         FixedClock(_NOW),
         FakeTransactionTemplate(),
         strokes or StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource()),
+        shuffler or DeterministicShuffler(),
     )
 
 
@@ -152,6 +155,116 @@ async def test_item_reviews_unknown_raises_not_found() -> None:
 
     with pytest.raises(ResourceNotFoundError):
         await service.item_reviews(999)
+
+
+# --- priority -------------------------------------------------------------
+
+
+async def test_prioritise_front_pins_to_the_empty_queue_at_zero() -> None:
+    study = FakeStudyItemRepository([make_study_item(item_id=1)])
+    service = _service(study=study)
+
+    pinned = await service.prioritise(1, PriorityEdge.FRONT)
+    moved_to_back = await service.prioritise(1, PriorityEdge.BACK)
+
+    assert pinned.priority_position == 0
+    assert moved_to_back.priority_position == 1
+    assert study.priorities == {1: 1}
+
+
+async def test_prioritise_unknown_item_raises_not_found() -> None:
+    service = _service(study=FakeStudyItemRepository())
+
+    with pytest.raises(ResourceNotFoundError):
+        await service.prioritise(999, PriorityEdge.FRONT)
+
+
+async def test_prioritise_a_non_learning_item_conflicts() -> None:
+    review_card = make_srs_card(state=SrsState.REVIEW)
+    study = FakeStudyItemRepository([make_study_item(item_id=1, card=review_card)])
+    service = _service(study=study)
+
+    with pytest.raises(ConflictError):
+        await service.prioritise(1, PriorityEdge.BACK)
+
+    assert study.priorities == {}
+
+
+async def test_deprioritise_is_idempotent_and_unknown_item_is_not_found() -> None:
+    study = FakeStudyItemRepository([make_study_item(item_id=1)])
+    service = _service(study=study)
+
+    await service.deprioritise(1)
+    await service.deprioritise(1)
+
+    assert study.priorities == {}
+
+    with pytest.raises(ResourceNotFoundError):
+        await service.deprioritise(999)
+
+
+async def test_reviewing_learning_into_review_drops_the_priority() -> None:
+    study = FakeStudyItemRepository([make_study_item(item_id=1)])
+    service = _service(study=study)
+    await service.prioritise(1, PriorityEdge.FRONT)
+
+    result = await service.review_item(1, SrsRating.GOOD)
+
+    assert result.item.priority_position is None
+    assert study.priorities == {}
+
+
+# --- session --------------------------------------------------------------
+
+# The fake repository returns lessons pinned-first (position then id), then the
+# unpinned remainder by id; the deterministic shuffler reverses only what it is
+# handed, so an expected order shows exactly which block was shuffled.
+
+
+async def test_lesson_session_keeps_the_pinned_block_and_shuffles_only_the_remainder() -> None:
+    items = [make_study_item(item_id=i) for i in (1, 2, 3)]
+    study = FakeStudyItemRepository(items)
+    study.priorities = {3: 5}
+    shuffler = DeterministicShuffler()
+    service = _service(study=study, shuffler=shuffler)
+
+    session = await service.session(SessionKind.LESSON)
+
+    assert [item.id for item in session.items] == [3, 2, 1]
+    assert shuffler.calls == [[1, 2]]
+
+
+async def test_review_session_shuffles_the_whole_due_block() -> None:
+    review_card = make_srs_card(state=SrsState.REVIEW, due=_NOW)
+    relearning_card = make_srs_card(state=SrsState.RELEARNING, due=_NOW)
+    not_due_card = make_srs_card(state=SrsState.REVIEW, due=_NOW.replace(year=2027))
+    study = FakeStudyItemRepository(
+        [
+            make_study_item(item_id=1, card=review_card),
+            make_study_item(item_id=2, card=relearning_card),
+            make_study_item(item_id=3, card=not_due_card),
+            make_study_item(item_id=4),  # still learning — excluded from reviews
+        ]
+    )
+    shuffler = DeterministicShuffler()
+    service = _service(study=study, shuffler=shuffler)
+
+    session = await service.session(SessionKind.REVIEW)
+
+    assert {item.id for item in session.items} == {1, 2}
+    assert sorted(shuffler.calls[0]) == [1, 2]
+
+
+async def test_empty_session_is_a_fresh_id_and_no_items() -> None:
+    service = _service(study=FakeStudyItemRepository())
+
+    first = await service.session(SessionKind.LESSON)
+    second = await service.session(SessionKind.LESSON)
+
+    assert first.kind is SessionKind.LESSON
+    assert first.items == ()
+    assert first.session_id
+    assert first.session_id != second.session_id
 
 
 # --- import_batch ---------------------------------------------------------

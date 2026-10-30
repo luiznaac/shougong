@@ -30,7 +30,11 @@ from shougong.persistence.reading.entity import ReadingTextEntity  # noqa: F401
 from shougong.persistence.reading.topic_entity import ReadingTopicEntity  # noqa: F401
 from shougong.persistence.reading.word_usage_entity import ReadingWordUsageEntity  # noqa: F401
 from shougong.persistence.strokes.entity import CharacterStrokesEntity  # noqa: F401
-from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity  # noqa: F401
+from shougong.persistence.study.entity import (  # noqa: F401
+    ReviewLogEntity,
+    StudyItemEntity,
+    StudyItemPriorityEntity,
+)
 from shougong.persistence.study_item_history.entity import StudyItemHistoryEntity  # noqa: F401
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
