@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLearningToReviewHistory, useStudyItems } from "../api/queries.ts";
 import type { StudyItem } from "../api/types.ts";
+import { ExtraStudyPanel } from "../components/ExtraStudyPanel.tsx";
 import { ItemsLearnedChart } from "../components/ItemsLearnedChart.tsx";
 import { ProgressTiles } from "../components/ProgressTiles.tsx";
 import { SrsDistribution } from "../components/SrsDistribution.tsx";
@@ -52,6 +53,10 @@ export function Dashboard() {
           disabled={reviewCount === 0}
         />
       </section>
+
+      <Panel title="Estudo extra">
+        <ExtraStudyPanel />
+      </Panel>
 
       <Panel title="SRS Stage Distribution">
         <SrsDistribution tally={tally} />

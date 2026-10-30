@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
 import { type StudyItemListQuery, api } from "./client.ts";
 import type { GenerateReadingRequest, SessionKind, SrsRating } from "./types.ts";
@@ -12,7 +12,23 @@ export const keys = {
   history: (id: number) => ["study-items", id, "history"] as const,
   dictionary: (q: string) => ["dictionary", q] as const,
   readingHistory: ["reading-texts"] as const,
+  insightsPrefix: ["insights"] as const,
+  extraStudy: (from: string, to: string) => ["insights", "extra-study", { from, to }] as const,
 };
+
+export interface ExtraStudyQueryOptions {
+  staleTime?: number;
+  enabled?: boolean;
+}
+
+export function useExtraStudy(from: string, to: string, opts: ExtraStudyQueryOptions = {}) {
+  return useQuery({
+    queryKey: keys.extraStudy(from, to),
+    queryFn: () => api.getExtraStudy(from, to),
+    staleTime: opts.staleTime,
+    enabled: opts.enabled ?? true,
+  });
+}
 
 export function useStudyItems(opts: StudyItemListQuery = {}) {
   return useQuery({
@@ -83,16 +99,20 @@ export function useAddStudyItem() {
   });
 }
 
+/** A real grade refreshes the study-item grids and both Extra Study buckets. */
+export function invalidateAfterReview(qc: QueryClient, id: number): void {
+  qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+  qc.invalidateQueries({ queryKey: keys.insightsPrefix });
+  qc.invalidateQueries({ queryKey: keys.studyItem(id) });
+  qc.invalidateQueries({ queryKey: keys.reviews(id) });
+}
+
 export function useReviewMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, rating }: { id: number; rating: SrsRating }) =>
       api.reviewStudyItem(id, rating),
-    onSuccess: (_res, { id }) => {
-      qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
-      qc.invalidateQueries({ queryKey: keys.studyItem(id) });
-      qc.invalidateQueries({ queryKey: keys.reviews(id) });
-    },
+    onSuccess: (_res, { id }) => invalidateAfterReview(qc, id),
   });
 }
 

@@ -9,6 +9,12 @@ import {
   useHandwritingTolerance,
 } from "../lib/localSettings.ts";
 import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
+import {
+  type QuizMode,
+  submitRevealedGrade,
+  summaryCopy,
+  topBarTitle,
+} from "../lib/quizPractice.ts";
 import { HandwritingQuiz } from "./HandwritingQuiz.tsx";
 import { Pinyin } from "./Pinyin.tsx";
 import { StrokeOrderPanel } from "./StrokeOrderPanel.tsx";
@@ -40,19 +46,25 @@ const NEXT_LABEL: Record<Phase, string> = {
 };
 
 /**
- * Full-screen quiz runner shared by Review and Lesson, HanziHero-styled:
- * a coloured subject band (pinyin + flip cards + meaning), a question band,
- * then a bottom toolbar. Nothing is submitted until "Próximo" confirms; the
- * selected grade can be undone with "Rollback".
+ * Full-screen quiz runner shared by Review, Lesson and practice, HanziHero-
+ * styled: a coloured subject band (pinyin + flip cards + meaning), a question
+ * band, then a bottom toolbar. Nothing is submitted until "Próximo" confirms;
+ * the selected grade can be undone with "Rollback".
+ *
+ * `record` defaults to true. Practice passes false, which keeps the whole
+ * runner but never issues a write request — there is no grade call at all, so
+ * "not recorded" is structural rather than a flag the backend has to honour.
  */
 export function Quiz({
   items,
   mode,
   emptyMessage,
+  record = true,
 }: {
   items: StudyItem[];
-  mode: "review" | "lesson";
+  mode: QuizMode;
   emptyMessage: string;
+  record?: boolean;
 }) {
   const navigate = useNavigate();
   const { mutateAsync: review } = useReviewMutation();
@@ -77,6 +89,7 @@ export function Quiz({
   const accuracy = done > 0 ? Math.round((correct / done) * 100) : 100;
   const finished = idx >= items.length;
 
+  const practice = !record;
   const bandClass =
     mode === "lesson" ? "from-violet-600 to-violet-800" : "from-rose-500 to-accent-600";
 
@@ -96,7 +109,12 @@ export function Quiz({
 
     setSubmitting(true);
     try {
-      await review({ id: current.id, rating: selected });
+      await submitRevealedGrade({
+        record,
+        itemId: current.id,
+        rating: selected,
+        submit: review,
+      });
       setDone((n) => n + 1);
       if (selected !== "again") setCorrect((n) => n + 1);
       advance();
@@ -111,7 +129,7 @@ export function Quiz({
     } finally {
       setSubmitting(false);
     }
-  }, [phase, selected, submitting, current, advance, review]);
+  }, [phase, selected, submitting, current, advance, review, record]);
 
   // Backward: undo the selected grade, else step back a phase.
   const rollback = useCallback(() => {
@@ -197,8 +215,16 @@ export function Quiz({
         ← Sair
       </button>
       <span className="text-xs uppercase tracking-widest text-white/60">
-        {mode === "lesson" ? "Lição" : "Review"}
+        {topBarTitle(mode, record)}
       </span>
+      {practice && (
+        <span
+          className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90"
+          title="Prática não registrada — seu SRS não muda"
+        >
+          SRS intact
+        </span>
+      )}
       <label className="flex items-center gap-1.5 text-xs text-white/80">
         <input
           type="checkbox"
@@ -240,6 +266,7 @@ export function Quiz({
           ) : (
             <Summary
               mode={mode}
+              record={record}
               done={done}
               correct={correct}
               skipped={skipped}
@@ -428,28 +455,30 @@ function Empty({ message }: { message: string }) {
 
 function Summary({
   mode,
+  record,
   done,
   correct,
   skipped,
   accuracy,
 }: {
-  mode: "review" | "lesson";
+  mode: QuizMode;
+  record: boolean;
   done: number;
   correct: number;
   skipped: number;
   accuracy: number;
 }) {
+  const copy = summaryCopy(mode, record);
   return (
     <div className="flex flex-col items-center gap-6 text-center text-white">
-      <h1 className="text-2xl font-bold">
-        {mode === "lesson" ? "Lição concluída 🎉" : "Sessão concluída 🎉"}
-      </h1>
+      <h1 className="text-2xl font-bold">{copy.title}</h1>
       <div className="flex gap-8">
-        <Metric label={mode === "lesson" ? "Aprendidos" : "Revisados"} value={done} />
+        <Metric label={copy.doneLabel} value={done} />
         {mode === "review" && <Metric label="Acertos" value={correct} />}
         {mode === "review" && <Metric label="Precisão" value={`${accuracy}%`} />}
         {skipped > 0 && <Metric label="Pulados" value={skipped} />}
       </div>
+      {copy.note && <p className="text-sm text-white/80">{copy.note}</p>}
       <Link
         to="/"
         className="rounded-lg bg-white px-6 py-2.5 font-semibold text-slate-900 hover:bg-white/90"
