@@ -1,4 +1,5 @@
 import type { StudyItem } from "../api/types.ts";
+import { isPinned } from "./lessonQueue.ts";
 
 export type TileBadgeKind = "leech" | "priority";
 
@@ -28,6 +29,6 @@ const PRIORITY: TileBadge = {
 export function tileBadges(item: StudyItem): TileBadge[] {
   const badges: TileBadge[] = [];
   if (item.is_leech) badges.push(LEECH);
-  if (item.priority_position !== null) badges.push(PRIORITY);
+  if (isPinned(item)) badges.push(PRIORITY);
   return badges;
 }

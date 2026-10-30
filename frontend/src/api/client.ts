@@ -5,6 +5,7 @@ import type {
   DictionaryEntry,
   ExtraStudy,
   GenerateReadingRequest,
+  PriorityEdge,
   ReadingTopic,
   ReviewLog,
   ReviewResult,
@@ -114,6 +115,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ rating }),
     });
+  },
+  prioritiseStudyItem(id: number, position: PriorityEdge): Promise<StudyItem> {
+    return request(`/study-items/${id}/priority`, {
+      method: "POST",
+      body: JSON.stringify({ position }),
+    });
+  },
+  deprioritiseStudyItem(id: number): Promise<void> {
+    return request(`/study-items/${id}/priority`, { method: "DELETE" });
   },
   listReviews(id: number, limit = 50): Promise<ReviewLog[]> {
     return request(`/study-items/${id}/reviews?limit=${limit}`);

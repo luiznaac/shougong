@@ -3,6 +3,7 @@ import { useItemHistory, useStudyItem } from "../api/queries.ts";
 import type { SrsState } from "../api/types.ts";
 import { Hanzi } from "../components/Hanzi.tsx";
 import { ItemMetricChart } from "../components/ItemMetricChart.tsx";
+import { ItemPrioritySection } from "../components/ItemPrioritySection.tsx";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { RelatedEntries } from "../components/RelatedEntries.tsx";
 import { StrokeOrderPanel } from "../components/StrokeOrderPanel.tsx";
@@ -53,6 +54,8 @@ export function StudyItemPage() {
           {levelLabel(level)}
         </span>
       </header>
+
+      <ItemPrioritySection item={item} />
 
       <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
