@@ -106,7 +106,10 @@ One row per dictionary entry the learner has queued; unique on `entry_id`. The F
 
 ### `review_log`
 
-Append-only grade history: `again | hard | good | easy` mapped to smallints. Newest first when read back.
+Append-only grade history: `again | hard | good | easy` mapped to smallints. Newest first when read back (review time, then id). Two indexes serve the derived insights, replacing the old `study_item_id`-only index (migration `0005_insights`):
+
+- `(study_item_id, review_datetime, id, rating)` — covering index for the leech window and the per-item grade list.
+- `(rating, review_datetime)` — the Extra Study mistake range.
 
 ### `study_item_history`
 
@@ -127,6 +130,16 @@ Curated scenario pool drawn when the user leaves the topic blank. `active=0` kee
 ### `reading_word_usage`
 
 Per-word use counters (`uses`, `last_used_at`) that feed the recency-biased sampling of the working set. Dialogue speakers are tracked under a `speaker:` key prefix to avoid colliding with vocabulary.
+
+## Derived insights
+
+The insight rules have no columns and no write path of their own:
+
+- **Leech** — an item is a leech when three or more of its ten most recent `review_log` entries carry `again`. The window is the last `min(10, n)` entries, ordered by review time then id descending, and every card state is evaluated. The flag is recomputed on every read, so a good streak that pushes failures out of the window clears it with nothing to reset. The read is one batched windowed aggregate for a whole page of items.
+- **Recent Mistakes** — an `again` grade inside the requested instant range on an item whose current `card_state` is `review` or `relearning`, deduped per item and ordered by most recent failure.
+- **Recently Learned** — a `study_item_history` row whose state moved `learning -> review` with a `created_at` inside the range, newest transition first. The lag that finds the transition runs over the whole trail; the date predicate is applied to the transition row afterwards, so a graduation whose previous row predates the range is still found.
+
+Practice grades are never written to `review_log`, so they can never enter any window or bucket.
 
 ## FSRS scheduling model
 

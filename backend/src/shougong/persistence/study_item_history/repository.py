@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import func, select
 
+from shougong.persistence.configuration.time import as_utc as _as_utc
+from shougong.persistence.configuration.time import naive_utc as _naive_utc
 from shougong.persistence.configuration.transaction import SqlAlchemyTransactionTemplate, current_session
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
 from shougong.persistence.dictionary.repository import to_domain as _entry_to_domain
@@ -16,16 +18,6 @@ from shougong.usecase.study_item_history.gateway import IStudyItemHistoryReposit
 from shougong.usecase.study_item_history.model import StudyItemHistory
 
 
-def _naive_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC).replace(tzinfo=None)
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-
-
 def _to_domain(row: StudyItemHistoryEntity, entry: DictionaryEntryEntity) -> StudyItemHistory:
     return StudyItemHistory(
         study_item_id=row.study_item_id,
@@ -34,10 +26,10 @@ def _to_domain(row: StudyItemHistoryEntity, entry: DictionaryEntryEntity) -> Stu
             state=SrsState(row.card_state),
             stability=row.card_stability,
             difficulty=row.card_difficulty,
-            due=_as_utc(row.card_due),  # type: ignore[arg-type]  # column is NOT NULL
+            due=_as_utc(row.card_due),
             last_review=_as_utc(row.card_last_review),
         ),
-        created_at=_as_utc(row.created_at),  # type: ignore[arg-type]  # column is NOT NULL
+        created_at=_as_utc(row.created_at),
     )
 
 

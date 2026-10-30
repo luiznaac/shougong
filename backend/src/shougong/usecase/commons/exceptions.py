@@ -20,3 +20,7 @@ class InvalidArgumentError(DomainError):
 
 class ConflictError(DomainError):
     """The request conflicts with the current state (e.g. a duplicate)."""
+
+
+class InvalidRangeError(DomainError):
+    """A requested instant range is inverted or wider than the supported window."""

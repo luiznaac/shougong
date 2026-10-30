@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import exists, select
 
+from shougong.persistence.configuration.time import as_utc as _as_utc
+from shougong.persistence.configuration.time import naive_utc as _naive_utc
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
@@ -21,32 +24,26 @@ from shougong.usecase.study.model import StudyItem
 from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
 
 
-def _naive_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC).replace(tzinfo=None)
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-
-
 def _card_of(row: StudyItemEntity) -> SrsCard:
     return SrsCard(
         state=SrsState(row.card_state),
         stability=row.card_stability,
         difficulty=row.card_difficulty,
-        due=_as_utc(row.card_due),  # type: ignore[arg-type]  # column is NOT NULL
+        due=_as_utc(row.card_due),
         last_review=_as_utc(row.card_last_review),
     )
 
 
-def _to_domain(row: StudyItemEntity, entry: DictionaryEntryEntity) -> StudyItem:
+def to_domain(row: StudyItemEntity, entry: DictionaryEntryEntity) -> StudyItem:
+    """Map a joined `study_item` + `dictionary_entry` row to the domain item.
+
+    Shared with the insights adapter, which reads the same item shape.
+    """
     return StudyItem(
         id=row.id,
         entry=_entry_to_domain(entry),
         card=_card_of(row),
-        created_at=_as_utc(row.created_at),  # type: ignore[arg-type]  # column is NOT NULL
+        created_at=_as_utc(row.created_at),
     )
 
 
@@ -88,7 +85,7 @@ class StudyItemRepository(IStudyItemRepository):
                 .where(StudyItemEntity.id == item_id)
             )
             result = (await session.execute(stmt)).first()
-            return _to_domain(*result) if result is not None else None
+            return to_domain(*result) if result is not None else None
 
         return await self._tx.execute(_run)
 
@@ -114,7 +111,7 @@ class StudyItemRepository(IStudyItemRepository):
             await session.flush()
             entry = await session.get(DictionaryEntryEntity, row.entry_id)
             assert entry is not None  # entry_id is a NOT NULL foreign key
-            updated = _to_domain(row, entry)
+            updated = to_domain(row, entry)
             await self._history.record(updated, changed_at)
             return updated
 
@@ -146,9 +143,24 @@ class StudyItemRepository(IStudyItemRepository):
             )
             rows = (await session.execute(stmt)).scalars().all()
             return [
-                SrsReviewLog(rating=SrsRating(row.rating), review_datetime=_as_utc(row.review_datetime))  # type: ignore[arg-type]  # column is NOT NULL
-                for row in rows
+                SrsReviewLog(rating=SrsRating(row.rating), review_datetime=_as_utc(row.review_datetime)) for row in rows
             ]
+
+        return await self._tx.execute(_run)
+
+    async def get_many(self, item_ids: Sequence[int]) -> list[StudyItem]:
+        if not item_ids:
+            return []
+
+        async def _run() -> list[StudyItem]:
+            session = current_session()
+            stmt = (
+                select(StudyItemEntity, DictionaryEntryEntity)
+                .join(DictionaryEntryEntity, StudyItemEntity.entry_id == DictionaryEntryEntity.id)
+                .where(StudyItemEntity.id.in_(item_ids))
+            )
+            rows = (await session.execute(stmt)).all()
+            return [to_domain(item, entry) for item, entry in rows]
 
         return await self._tx.execute(_run)
 
@@ -176,6 +188,6 @@ class StudyItemRepository(IStudyItemRepository):
                 stmt = stmt.where(StudyItemEntity.card_due <= _naive_utc(due_before))
             stmt = stmt.order_by(StudyItemEntity.card_due, StudyItemEntity.id).limit(limit).offset(offset)
             rows = (await session.execute(stmt)).all()
-            return [_to_domain(item, entry) for item, entry in rows]
+            return [to_domain(item, entry) for item, entry in rows]
 
         return await self._tx.execute(_run)

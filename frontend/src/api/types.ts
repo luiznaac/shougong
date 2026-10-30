@@ -32,6 +32,9 @@ export interface StudyItem {
   entry: DictionaryEntry;
   card: SrsCard;
   created_at: string;
+  // Derived on read: the item has 3+ `again` grades in its last 10 review-log
+  // entries. False wherever the backend does not annotate it (e.g. reviews).
+  is_leech: boolean;
 }
 
 export interface ReviewLog {
@@ -80,6 +83,22 @@ export interface StudyItemHistory {
   entry: DictionaryEntry;
   card: SrsCard;
   created_at: string;
+  is_leech: boolean; // always false on history responses
+}
+
+// One Extra Study tab: a true total plus at most 200 items in server order.
+export interface InsightBucket {
+  total: number;
+  items: StudyItem[];
+}
+
+// Recent failures and graduations for one instant range (`from` inclusive,
+// `to` exclusive). Both buckets are always present.
+export interface ExtraStudy {
+  from: string; // ISO instant
+  to: string; // ISO instant
+  recent_mistakes: InsightBucket;
+  recently_learned: InsightBucket;
 }
 
 export type ReadingFormat = "paragraph" | "sentences" | "dialogue";

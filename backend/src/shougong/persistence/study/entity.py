@@ -46,4 +46,9 @@ class ReviewLogEntity(Base):
     rating: Mapped[int] = mapped_column(SmallInteger)
     review_datetime: Mapped[datetime] = mapped_column(_Timestamp)
 
-    __table_args__ = (Index("ix_review_log_study_item", "study_item_id"),)
+    __table_args__ = (
+        # covers the leech window and the per-item grade history read
+        Index("ix_review_log_study_item_window", "study_item_id", "review_datetime", "id", "rating"),
+        # covers the Extra Study mistake range
+        Index("ix_review_log_rating_datetime", "rating", "review_datetime"),
+    )
