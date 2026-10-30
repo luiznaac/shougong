@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ApiError, api } from "../api/client.ts";
+import { ApiError } from "../api/client.ts";
+import { useReviewMutation } from "../api/queries.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
 import {
   TOLERANCE_PRESETS,
@@ -54,6 +55,7 @@ export function Quiz({
   emptyMessage: string;
 }) {
   const navigate = useNavigate();
+  const { mutateAsync: review } = useReviewMutation();
 
   const [idx, setIdx] = useState(0);
   const [phase, setPhase] = useState<Phase>(mode === "lesson" ? "info" : "prompt");
@@ -94,7 +96,7 @@ export function Quiz({
 
     setSubmitting(true);
     try {
-      await api.reviewStudyItem(current.id, selected);
+      await review({ id: current.id, rating: selected });
       setDone((n) => n + 1);
       if (selected !== "again") setCorrect((n) => n + 1);
       advance();
@@ -109,7 +111,7 @@ export function Quiz({
     } finally {
       setSubmitting(false);
     }
-  }, [phase, selected, submitting, current, advance]);
+  }, [phase, selected, submitting, current, advance, review]);
 
   // Backward: undo the selected grade, else step back a phase.
   const rollback = useCallback(() => {
