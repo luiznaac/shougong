@@ -20,6 +20,10 @@ npm run build        # tsc -b && vite build
 
 Tests live in `src/lib/**/*.test.ts` (Vitest, node environment) and cover pure helpers only — there are no component/render tests yet.
 
+## Coding standards
+
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
+
 ## Shougong-specific pieces
 
 - **`hanzi-writer`** draws stroke order (`components/StrokeOrder.tsx`, `components/StrokeOrderPanel.tsx`) from stroke/median data the backend serves — see `CharacterStrokes` in `api/types.ts`. Coordinate space is a 1024×1024 box with the Y-axis flipped; see the comment in `api/types.ts` before touching stroke-rendering code.
@@ -31,9 +35,5 @@ Tests live in `src/lib/**/*.test.ts` (Vitest, node environment) and cover pure h
 
 - Adding a page in the review/lesson flow → look at `Review.tsx`/`Lesson.tsx` first, they're intentionally outside `Layout`.
 - Changing what the UI shows for a backend enum → `i18n/`, and check `../docs/03-data-model.md` for the enum's full value set before assuming you've covered every case.
-
-## Coding standards
-
-- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.

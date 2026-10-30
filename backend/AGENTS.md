@@ -47,15 +47,15 @@ uv run poe migrate            # apply pending migrations locally
 - A health check never raises — catch `Exception`, return `is_healthy=False`.
 - See salgadinhos' `python-hexagonal-feature` and `exposed-v1`-equivalent stack skills for the walkthrough shape shared with the `environments/python` scaffold this was generated from.
 
+## Coding standards
+
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
+
 ## Read when…
 
 - Adding/changing a reading-generation feature or the LLM prompt → [`../docs/05-reading-engine.md`](../docs/05-reading-engine.md).
 - Changing the data model or writing a migration → [`../docs/03-data-model.md`](../docs/03-data-model.md).
 - Adding or changing an HTTP endpoint → [`../docs/04-api.md`](../docs/04-api.md), and check [`../docs/07-api-gaps.md`](../docs/07-api-gaps.md) for known-missing endpoints before assuming one doesn't exist for a reason.
 - Anything touching SRS scheduling/FSRS → `../docs/02-architecture.md`'s "grade a review" sequence diagram, then `srs/fsrs_engine.py` directly.
-
-## Coding standards
-
-- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.
