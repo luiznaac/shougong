@@ -22,3 +22,11 @@ No real secret value is committed or defaulted in code: `MYSQL__PASSWORD` and `G
 ## Docker
 
 One image (repo-root `Dockerfile`, multi-stage) ships backend + frontend together: `supervisord` runs `uvicorn` (API, `API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the built SPA on `WEB_PORT`/8081 and reverse-proxies `/api` → uvicorn). No DB in the image. `docker-compose.yml` at the root adds MySQL for full-stack / DB-only local runs. The schema comes from `backend/alembic/versions/*.py`, applied by `python scripts/migrate.py` from `deploy/entrypoint.sh` before the app starts — see [backend/AGENTS.md](backend/AGENTS.md) §3.5. The `publish` job in `.github/workflows/ci.yml` (`needs: [backend, frontend]`, push-to-master only) pushes `luiznaac/shougong:latest` + `:v<run-number>` (a sequential build number, `github.run_number`) — only after a green CI run.
+
+## Acceptance
+
+Surfaces: **HTTP + Browser** — the FastAPI service and the React SPA.
+
+Run story: the local dev stack — MySQL in Docker, then the backend, then the Vite dev server.
+
+Runbook: [`docs/acceptance-runbook.md`](docs/acceptance-runbook.md) — boot commands, readiness probes, env and teardown. Browser `start_url`: `http://localhost:5273/`.
