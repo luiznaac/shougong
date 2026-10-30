@@ -10,20 +10,22 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 **Seam(s)**:
 - **DTO mirror** (`api/types.ts`) — mirrors `backend/src/shougong/httpapi/schema.py` (`DictionaryEntry`, `CharacterStrokes`, `SrsCard`, `StudyItem`, `ReviewLog`, batch-import and reading shapes, plus `SrsRating`/`SrsState`); update both in the same commit. `CharacterStrokes.medians` are raw hanzi-writer data in a 1024×1024 box with the Y-axis flipped (see `components/StrokeOrder.tsx`).
 - **Fetch adapter** (`api/client.ts`) — `BASE` is `VITE_API_BASE ?? "/api"`; `ApiError` carries `status` and the `{detail}` message; `request<T>` treats `204` as `undefined`. A new endpoint adds a method to `api`, not another fetch wrapper.
-- **Query seam** (`api/queries.ts`) — the `keys` factory (`studyItemsPrefix`, `studyItems`, `studyItem`, `reviews`, `history`, `dictionary`, `readingHistory`) plus the non-factory keys (`["study-session", kind]` from `lib/studySession.ts`, `["strokes", character]`). `useStudyItems` pages through `api.listAllStudyItems` (backend cap 200); `useCharacterStrokes` sets `retry: false` (a 404 means "no stroke data") and `staleTime: Infinity` (stroke data never changes). `useStudySession` sits outside the `["study-items"]` prefix with infinite stale time and zero cache time, so study-item invalidation never refetches or reshuffles a running session.
+- **Query seam** (`api/queries.ts`) — the `keys` factory (`studyItemsPrefix`, `studyItems`, `studyItem`, `reviews`, `history`, `dictionary`, `readingHistory`) plus the non-factory keys (`["study-session", kind]` from `lib/studySession.ts`, `["strokes", character]`). `studyItems` carries `{due, leech}`; `useStudyItems` pages through `api.listAllStudyItems` (backend cap 200); `useCharacterStrokes` sets `retry: false` (a 404 means "no stroke data") and `staleTime: Infinity` (stroke data never changes). `useStudySession` sits outside the `["study-items"]` prefix with infinite stale time and zero cache time, so study-item invalidation never refetches or reshuffles a running session.
 
 ### `src/pages` — routed screens
 **Purpose**: the seven screens — dashboard, add/batch-import, study-item detail, reading, and the full-screen lesson/review flows.
 **Files**: `frontend/src/pages/Dashboard.tsx`, `pages/AddItems.tsx`, `pages/BatchImport.tsx`, `pages/StudyItemPage.tsx`, `pages/Reading.tsx`, `pages/Lesson.tsx`, `pages/Review.tsx`
 **Seam(s)**:
 - **Study session seam** (`pages/Lesson.tsx`, `pages/Review.tsx`, `api/queries.ts`, `lib/studySession.ts`) — each flow reads `GET /study/session?kind=…` once on entry (`staleTime: Infinity`, `gcTime: 0`) and hands the received item order to `Quiz` verbatim — no client filter or sort. The backend owns lesson membership (all `learning`, pinned first then shuffled remainder) and review membership (due, non-learning, fully shuffled); a remount or refresh is a new session with a new shuffle. `useReviewMutation` invalidates the `["study-items"]` prefix, the single item and its review list, but not the running session.
+- **Character panel** (`pages/Dashboard.tsx`, `lib/characterPanel.ts`) — the `Todas (n)`/`Sanguessugas (n)` chip pair is component state (not a URL param) over a labelled `fieldset` with `aria-pressed` buttons. `Todas` keeps the stability sort; `Sanguessugas` uses `GET /study-items?leech=true` and renders the server's worst-first order verbatim. The leech list is fetched eagerly, its count is always visible, and zero leeches show an empty sentence distinct from loading.
 - **Reading** (`pages/Reading.tsx`) — composes the generation controls, history, topic panel and vocabulary panel; model choice is persisted client-side (`reading.model`), and numeric inputs are clamped to the backend bounds.
 - **Batch import** (`pages/BatchImport.tsx`) — parses the CSV locally, then sends one row at a time and layers `pending`/`loading` display states over the backend outcome.
 
 ### `src/components` — chrome, quiz and Chinese-language widgets
 **Purpose**: the layout chrome, the quiz/lesson machinery, the stroke-order renderers and the reading/vocabulary panels.
-**Files**: `frontend/src/components/{Layout,Quiz,HandwritingQuiz,StrokeOrder,StrokeOrderPanel,Pinyin,Hanzi,RelatedEntries,VocabularyPanel,ReadingTopicsPanel,ProgressTiles,UpcomingReviews,SrsDistribution,ItemMetricChart,ItemsLearnedChart}.tsx`
+**Files**: `frontend/src/components/{Layout,Quiz,HandwritingQuiz,StrokeOrder,StrokeOrderPanel,Pinyin,Hanzi,RelatedEntries,VocabularyPanel,ReadingTopicsPanel,StudyItemTile,ProgressTiles,UpcomingReviews,SrsDistribution,ItemMetricChart,ItemsLearnedChart}.tsx`
 **Seam(s)**:
+- **Character tile** (`components/StudyItemTile.tsx`, `lib/tileBadges.ts`) — the one tile used by every character grid and the item page header, fixed at `w-28` with the SRS level border. `tileBadges(item)` derives the overlays from the DTO alone: a ghost for `is_leech`, then a bolt for a non-null `priority_position`, rendered as dark `role="img"` chips with a pt-BR `aria-label` and a `title`. `ProgressTiles` only wraps a grid and never re-sorts its input. The quiz runner renders none of this.
 - **Chrome seam** (`components/Layout.tsx`) — the header nav (`/`, `/add`, `/add/batch`, `/reading`) and the routed `<Outlet />`; `Lesson`/`Review` are deliberately outside it.
 - **Stroke coordinate seam** (`components/StrokeOrder.tsx`, `HandwritingQuiz.tsx`) — converts hanzi-writer's raw (Y-up, top-left at `(0, 900)`) data into a top-down 0..1024 SVG box; `HandwritingQuiz` feeds the same cached data through `charDataLoader` so it never hits a CDN.
 - **Quiz phase seam** (`components/Quiz.tsx`) — the `info → prompt → revealed` phase machine over an item queue, with the `RATINGS` (`again`/`hard`/`good`/`easy`) as the review submission and keyboard hotkeys; `HandwritingQuiz` is the optional interactive check.
@@ -36,8 +38,10 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 
 ### `src/lib` — pure helpers
 **Purpose**: the unit-testable surface — CSV parsing, pinyin conversion, the display-only SRS ladder, local settings and formatting.
-**Files**: `frontend/src/lib/csv.ts`, `lib/pinyin.ts`, `lib/srs.ts`, `lib/localSettings.ts`, `lib/format.ts`, `lib/studySession.ts`
+**Files**: `frontend/src/lib/csv.ts`, `lib/pinyin.ts`, `lib/srs.ts`, `lib/localSettings.ts`, `lib/format.ts`, `lib/studySession.ts`, `lib/tileBadges.ts`, `lib/characterPanel.ts`
 **Seam(s)**:
+- **Tile badge seam** (`lib/tileBadges.ts`) — `tileBadges(item)` returns the ordered ghost/bolt descriptors (ghost first) with their emoji, pt-BR label and title; `StudyItemTile` renders exactly this list.
+- **Character filter seam** (`lib/characterPanel.ts`) — `orderCharacterTiles(filter, {all, leeches})` owns the two orderings: stability descending for `Todas`, received order untouched for `Sanguessugas`.
 - **CSV seam** (`lib/csv.ts`) — `parseStudyItemsCsv(text)` accepts a hanzi/pinyin header, comma or semicolon, quoted fields; it never validates pinyin (the backend reports per-row).
 - **Pinyin seam** (`lib/pinyin.ts`) — `parsePinyin(numbered)` → `{text, tone}` and `toAccented`; the tone-mark placement rule lives here, not in a component.
 - **SRS display ladder** (`lib/srs.ts`) — derived from the backend's continuous `stability` (days), not a stored level; `LEVELS`/`GROUP_ORDER`/`GROUP_COLOR` are the single ladder and palette.
@@ -52,7 +56,7 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 - **Theme seam** (`src/index.css`) — the `@theme` block owns the hanzi font, the accent, the pinyin tone colours (`--color-tone-*`), the SRS stage colours (`--color-srs-*`) and the `.tone-*` classes; components consume those names.
 - **Base-path seam** (`vite.config.ts`) — `base` is `/shougong/` in production and `/` in dev; `main.tsx` derives the router `basename` from `import.meta.env.BASE_URL`.
 - **Dev server** (`vite.config.ts`) — port 5273 with the `/api` proxy to `VITE_API_TARGET ?? http://localhost:8080`.
-- **Quality gate** (`package.json`) — `typecheck` and `build` only; there is no lint or test script in this lane.
+- **Quality gate** (`package.json`) — `check` runs `typecheck` + `lint` (Biome) + `test` (Vitest, node environment: pure helpers in `src/lib` and markup-only tile tests through `react-dom/server`).
 
 ## Entry points
 

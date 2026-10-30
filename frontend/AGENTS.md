@@ -13,12 +13,12 @@ npm run dev          # vite dev server
 npm run typecheck    # tsc -b --noEmit
 npm run lint         # biome check
 npm run lint:fix     # biome check --write
-npm run test         # vitest run — src/lib/**/*.test.ts, pure helpers only
+npm run test         # vitest run — src/**/*.test.{ts,tsx}, node environment
 npm run check        # typecheck + lint + test — run before considering a change done
 npm run build        # tsc -b && vite build
 ```
 
-Tests live in `src/lib/**/*.test.ts` (Vitest, node environment) and cover pure helpers only — there are no component/render tests yet.
+Tests run in Vitest's node environment: pure helpers in `src/lib/**/*.test.ts` and, where a rendered contract matters, markup-only component tests (`src/components/**/*.test.tsx`) using `react-dom/server` — no DOM/Testing Library dependency.
 
 ## Coding standards
 

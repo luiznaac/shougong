@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
-import { api } from "./client.ts";
+import { type StudyItemListQuery, api } from "./client.ts";
 import type { GenerateReadingRequest, SessionKind, SrsRating } from "./types.ts";
 
 export const keys = {
   studyItemsPrefix: ["study-items"] as const,
-  studyItems: (due?: boolean) => ["study-items", { due: due ?? false }] as const,
+  studyItems: (opts: StudyItemListQuery = {}) =>
+    ["study-items", { due: opts.due ?? false, leech: opts.leech ?? false }] as const,
   studyItem: (id: number) => ["study-items", id] as const,
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
@@ -13,10 +14,10 @@ export const keys = {
   readingHistory: ["reading-texts"] as const,
 };
 
-export function useStudyItems(opts: { due?: boolean } = {}) {
+export function useStudyItems(opts: StudyItemListQuery = {}) {
   return useQuery({
-    queryKey: keys.studyItems(opts.due),
-    queryFn: () => api.listAllStudyItems({ due: opts.due }),
+    queryKey: keys.studyItems(opts),
+    queryFn: () => api.listAllStudyItems(opts),
   });
 }
 

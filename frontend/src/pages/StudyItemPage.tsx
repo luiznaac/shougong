@@ -6,6 +6,7 @@ import { ItemMetricChart } from "../components/ItemMetricChart.tsx";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { RelatedEntries } from "../components/RelatedEntries.tsx";
 import { StrokeOrderPanel } from "../components/StrokeOrderPanel.tsx";
+import { StudyItemTile } from "../components/StudyItemTile.tsx";
 import { formatDate, formatDateTime } from "../lib/format.ts";
 import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
@@ -34,7 +35,10 @@ export function StudyItemPage() {
         ← Painel
       </Link>
 
-      <header className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-10">
+      <header className="relative flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-10">
+        <div className="absolute top-4 right-4">
+          <StudyItemTile item={item} />
+        </div>
         <Hanzi
           text={item.entry.simplified}
           singleCharPx={96}
