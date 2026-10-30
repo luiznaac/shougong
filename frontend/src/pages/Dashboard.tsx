@@ -4,10 +4,12 @@ import { useLearningToReviewHistory, useStudyItems } from "../api/queries.ts";
 import type { StudyItem } from "../api/types.ts";
 import { ExtraStudyPanel } from "../components/ExtraStudyPanel.tsx";
 import { ItemsLearnedChart } from "../components/ItemsLearnedChart.tsx";
+import { LessonQueuePanel } from "../components/LessonQueuePanel.tsx";
 import { ProgressTiles } from "../components/ProgressTiles.tsx";
 import { SrsDistribution } from "../components/SrsDistribution.tsx";
 import { UpcomingReviews } from "../components/UpcomingReviews.tsx";
 import { type CharacterFilter, orderCharacterTiles } from "../lib/characterPanel.ts";
+import { lessonQueueRows } from "../lib/lessonQueue.ts";
 import { tallyGroups } from "../lib/srs.ts";
 
 export function Dashboard() {
@@ -27,7 +29,8 @@ export function Dashboard() {
   if (!items) return null;
 
   // Left button → lesson flow: everything still in `learning`.
-  const lessonCount = items.filter((i) => i.card.state === "learning").length;
+  const queueRows = lessonQueueRows(items);
+  const lessonCount = queueRows.length;
   // Right button → review flow: `due=true` comes straight from the backend
   // (it owns the day-boundary logic); keep only the `review`-state ones —
   // learning items are handled by the lesson flow.
@@ -57,6 +60,12 @@ export function Dashboard() {
       <Panel title="Estudo extra">
         <ExtraStudyPanel />
       </Panel>
+
+      {lessonCount > 0 ? (
+        <Panel title="Próximas lições">
+          <LessonQueuePanel rows={queueRows} />
+        </Panel>
+      ) : null}
 
       <Panel title="SRS Stage Distribution">
         <SrsDistribution tally={tally} />

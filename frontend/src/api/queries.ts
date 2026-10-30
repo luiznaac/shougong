@@ -1,7 +1,20 @@
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  type QueryKey,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { applyCachedPriority, predictPriorityPosition } from "../lib/lessonQueue.ts";
 import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
 import { type StudyItemListQuery, api } from "./client.ts";
-import type { GenerateReadingRequest, SessionKind, SrsRating } from "./types.ts";
+import type {
+  GenerateReadingRequest,
+  PriorityEdge,
+  SessionKind,
+  SrsRating,
+  StudyItem,
+} from "./types.ts";
 
 export const keys = {
   studyItemsPrefix: ["study-items"] as const,
@@ -114,6 +127,70 @@ export function useReviewMutation() {
       api.reviewStudyItem(id, rating),
     onSuccess: (_res, { id }) => invalidateAfterReview(qc, id),
   });
+}
+
+interface PriorityVariables {
+  id: number;
+  edge: PriorityEdge | null;
+}
+
+interface PriorityMutationContext {
+  snapshot: [QueryKey, unknown][];
+}
+
+export function priorityMutationOptions(qc: QueryClient) {
+  return {
+    mutationFn: ({ id, edge }: PriorityVariables): Promise<StudyItem | undefined> =>
+      edge
+        ? api.prioritiseStudyItem(id, edge)
+        : api.deprioritiseStudyItem(id).then(() => undefined),
+    onMutate: async ({ id, edge }: PriorityVariables): Promise<PriorityMutationContext> => {
+      await qc.cancelQueries({ queryKey: keys.studyItemsPrefix });
+      const snapshot = qc.getQueriesData({
+        queryKey: keys.studyItemsPrefix,
+      }) as [QueryKey, unknown][];
+      const lists = snapshot
+        .map(([, data]) => data)
+        .filter((data): data is StudyItem[] => Array.isArray(data));
+      const position = edge === null ? null : predictPriorityPosition(lists, edge);
+      qc.setQueriesData({ queryKey: keys.studyItemsPrefix }, (data) =>
+        applyCachedPriority(data, id, position),
+      );
+      return { snapshot };
+    },
+    onError: (
+      _error: unknown,
+      _variables: PriorityVariables,
+      context: PriorityMutationContext | undefined,
+    ) => {
+      for (const [key, data] of context?.snapshot ?? []) qc.setQueryData(key, data);
+    },
+    onSuccess: (item: StudyItem | undefined) => {
+      if (item) qc.setQueryData(keys.studyItem(item.id), item);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+      qc.invalidateQueries({ queryKey: studySessionKey("lesson") });
+    },
+  };
+}
+
+export function usePriorityActions() {
+  const qc = useQueryClient();
+  const mutation = useMutation(priorityMutationOptions(qc));
+  const run = (id: number, edge: PriorityEdge | null) => {
+    mutation.reset();
+    mutation.mutate({ id, edge });
+  };
+
+  return {
+    pinFront: (id: number) => run(id, "front"),
+    pinBack: (id: number) => run(id, "back"),
+    remove: (id: number) => run(id, null),
+    pending: mutation.isPending,
+    error: mutation.error,
+    errorItemId: mutation.variables?.id ?? null,
+  };
 }
 
 export function useReadingHistory() {
