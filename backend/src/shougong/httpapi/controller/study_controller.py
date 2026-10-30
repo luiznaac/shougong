@@ -6,10 +6,14 @@
                                 `?leech=true` returns the worst-first leech list.
 `GET  /study-items/{id}`         a single item.
 `POST /study-items/{id}/reviews` grade an item and let FSRS reschedule it (201 + Location);
-                                409 if the item is not due yet.
+                                 409 if the item is not due yet.
 `GET  /study-items/{id}/reviews` the item's grade history, newest first.
+`POST /study-items/{id}/priority` pin a learning item to the front/back of the lesson
+                                 queue (upsert; 409 for a non-learning item).
+`DELETE /study-items/{id}/priority` unpin an item (204, idempotent).
 
-The item's history trail lives in `StudyItemHistoryController`.
+The item's history trail lives in `StudyItemHistoryController`; the lesson/review
+selection lives in `StudySessionController`.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from shougong.httpapi.schema import (
     AddStudyItemRequest,
     BatchImportRequest,
     BatchImportResponse,
+    PriorityRequest,
     ReviewLogResponse,
     ReviewRequest,
     ReviewResponse,
@@ -88,5 +93,13 @@ class StudyController(IController):
         ) -> list[ReviewLogResponse]:
             logs = await self._service.item_reviews(item_id, limit=limit, offset=offset)
             return [ReviewLogResponse.from_domain(log) for log in logs]
+
+        @router.post("/{item_id}/priority")
+        async def prioritise(item_id: int, body: PriorityRequest) -> StudyItemResponse:
+            return StudyItemResponse.from_domain(await self._service.prioritise(item_id, body.to_domain()))
+
+        @router.delete("/{item_id}/priority", status_code=204)
+        async def deprioritise(item_id: int) -> None:
+            await self._service.deprioritise(item_id)
 
         return router

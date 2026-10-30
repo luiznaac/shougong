@@ -9,6 +9,7 @@ from shougong.usecase.strokes.service import StrokeService
 from shougong.usecase.study.service import StudyService
 from shougong.usecase.study_item_history.service import StudyItemHistoryService
 from tests.fixtures import (
+    DeterministicShuffler,
     FakeDictionaryRepository,
     FakeHanziStrokeSource,
     FakeStrokeRepository,
@@ -27,7 +28,9 @@ def _services(*, entries: tuple[int, ...] = (1,)) -> tuple[StudyService, StudyIt
     study_repo = FakeStudyItemRepository()
     dictionary = FakeDictionaryRepository([make_dictionary_entry(entry_id=n) for n in entries])
     strokes = StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource())
-    study = StudyService(study_repo, dictionary, StubSrsEngine(), FixedClock(_NOW), tx, strokes)
+    study = StudyService(
+        study_repo, dictionary, StubSrsEngine(), FixedClock(_NOW), tx, strokes, DeterministicShuffler()
+    )
     history = StudyItemHistoryService(study_repo.history, study_repo, tx)
     return study, history
 

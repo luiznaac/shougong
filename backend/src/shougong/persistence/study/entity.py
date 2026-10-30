@@ -1,7 +1,9 @@
-"""ORM entities for the `study_item` and `review_log` tables.
+"""ORM entities for the `study_item`, `review_log` and `study_item_priority` tables.
 
 The FSRS card is flattened into `study_item.card_*` columns; `card_due` is indexed
 for the "what's due now" query. `review_log` is the append-only history of grades.
+`study_item_priority` holds one row per pinned item (row presence is membership) and
+its signed `position` is the opaque display-ordering key.
 The `study_item_history` trail lives in `persistence/study_item_history/`.
 Datetimes are stored as naive UTC (MySQL has no tz). Add a migration alongside any change here —
 see backend/AGENTS.md.
@@ -11,7 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Double, ForeignKey, Index, SmallInteger
+from sqlalchemy import BigInteger, Double, ForeignKey, Index, Integer, SmallInteger
 from sqlalchemy.dialects.mysql import DATETIME
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,3 +54,16 @@ class ReviewLogEntity(Base):
         # covers the Extra Study mistake range
         Index("ix_review_log_rating_datetime", "rating", "review_datetime"),
     )
+
+
+class StudyItemPriorityEntity(Base):
+    __tablename__ = "study_item_priority"
+
+    # Row presence is membership: deleting it unpins the item, and deleting the
+    # study item cascades.
+    study_item_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("study_item.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, index=True)

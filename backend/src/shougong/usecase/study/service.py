@@ -1,7 +1,9 @@
-"""`StudyService` — add dictionary entries to the study queue and list them."""
+"""`StudyService` — add dictionary entries to the study queue, list them,
+prioritise them and build lesson/review sessions."""
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -14,7 +16,7 @@ from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.dictionary.pinyin import is_numbered_pinyin, sanitize_pinyin
 from shougong.usecase.srs.engine import ISrsEngine
-from shougong.usecase.srs.model import SrsRating, SrsReviewLog
+from shougong.usecase.srs.model import SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.strokes.service import StrokeService
 from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import (
@@ -22,9 +24,13 @@ from shougong.usecase.study.model import (
     BatchImportReport,
     BatchImportRow,
     BatchRowStatus,
+    PriorityEdge,
     ReviewResult,
+    SessionKind,
     StudyItem,
+    StudySession,
 )
+from shougong.usecase.study.shuffler import IShuffler
 
 _log = get_logger(__name__)
 
@@ -73,6 +79,7 @@ class StudyService:
         clock: IClock,
         transaction_template: ITransactionTemplate,
         stroke_service: StrokeService,
+        shuffler: IShuffler,
     ) -> None:
         self._study = study_repository
         self._dictionary = dictionary_repository
@@ -80,6 +87,7 @@ class StudyService:
         self._clock = clock
         self._tx = transaction_template
         self._strokes = stroke_service
+        self._shuffler = shuffler
 
     async def add_item(self, entry_id: int) -> StudyItem:
         async def _run() -> StudyItem:
@@ -205,6 +213,51 @@ class StudyService:
         if item is None:
             raise ResourceNotFoundError("study_item", str(item_id))
         return item
+
+    async def prioritise(self, item_id: int, edge: PriorityEdge) -> StudyItem:
+        """Pin a learning item to the front or back of the lesson queue, or move
+        an already-pinned item to the other edge."""
+
+        async def _run() -> StudyItem:
+            item = await self._study.get(item_id)
+            if item is None:
+                raise ResourceNotFoundError("study_item", str(item_id))
+            if item.card.state is not SrsState.LEARNING:
+                raise ConflictError(f"study item {item_id} is not learning")
+            updated = await self._study.prioritise(item_id, edge)
+            _log.info("study.item.prioritised", item_id=item_id, edge=edge.value)
+            return updated
+
+        return await self._tx.execute(_run)
+
+    async def deprioritise(self, item_id: int) -> None:
+        """Unpin an item; a no-op when it was not prioritised."""
+
+        async def _run() -> None:
+            if await self._study.get(item_id) is None:
+                raise ResourceNotFoundError("study_item", str(item_id))
+            await self._study.deprioritise(item_id)
+            _log.info("study.item.deprioritised", item_id=item_id)
+
+        await self._tx.execute(_run)
+
+    async def session(self, kind: SessionKind) -> StudySession:
+        """One fresh lesson or review selection, in the order the client presents it.
+
+        A lesson keeps its pinned block first, ascending by position then id, and
+        never shuffles it; only the unpinned remainder is shuffled. A review shuffles
+        the whole due block with no priority weighting.
+        """
+        now = self._clock.now()
+        items = await self._study.list_for_session(kind, now=now)
+        if kind is SessionKind.REVIEW:
+            ordered = self._shuffler.shuffle(items)
+        else:
+            pinned = [item for item in items if item.priority_position is not None]
+            remainder = [item for item in items if item.priority_position is None]
+            ordered = [*pinned, *self._shuffler.shuffle(remainder)]
+        _log.info("study.session.created", kind=kind.value, items=len(ordered))
+        return StudySession(session_id=uuid.uuid4().hex, kind=kind, items=tuple(ordered))
 
     async def review_item(self, item_id: int, rating: SrsRating) -> ReviewResult:
         async def _run() -> ReviewResult:

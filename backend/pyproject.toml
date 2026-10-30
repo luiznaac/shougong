@@ -145,7 +145,7 @@ type = "layers"
 containers = ["shougong"]
 layers = [
     "application",
-    "(httpapi) (persistence) (gateway) (srs) (segmentation)",
+    "(httpapi) (persistence) (gateway) (srs) (segmentation) (randomization)",
     "usecase",
 ]
 

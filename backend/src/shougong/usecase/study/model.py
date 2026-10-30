@@ -21,6 +21,31 @@ class StudyItem:
     entry: DictionaryEntry
     card: SrsCard
     created_at: datetime
+    # Opaque display-ordering key; `None` when the item is not pinned. Never render raw.
+    priority_position: int | None = None
+
+
+class PriorityEdge(StrEnum):
+    FRONT = "front"
+    BACK = "back"
+
+
+class SessionKind(StrEnum):
+    LESSON = "lesson"
+    REVIEW = "review"
+
+
+@dataclass(frozen=True, slots=True)
+class StudySession:
+    """One request's card selection, in the order the client must present it.
+
+    `session_id` is opaque and informational only — never an ordering input or a
+    resume key; every request produces a fresh shuffle.
+    """
+
+    session_id: str
+    kind: SessionKind
+    items: tuple[StudyItem, ...]
 
 
 @dataclass(frozen=True, slots=True)

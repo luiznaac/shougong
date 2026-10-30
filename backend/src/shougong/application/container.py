@@ -41,6 +41,7 @@ from shougong.httpapi.controller.reading_topic_controller import ReadingTopicCon
 from shougong.httpapi.controller.strokes_controller import StrokesController
 from shougong.httpapi.controller.study_controller import StudyController
 from shougong.httpapi.controller.study_item_history_controller import StudyItemHistoryController
+from shougong.httpapi.controller.study_session_controller import StudySessionController
 from shougong.httpapi.controller.vocabulary_controller import VocabularyController
 from shougong.persistence.configuration.database import build_engine, build_session_factory
 from shougong.persistence.configuration.transaction import SqlAlchemyTransactionTemplate
@@ -53,6 +54,7 @@ from shougong.persistence.reading.word_usage_repository import ReadingWordUsageR
 from shougong.persistence.strokes.repository import StrokeRepository
 from shougong.persistence.study.repository import StudyItemRepository
 from shougong.persistence.study_item_history.repository import StudyItemHistoryRepository
+from shougong.randomization.random_shuffler import RandomShuffler
 from shougong.segmentation.jieba_segmenter import JiebaSegmenter
 from shougong.segmentation.jieba_segmenter import warm_up as warm_up_jieba
 from shougong.srs.fsrs_engine import FsrsEngine
@@ -115,6 +117,7 @@ class Container:
             self.clock,
             self.transaction_template,
             self._stroke_service,
+            RandomShuffler(),
         )
         self._study_item_history_service = StudyItemHistoryService(
             self._study_item_history_repository,
@@ -162,6 +165,7 @@ class Container:
             DictionaryController(self._dictionary_service),
             StrokesController(self._stroke_service),
             StudyController(self._study_service, self._insight_service),
+            StudySessionController(self._study_service),
             StudyItemHistoryController(self._study_item_history_service),
             InsightsController(self._insight_service),
             ReadingController(self._reading_service),

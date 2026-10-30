@@ -34,6 +34,9 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | `GET` | `/study-items/{item_id}` | Fetch one study item |
 | `POST` | `/study-items/{item_id}/reviews` | Grade a due card (`201`) |
 | `GET` | `/study-items/{item_id}/reviews` | Grade history, newest first |
+| `POST` | `/study-items/{item_id}/priority` | Pin a learning item front/back, or move it to the other edge (upsert) |
+| `DELETE` | `/study-items/{item_id}/priority` | Unpin an item (`204`, idempotent) |
+| `GET` | `/study/session?kind=lesson\|review` | One request's lesson or review selection, in presentation order |
 | `GET` | `/study-items/{item_id}/history` | Card-state snapshot trail, newest first |
 | `GET` | `/study-items/history/learning-to-review` | Every learning -> review graduation row, newest first |
 | `GET` | `/study/insights/extra-study?from=&to=` | Recent failures and graduations in an instant range |
@@ -80,11 +83,37 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
     "last_review": null
   },
   "created_at": "2026-09-11T12:00:00Z",
+  "priority_position": null,
   "is_leech": false
 }
 ```
 
 `card.state` is one of `learning | review | relearning`.
+
+`priority_position` is a nullable signed integer — an **opaque** display-ordering key, never rendered raw. It is `null` when the item is not pinned.
+
+### Priority
+
+Request: `{ "position": "front" | "back" }`. The endpoint is an upsert: it creates the pin or moves an already-pinned item to the requested edge, and answers `200` with the updated `StudyItemResponse`. `404` for an unknown item, `409` for an item whose card is not `learning`. `DELETE` answers `204` whether or not the item was pinned, and `404` only for an unknown item.
+
+Priority is learning-only. Graduating an item from `learning` into `review` deletes its pin in the same transaction as the card update.
+
+### Study session
+
+`GET /study/session?kind=lesson|review` (kind required; an unknown value is `422`) returns:
+
+```json
+{
+  "session_id": "0f6c2b9a4e5d4c8a9b1e2f3a4d5c6b7a",
+  "kind": "lesson",
+  "items": []
+}
+```
+
+- **lesson** — every item whose card state is `learning`, with no due predicate. The pinned block leads, ascending by priority position then item id, and keeps that order unshuffled; only the unpinned remainder is shuffled.
+- **review** — every due item that is not `learning` (`relearning` included). The whole block is shuffled, with no priority weighting.
+- An empty selection is `200` with `items: []`. There is no pagination, limit or cursor.
+- Nothing is persisted: no session row, seed or expiry. The response order is authoritative and the client must not re-sort. `session_id` is opaque and informational only — never an ordering input or a resume key; every request produces a fresh shuffle.
 
 `is_leech` is derived on every read, never stored: an item is a leech when three
 or more of its ten most recent review-log entries carry `again`. It is annotated
@@ -198,7 +227,7 @@ The app maps domain exceptions to a consistent problem shape:
 ## Conventions
 
 - **Pagination**: `limit` (defaults vary, caps at 100-200 depending on route) + `offset`. Clients page through until a short page is returned.
-- **Ordering**: study items by due date then id (unless `leech=true`, which orders worst-first); review/history newest first; readings newest first.
+- **Ordering**: study items by due date then id (unless `leech=true`, which orders worst-first); review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
 - **`Location` headers** are set on created resources.
 - **Idempotency**: dictionary autoload and HSK enrichment are idempotent; adding the same entry twice is a conflict, not a duplicate insert.
 - **Freshness**: reading history stores token text only and hydrates pinyin, definitions, and `dictionary_entry_id` on read against the current dictionary and study queue, so listed readings reflect the live vocabulary.
