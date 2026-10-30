@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
@@ -30,6 +31,11 @@ class IStudyItemRepository(Protocol):
     async def add_review_log(self, item_id: int, log: SrsReviewLog) -> None: ...
 
     async def list_reviews(self, item_id: int, *, limit: int, offset: int) -> list[SrsReviewLog]: ...
+
+    async def get_many(self, item_ids: Sequence[int]) -> list[StudyItem]:
+        """Hydrate a batch of items by id in one read; unknown ids are absent.
+        Used by the insights slice so the leech page is not an N+1."""
+        ...
 
     async def list_known_entries(self) -> list[DictionaryEntry]:
         """Every dictionary entry the learner has queued for study, unpaginated —

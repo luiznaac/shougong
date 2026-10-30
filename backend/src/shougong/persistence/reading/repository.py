@@ -12,11 +12,13 @@ time.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 
+from shougong.persistence.configuration.time import as_utc as _as_utc
+from shougong.persistence.configuration.time import naive_utc as _naive_utc
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
@@ -39,14 +41,6 @@ from shougong.usecase.reading.model import (
 
 def _optional_str(value: Any) -> str | None:
     return None if value is None else str(value)
-
-
-def _naive_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC).replace(tzinfo=None)
-
-
-def _as_utc(value: datetime) -> datetime:
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 def _token_to_json(token: ReadingToken) -> dict[str, Any]:

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import Select, delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shougong.persistence.configuration.time import as_utc as _as_utc
+from shougong.persistence.configuration.time import naive_utc as _naive_utc
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
@@ -22,32 +25,32 @@ from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem
 from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
 
 
-def _naive_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC).replace(tzinfo=None)
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-
-
 def _card_of(row: StudyItemEntity) -> SrsCard:
     return SrsCard(
         state=SrsState(row.card_state),
         stability=row.card_stability,
         difficulty=row.card_difficulty,
-        due=_as_utc(row.card_due),  # type: ignore[arg-type]  # column is NOT NULL
+        due=_as_utc(row.card_due),
         last_review=_as_utc(row.card_last_review),
     )
 
 
-def _to_domain(row: StudyItemEntity, entry: DictionaryEntryEntity, priority_position: int | None) -> StudyItem:
+def to_domain(
+    row: StudyItemEntity,
+    entry: DictionaryEntryEntity,
+    priority_position: int | None = None,
+) -> StudyItem:
+    """Map a joined `study_item` + `dictionary_entry` row to the domain item.
+
+    Shared with the insights adapter, which reads the same item shape; the
+    priority position is optional so a read that does not join the pin table
+    can still use it.
+    """
     return StudyItem(
         id=row.id,
         entry=_entry_to_domain(entry),
         card=_card_of(row),
-        created_at=_as_utc(row.created_at),  # type: ignore[arg-type]  # column is NOT NULL
+        created_at=_as_utc(row.created_at),
         priority_position=priority_position,
     )
 
@@ -73,7 +76,7 @@ class StudyItemRepository(IStudyItemRepository):
         result = (await session.execute(_with_priority_and_entry().where(StudyItemEntity.id == item_id))).first()
         if result is None:
             raise ResourceNotFoundError("study_item", str(item_id))
-        return _to_domain(*result)
+        return to_domain(*result)
 
     async def create(self, entry: DictionaryEntry, card: SrsCard, created_at: datetime) -> StudyItem:
         async def _run() -> StudyItem:
@@ -99,7 +102,7 @@ class StudyItemRepository(IStudyItemRepository):
         async def _run() -> StudyItem | None:
             session = current_session()
             result = (await session.execute(_with_priority_and_entry().where(StudyItemEntity.id == item_id))).first()
-            return _to_domain(*result) if result is not None else None
+            return to_domain(*result) if result is not None else None
 
         return await self._tx.execute(_run)
 
@@ -202,9 +205,20 @@ class StudyItemRepository(IStudyItemRepository):
             )
             rows = (await session.execute(stmt)).scalars().all()
             return [
-                SrsReviewLog(rating=SrsRating(row.rating), review_datetime=_as_utc(row.review_datetime))  # type: ignore[arg-type]  # column is NOT NULL
-                for row in rows
+                SrsReviewLog(rating=SrsRating(row.rating), review_datetime=_as_utc(row.review_datetime)) for row in rows
             ]
+
+        return await self._tx.execute(_run)
+
+    async def get_many(self, item_ids: Sequence[int]) -> list[StudyItem]:
+        if not item_ids:
+            return []
+
+        async def _run() -> list[StudyItem]:
+            session = current_session()
+            stmt = _with_priority_and_entry().where(StudyItemEntity.id.in_(item_ids))
+            rows = (await session.execute(stmt)).all()
+            return [to_domain(item, entry, position) for item, entry, position in rows]
 
         return await self._tx.execute(_run)
 
@@ -235,7 +249,7 @@ class StudyItemRepository(IStudyItemRepository):
                     StudyItemEntity.card_due <= _naive_utc(now),
                 ).order_by(StudyItemEntity.card_due, StudyItemEntity.id)
             rows = (await session.execute(stmt)).all()
-            return [_to_domain(item, entry, position) for item, entry, position in rows]
+            return [to_domain(item, entry, position) for item, entry, position in rows]
 
         return await self._tx.execute(_run)
 
@@ -250,6 +264,6 @@ class StudyItemRepository(IStudyItemRepository):
                 stmt = stmt.where(StudyItemEntity.card_due <= _naive_utc(due_before))
             stmt = stmt.order_by(StudyItemEntity.card_due, StudyItemEntity.id).limit(limit).offset(offset)
             rows = (await session.execute(stmt)).all()
-            return [_to_domain(item, entry, position) for item, entry, position in rows]
+            return [to_domain(item, entry, position) for item, entry, position in rows]
 
         return await self._tx.execute(_run)

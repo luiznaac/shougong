@@ -14,6 +14,8 @@ from typing import TypeVar
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
+from shougong.usecase.insights.gateway import IInsightRepository
+from shougong.usecase.insights.model import GradeWindow, InsightBucket
 from shougong.usecase.reading.gateway import (
     DialogueLine,
     IReadingHistoryRepository,
@@ -286,6 +288,10 @@ class FakeStudyItemRepository(IStudyItemRepository):
     async def exists_for_entry(self, entry_id: int) -> bool:
         return any(i.entry.id == entry_id for i in self.items)
 
+    async def get_many(self, item_ids: Sequence[int]) -> list[StudyItem]:
+        wanted = set(item_ids)
+        return [item for item in self.items if item.id in wanted]
+
     async def list_known_entries(self) -> list[DictionaryEntry]:
         return [item.entry for item in self.items]
 
@@ -337,6 +343,40 @@ class FakeStudyItemRepository(IStudyItemRepository):
         # newest first; ties broken by later insertion first, mirroring the repo's id DESC
         order = sorted(range(len(logs)), key=lambda i: (logs[i].review_datetime, i), reverse=True)
         return [logs[i] for i in order][offset : offset + limit]
+
+
+class FakeInsightRepository(IInsightRepository):
+    """Read-only (it exposes no write method at all), so a test using it proves
+    the insight service can never record a practice grade."""
+
+    def __init__(
+        self,
+        windows: list[GradeWindow] | None = None,
+        *,
+        mistakes: InsightBucket | None = None,
+        learned: InsightBucket | None = None,
+    ) -> None:
+        self.windows: list[GradeWindow] = list(windows or [])
+        self.mistakes = mistakes or InsightBucket(total=0, items=())
+        self.learned = learned or InsightBucket(total=0, items=())
+        self.window_calls: list[tuple[tuple[int, ...] | None, int]] = []
+        self.mistake_calls: list[tuple[datetime, datetime, int]] = []
+        self.learned_calls: list[tuple[datetime, datetime, int]] = []
+
+    async def list_grade_windows(self, item_ids: Sequence[int] | None, *, window_size: int) -> list[GradeWindow]:
+        self.window_calls.append((None if item_ids is None else tuple(item_ids), window_size))
+        if item_ids is None:
+            return list(self.windows)
+        wanted = set(item_ids)
+        return [window for window in self.windows if window.study_item_id in wanted]
+
+    async def recent_mistakes(self, *, start: datetime, end: datetime, limit: int) -> InsightBucket:
+        self.mistake_calls.append((start, end, limit))
+        return self.mistakes
+
+    async def recently_learned(self, *, start: datetime, end: datetime, limit: int) -> InsightBucket:
+        self.learned_calls.append((start, end, limit))
+        return self.learned
 
 
 # A canned gateway response: a plain string is the text; a dict is

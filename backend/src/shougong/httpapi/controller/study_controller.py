@@ -2,7 +2,8 @@
 
 `POST /study-items`              enqueue a dictionary entry (201 + Location).
 `POST /study-items/batch`        enqueue many from CSV rows (hanzi + pinyin); returns a per-row report.
-`GET  /study-items`              list items; `?due=true` filters to what's due now.
+`GET  /study-items`              list items; `?due=true` filters to what's due now;
+                                `?leech=true` returns the worst-first leech list.
 `GET  /study-items/{id}`         a single item.
 `POST /study-items/{id}/reviews` grade an item and let FSRS reschedule it (201 + Location);
                                  409 if the item is not due yet.
@@ -32,13 +33,15 @@ from shougong.httpapi.schema import (
     ReviewResponse,
     StudyItemResponse,
 )
+from shougong.usecase.insights.service import InsightService
 from shougong.usecase.study.model import BatchImportRow
 from shougong.usecase.study.service import StudyService
 
 
 class StudyController(IController):
-    def __init__(self, service: StudyService) -> None:
+    def __init__(self, service: StudyService, insight_service: InsightService) -> None:
         self._service = service
+        self._insights = insight_service
 
     def router(self) -> APIRouter:
         router = APIRouter(tags=["study"], prefix="/study-items")
@@ -59,15 +62,22 @@ class StudyController(IController):
         @router.get("")
         async def list_items(
             due: bool = False,
+            leech: bool = False,
             limit: Annotated[int, Query(ge=1, le=200)] = 50,
             offset: Annotated[int, Query(ge=0)] = 0,
         ) -> list[StudyItemResponse]:
-            items = await self._service.list_items(due_only=due, limit=limit, offset=offset)
-            return [StudyItemResponse.from_domain(item) for item in items]
+            if leech:
+                items, flags = await self._insights.leech_items(limit=limit, offset=offset)
+            else:
+                items = await self._service.list_items(due_only=due, limit=limit, offset=offset)
+                flags = await self._insights.leech_flags([item.id for item in items])
+            return [StudyItemResponse.from_domain(item, is_leech=flags.get(item.id, False)) for item in items]
 
         @router.get("/{item_id}")
         async def get(item_id: int) -> StudyItemResponse:
-            return StudyItemResponse.from_domain(await self._service.get_item(item_id))
+            item = await self._service.get_item(item_id)
+            flags = await self._insights.leech_flags([item.id])
+            return StudyItemResponse.from_domain(item, is_leech=flags.get(item.id, False))
 
         @router.post("/{item_id}/reviews", status_code=201)
         async def review(item_id: int, body: ReviewRequest, response: Response) -> ReviewResponse:

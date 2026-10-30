@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.health.checker import HealthCheckResult
+from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket
 from shougong.usecase.reading.model import (
     GenerationAttempt,
     ReadingFormat,
@@ -108,15 +110,18 @@ class StudyItemResponse(BaseModel):
     created_at: datetime
     # Opaque display-ordering key for the lesson queue; null when not pinned.
     priority_position: int | None
+    # Derived on read by the insights slice; false wherever the caller does not annotate it.
+    is_leech: bool = False
 
     @classmethod
-    def from_domain(cls, item: StudyItem) -> Self:
+    def from_domain(cls, item: StudyItem, *, is_leech: bool = False) -> Self:
         return cls(
             id=item.id,
             entry=DictionaryEntryResponse.from_domain(item.entry),
             card=SrsCardResponse.from_domain(item.card),
             created_at=item.created_at,
             priority_position=item.priority_position,
+            is_leech=is_leech,
         )
 
 
@@ -216,6 +221,8 @@ class StudyItemHistoryResponse(BaseModel):
     entry: DictionaryEntryResponse
     card: SrsCardResponse
     created_at: datetime
+    # History never carries the derived flag — it is always false here.
+    is_leech: bool = False
 
     @classmethod
     def from_domain(cls, history: StudyItemHistory) -> StudyItemHistoryResponse:
@@ -236,6 +243,40 @@ class ReviewResponse(BaseModel):
         return cls(
             item=StudyItemResponse.from_domain(result.item),
             review=ReviewLogResponse.from_domain(result.log),
+        )
+
+
+class InsightBucketResponse(BaseModel):
+    total: int
+    items: list[StudyItemResponse]
+
+    @classmethod
+    def from_domain(cls, bucket: InsightBucket, leech_flags: Mapping[int, bool]) -> Self:
+        return cls(
+            total=bucket.total,
+            items=[
+                StudyItemResponse.from_domain(item, is_leech=leech_flags.get(item.id, False)) for item in bucket.items
+            ],
+        )
+
+
+class ExtraStudyResponse(BaseModel):
+    """Both Extra Study tabs for one instant range: `from` inclusive, `to` exclusive."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    start: datetime = Field(serialization_alias="from")
+    end: datetime = Field(serialization_alias="to")
+    recent_mistakes: InsightBucketResponse
+    recently_learned: InsightBucketResponse
+
+    @classmethod
+    def from_domain(cls, report: ExtraStudyReport) -> Self:
+        return cls(
+            start=report.start,
+            end=report.end,
+            recent_mistakes=InsightBucketResponse.from_domain(report.recent_mistakes, report.leech_flags),
+            recently_learned=InsightBucketResponse.from_domain(report.recently_learned, report.leech_flags),
         )
 
 
