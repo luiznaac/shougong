@@ -30,12 +30,13 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | --- | --- | --- |
 | `POST` | `/study-items` | Enqueue one dictionary entry (`201` + `Location`) |
 | `POST` | `/study-items/batch` | Import up to 1000 rows, per-row report |
-| `GET` | `/study-items?due=&limit=&offset=` | List queue, optionally due only |
+| `GET` | `/study-items?due=&leech=&limit=&offset=` | List queue, optionally due only or the worst-first leech list |
 | `GET` | `/study-items/{item_id}` | Fetch one study item |
 | `POST` | `/study-items/{item_id}/reviews` | Grade a due card (`201`) |
 | `GET` | `/study-items/{item_id}/reviews` | Grade history, newest first |
 | `GET` | `/study-items/{item_id}/history` | Card-state snapshot trail, newest first |
 | `GET` | `/study-items/history/learning-to-review` | Every learning -> review graduation row, newest first |
+| `GET` | `/study/insights/extra-study?from=&to=` | Recent failures and graduations in an instant range |
 
 ### Reading
 
@@ -78,11 +79,53 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
     "difficulty": 5.2,
     "last_review": null
   },
-  "created_at": "2026-09-11T12:00:00Z"
+  "created_at": "2026-09-11T12:00:00Z",
+  "is_leech": false
 }
 ```
 
 `card.state` is one of `learning | review | relearning`.
+
+`is_leech` is derived on every read, never stored: an item is a leech when three
+or more of its ten most recent review-log entries carry `again`. It is annotated
+on the study-item list, the single study item, the study session, the Extra Study
+buckets and the `leech=true` list. Review and history responses always carry
+`false`.
+
+`GET /study-items?leech=true` returns the leech list ordered worst-first — `again`
+count descending, then most recent failure descending, then item id ascending — and
+paginates that order. Without `leech`, the list keeps its due-then-id order (and
+`due=true` filters to what is due now).
+
+### Extra Study
+
+`GET /study/insights/extra-study?from=&to=` takes two required instants: `from` is
+inclusive, `to` exclusive. The browser sends the learner's local-day boundaries;
+the backend validates only the range shape (missing, inverted or longer than 32
+days is a `422`). Both buckets are always present, each with a true total and at
+most 200 items.
+
+```json
+{
+  "from": "2026-09-01T03:00:00Z",
+  "to": "2026-09-04T03:00:00Z",
+  "recent_mistakes": {
+    "total": 2,
+    "items": [ { "id": 42, "entry": {}, "card": {}, "created_at": "…", "is_leech": true } ]
+  },
+  "recently_learned": {
+    "total": 1,
+    "items": [ { "id": 7, "entry": {}, "card": {}, "created_at": "…", "is_leech": false } ]
+  }
+}
+```
+
+- **Recent Mistakes**: items whose current state is `review` or `relearning` and
+  that have at least one in-range `again`, deduped per item, most recent failure
+  first. Card state is evaluated now, so an item that graduated out of the
+  excluded states drops out.
+- **Recently Learned**: items whose learning-to-review transition row landed in
+  range, newest transition first.
 
 ### Review request
 
@@ -155,7 +198,7 @@ The app maps domain exceptions to a consistent problem shape:
 ## Conventions
 
 - **Pagination**: `limit` (defaults vary, caps at 100-200 depending on route) + `offset`. Clients page through until a short page is returned.
-- **Ordering**: study items by due date then id; review/history newest first; readings newest first.
+- **Ordering**: study items by due date then id (unless `leech=true`, which orders worst-first); review/history newest first; readings newest first.
 - **`Location` headers** are set on created resources.
 - **Idempotency**: dictionary autoload and HSK enrichment are idempotent; adding the same entry twice is a conflict, not a duplicate insert.
 - **Freshness**: reading history stores token text only and hydrates pinyin, definitions, and `dictionary_entry_id` on read against the current dictionary and study queue, so listed readings reflect the live vocabulary.

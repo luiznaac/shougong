@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 
+from shougong.persistence.configuration.time import naive_utc as _naive_utc
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
@@ -13,10 +14,6 @@ from shougong.persistence.configuration.transaction import (
 from shougong.persistence.reading.topic_entity import ReadingTopicEntity
 from shougong.usecase.reading.gateway import IReadingTopicRepository
 from shougong.usecase.reading.model import ReadingTopic
-
-
-def _naive_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def to_domain(row: ReadingTopicEntity) -> ReadingTopic:

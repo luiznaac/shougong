@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 
+from shougong.persistence.configuration.time import as_utc as _as_utc
+from shougong.persistence.configuration.time import naive_utc as _naive_utc
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
@@ -14,16 +16,6 @@ from shougong.persistence.configuration.transaction import (
 from shougong.persistence.reading.word_usage_entity import ReadingWordUsageEntity
 from shougong.usecase.reading.gateway import IReadingWordUsageRepository
 from shougong.usecase.reading.working_set import WordUsage
-
-
-def _naive_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC).replace(tzinfo=None)
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 class ReadingWordUsageRepository(IReadingWordUsageRepository):

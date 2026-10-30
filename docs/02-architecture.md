@@ -26,6 +26,7 @@ flowchart TB
         READING["reading slice"]
         VOCAB["vocabulary / proficiency"]
         HIST["study item history"]
+        INSIGHTS["insights / leeches"]
     end
     APP["application: composition root"]
     APP --> HTTP
@@ -52,6 +53,7 @@ Rules that keep the architecture honest:
 | SRS | FSRS card model and rating | `ISrsEngine` | `DayBoundaryEngine` + `FsrsEngine` |
 | Strokes | per-character stroke order | `IStrokeRepository`, `IHanziStrokeSource` | SQLAlchemy cache, Hanzi Writer source |
 | Reading | generation, working sets, topics, word usage | `IReadingTextGateway`, `ISegmenter`, `IReadingHistoryRepository`, `IReadingTopicRepository`, `IReadingWordUsageRepository` | LiteLLM gateway, jieba segmenter, SQLAlchemy repos |
+| Insights | leech policy, Extra Study buckets | `IInsightRepository` (read-only), `IStudyItemRepository` | SQLAlchemy repo; derived on read, not persisted |
 | Vocabulary | grammatical overview and proficiency | `IStudyItemRepository`, `IDictionaryRepository` | derived on read, not persisted |
 | Health | liveness/readiness | `IHealthChecker` | MySQL check, self-HTTP check |
 

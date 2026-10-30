@@ -35,6 +35,7 @@ from shougong.httpapi.configuration.server import build_app
 from shougong.httpapi.controller.base import IController
 from shougong.httpapi.controller.dictionary_controller import DictionaryController
 from shougong.httpapi.controller.health_controller import HealthController
+from shougong.httpapi.controller.insights_controller import InsightsController
 from shougong.httpapi.controller.reading_controller import ReadingController
 from shougong.httpapi.controller.reading_topic_controller import ReadingTopicController
 from shougong.httpapi.controller.strokes_controller import StrokesController
@@ -45,6 +46,7 @@ from shougong.persistence.configuration.database import build_engine, build_sess
 from shougong.persistence.configuration.transaction import SqlAlchemyTransactionTemplate
 from shougong.persistence.dictionary.repository import DictionaryRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
+from shougong.persistence.insights.repository import InsightRepository
 from shougong.persistence.reading.repository import ReadingHistoryRepository
 from shougong.persistence.reading.topic_repository import ReadingTopicRepository
 from shougong.persistence.reading.word_usage_repository import ReadingWordUsageRepository
@@ -58,6 +60,7 @@ from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
+from shougong.usecase.insights.service import InsightService
 from shougong.usecase.reading.service import ReadingService
 from shougong.usecase.reading.topic_service import ReadingTopicService
 from shougong.usecase.reading.vocabulary_service import VocabularyOverviewService
@@ -119,6 +122,14 @@ class Container:
             self.transaction_template,
         )
 
+        # --- insights slice ---------------------------------------------
+        self._insight_repository = InsightRepository(self.transaction_template)
+        self._insight_service = InsightService(
+            self._insight_repository,
+            self._study_item_repository,
+            self.transaction_template,
+        )
+
         # --- reading slice -----------------------------------------------
         self._segmenter = JiebaSegmenter()
         self._reading_gateway = LiteLlmReadingGateway(
@@ -150,8 +161,9 @@ class Container:
             HealthController(self.health_checkers),
             DictionaryController(self._dictionary_service),
             StrokesController(self._stroke_service),
-            StudyController(self._study_service),
+            StudyController(self._study_service, self._insight_service),
             StudyItemHistoryController(self._study_item_history_service),
+            InsightsController(self._insight_service),
             ReadingController(self._reading_service),
             VocabularyController(self._vocabulary_overview_service),
             ReadingTopicController(self._reading_topic_service),
