@@ -3,6 +3,7 @@ import type {
   BatchImportRowRequest,
   CharacterStrokes,
   DictionaryEntry,
+  ExtraStudy,
   GenerateReadingRequest,
   ReadingTopic,
   ReviewLog,
@@ -136,6 +137,12 @@ export const api = {
   // --- study sessions ---
   getStudySession(kind: SessionKind): Promise<StudySession> {
     return request(`/study/session?kind=${kind}`);
+  },
+
+  // --- insights ---
+  getExtraStudy(from: string, to: string): Promise<ExtraStudy> {
+    const params = new URLSearchParams({ from, to });
+    return request(`/study/insights/extra-study?${params}`);
   },
 
   // --- reading ---

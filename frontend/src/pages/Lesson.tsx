@@ -1,4 +1,5 @@
 import { useStudySession } from "../api/queries.ts";
+import { FullScreenMsg } from "../components/FullScreenMsg.tsx";
 import { Quiz } from "../components/Quiz.tsx";
 
 export function Lesson() {
@@ -11,13 +12,5 @@ export function Lesson() {
 
   return (
     <Quiz items={data?.items ?? []} mode="lesson" emptyMessage="Nenhum item novo para aprender." />
-  );
-}
-
-function FullScreenMsg({ text, tone }: { text: string; tone?: "error" }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950">
-      <p className={tone === "error" ? "text-rose-400" : "text-slate-400"}>{text}</p>
-    </div>
   );
 }
