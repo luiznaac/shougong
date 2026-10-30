@@ -1,24 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client.ts";
+import { useStudySession } from "../api/queries.ts";
 import { Quiz } from "../components/Quiz.tsx";
 
 export function Lesson() {
-  // Items still in `learning` — never successfully reviewed. Each is shown in
-  // full first, then quizzed once.
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["lesson-queue"],
-    queryFn: async () => {
-      const all = await api.listAllStudyItems();
-      return all.filter((i) => i.card.state === "learning");
-    },
-    staleTime: Number.POSITIVE_INFINITY,
-    gcTime: 0,
-  });
+  // The backend selects every `learning` item and freezes the session order
+  // (pinned first, shuffled remainder) for the whole run.
+  const { data, isLoading, error } = useStudySession("lesson");
 
   if (isLoading) return <FullScreenMsg text="Carregando lição…" />;
   if (error) return <FullScreenMsg text={`Falha ao carregar: ${String(error)}`} tone="error" />;
 
-  return <Quiz items={data ?? []} mode="lesson" emptyMessage="Nenhum item novo para aprender." />;
+  return (
+    <Quiz items={data?.items ?? []} mode="lesson" emptyMessage="Nenhum item novo para aprender." />
+  );
 }
 
 function FullScreenMsg({ text, tone }: { text: string; tone?: "error" }) {

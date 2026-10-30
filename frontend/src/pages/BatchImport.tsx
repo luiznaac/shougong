@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client.ts";
+import { keys } from "../api/queries.ts";
 import type { BatchImportOutcome, BatchImportRowRequest, DictionaryEntry } from "../api/types.ts";
 import { parseStudyItemsCsv } from "../lib/csv.ts";
 import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
@@ -96,7 +97,7 @@ export function BatchImport() {
     if (runIdRef.current === runId) {
       setCurrentIndex(-1);
       setRunning(false);
-      qc.invalidateQueries({ queryKey: ["study-items"] });
+      qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
     }
   };
 
@@ -121,7 +122,7 @@ export function BatchImport() {
         }
         return next;
       });
-      qc.invalidateQueries({ queryKey: ["study-items"] });
+      qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
     } catch (e) {
       const alreadyQueued = e instanceof ApiError && e.status === 409;
       setOutcomes((prev) => {

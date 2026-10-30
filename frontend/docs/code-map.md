@@ -10,14 +10,13 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 **Seam(s)**:
 - **DTO mirror** (`api/types.ts`) — mirrors `backend/src/shougong/httpapi/schema.py` (`DictionaryEntry`, `CharacterStrokes`, `SrsCard`, `StudyItem`, `ReviewLog`, batch-import and reading shapes, plus `SrsRating`/`SrsState`); update both in the same commit. `CharacterStrokes.medians` are raw hanzi-writer data in a 1024×1024 box with the Y-axis flipped (see `components/StrokeOrder.tsx`).
 - **Fetch adapter** (`api/client.ts`) — `BASE` is `VITE_API_BASE ?? "/api"`; `ApiError` carries `status` and the `{detail}` message; `request<T>` treats `204` as `undefined`. A new endpoint adds a method to `api`, not another fetch wrapper.
-- **Query seam** (`api/queries.ts`) — the `keys` factory (`studyItems`, `studyItem`, `reviews`, `history`, `dictionary`, `readingHistory`) plus the non-factory keys (`["strokes", character]`, `["review-queue"]`). `useStudyItems` pages through `api.listAllStudyItems` (backend cap 200); `useCharacterStrokes` sets `retry: false` (a 404 means "no stroke data") and `staleTime: Infinity` (stroke data never changes).
+- **Query seam** (`api/queries.ts`) — the `keys` factory (`studyItemsPrefix`, `studyItems`, `studyItem`, `reviews`, `history`, `dictionary`, `readingHistory`) plus the non-factory keys (`["study-session", kind]` from `lib/studySession.ts`, `["strokes", character]`). `useStudyItems` pages through `api.listAllStudyItems` (backend cap 200); `useCharacterStrokes` sets `retry: false` (a 404 means "no stroke data") and `staleTime: Infinity` (stroke data never changes). `useStudySession` sits outside the `["study-items"]` prefix with infinite stale time and zero cache time, so study-item invalidation never refetches or reshuffles a running session.
 
 ### `src/pages` — routed screens
 **Purpose**: the seven screens — dashboard, add/batch-import, study-item detail, reading, and the full-screen lesson/review flows.
 **Files**: `frontend/src/pages/Dashboard.tsx`, `pages/AddItems.tsx`, `pages/BatchImport.tsx`, `pages/StudyItemPage.tsx`, `pages/Reading.tsx`, `pages/Lesson.tsx`, `pages/Review.tsx`
 **Seam(s)**:
-- **Review queue** (`pages/Review.tsx`) — snapshots the due queue once on entry (`staleTime: Infinity`, `gcTime: 0`), keeps only `review`/`relearning` cards (new `learning` items go to the lesson flow) and hands it to `Quiz`.
-- **Lesson flow** (`pages/Lesson.tsx`) — the other full-screen flow, mounted outside the `Layout` chrome in `App.tsx`.
+- **Study session seam** (`pages/Lesson.tsx`, `pages/Review.tsx`, `api/queries.ts`, `lib/studySession.ts`) — each flow reads `GET /study/session?kind=…` once on entry (`staleTime: Infinity`, `gcTime: 0`) and hands the received item order to `Quiz` verbatim — no client filter or sort. The backend owns lesson membership (all `learning`, pinned first then shuffled remainder) and review membership (due, non-learning, fully shuffled); a remount or refresh is a new session with a new shuffle. `useReviewMutation` invalidates the `["study-items"]` prefix, the single item and its review list, but not the running session.
 - **Reading** (`pages/Reading.tsx`) — composes the generation controls, history, topic panel and vocabulary panel; model choice is persisted client-side (`reading.model`), and numeric inputs are clamped to the backend bounds.
 - **Batch import** (`pages/BatchImport.tsx`) — parses the CSV locally, then sends one row at a time and layers `pending`/`loading` display states over the backend outcome.
 
@@ -37,12 +36,13 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 
 ### `src/lib` — pure helpers
 **Purpose**: the unit-testable surface — CSV parsing, pinyin conversion, the display-only SRS ladder, local settings and formatting.
-**Files**: `frontend/src/lib/csv.ts`, `lib/pinyin.ts`, `lib/srs.ts`, `lib/localSettings.ts`, `lib/format.ts`
+**Files**: `frontend/src/lib/csv.ts`, `lib/pinyin.ts`, `lib/srs.ts`, `lib/localSettings.ts`, `lib/format.ts`, `lib/studySession.ts`
 **Seam(s)**:
 - **CSV seam** (`lib/csv.ts`) — `parseStudyItemsCsv(text)` accepts a hanzi/pinyin header, comma or semicolon, quoted fields; it never validates pinyin (the backend reports per-row).
 - **Pinyin seam** (`lib/pinyin.ts`) — `parsePinyin(numbered)` → `{text, tone}` and `toAccented`; the tone-mark placement rule lives here, not in a component.
 - **SRS display ladder** (`lib/srs.ts`) — derived from the backend's continuous `stability` (days), not a stored level; `LEVELS`/`GROUP_ORDER`/`GROUP_COLOR` are the single ladder and palette.
 - **Local settings** (`lib/localSettings.ts`) — `useHandwritingEnabled`/`useHandwritingTolerance` persist per browser; `allowedMistakes(strokeCount, tolerancePercent)` scales the tolerance by the character's own stroke count.
+- **Session query policy** (`lib/studySession.ts`) — `studySessionKey(kind)` and `STUDY_SESSION_QUERY` pin the session hooks outside the `["study-items"]` prefix with infinite stale time and zero cache time.
 - **Formatting** (`lib/format.ts`) — `fromNow`/`formatDateTime`/`formatDate`, all `pt-BR`.
 
 ### Theme and root wiring

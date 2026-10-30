@@ -8,9 +8,11 @@ import type {
   ReviewLog,
   ReviewResult,
   SavedReadingText,
+  SessionKind,
   SrsRating,
   StudyItem,
   StudyItemHistory,
+  StudySession,
   VocabularyOverview,
 } from "./types.ts";
 
@@ -118,6 +120,11 @@ export const api = {
       if (page.length < 200) break;
     }
     return all;
+  },
+
+  // --- study sessions ---
+  getStudySession(kind: SessionKind): Promise<StudySession> {
+    return request(`/study/session?kind=${kind}`);
   },
 
   // --- reading ---

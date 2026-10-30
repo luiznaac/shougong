@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
 import { api } from "./client.ts";
-import type { GenerateReadingRequest, SrsRating } from "./types.ts";
+import type { GenerateReadingRequest, SessionKind, SrsRating } from "./types.ts";
 
 export const keys = {
+  studyItemsPrefix: ["study-items"] as const,
   studyItems: (due?: boolean) => ["study-items", { due: due ?? false }] as const,
   studyItem: (id: number) => ["study-items", id] as const,
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
@@ -22,6 +24,14 @@ export function useStudyItem(id: number) {
   return useQuery({
     queryKey: keys.studyItem(id),
     queryFn: () => api.getStudyItem(id),
+  });
+}
+
+export function useStudySession(kind: SessionKind) {
+  return useQuery({
+    queryKey: studySessionKey(kind),
+    queryFn: () => api.getStudySession(kind),
+    ...STUDY_SESSION_QUERY,
   });
 }
 
@@ -68,7 +78,7 @@ export function useAddStudyItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dictionaryEntryId: number) => api.addStudyItem(dictionaryEntryId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["study-items"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.studyItemsPrefix }),
   });
 }
 
@@ -78,6 +88,7 @@ export function useReviewMutation() {
     mutationFn: ({ id, rating }: { id: number; rating: SrsRating }) =>
       api.reviewStudyItem(id, rating),
     onSuccess: (_res, { id }) => {
+      qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
       qc.invalidateQueries({ queryKey: keys.studyItem(id) });
       qc.invalidateQueries({ queryKey: keys.reviews(id) });
     },
