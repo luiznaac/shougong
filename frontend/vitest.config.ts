@@ -1,10 +1,10 @@
 import { defineConfig } from "vitest/config";
 
-// Only src/lib/** is under test — pure logic, no React rendering. See AGENTS.md: this lane
-// doesn't set up component/render tests yet, and `npm test` allows an empty suite.
+// Pure helpers under src/lib and markup-only component tests (react-dom/server,
+// no DOM) run in the node environment. See AGENTS.md.
 export default defineConfig({
   test: {
-    include: ["src/lib/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "node",
   },
 });

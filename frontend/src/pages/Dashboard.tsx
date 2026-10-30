@@ -1,15 +1,24 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLearningToReviewHistory, useStudyItems } from "../api/queries.ts";
+import type { StudyItem } from "../api/types.ts";
 import { ItemsLearnedChart } from "../components/ItemsLearnedChart.tsx";
 import { ProgressTiles } from "../components/ProgressTiles.tsx";
 import { SrsDistribution } from "../components/SrsDistribution.tsx";
 import { UpcomingReviews } from "../components/UpcomingReviews.tsx";
+import { type CharacterFilter, orderCharacterTiles } from "../lib/characterPanel.ts";
 import { tallyGroups } from "../lib/srs.ts";
 
 export function Dashboard() {
+  const [filter, setFilter] = useState<CharacterFilter>("all");
   const { data: items, isLoading, error } = useStudyItems();
   const { data: dueItems } = useStudyItems({ due: true });
+  // Fetched eagerly so the leech chip count is accurate on dashboard load.
+  const {
+    data: leechItems,
+    isLoading: leechesLoading,
+    error: leechesError,
+  } = useStudyItems({ leech: true });
   const { data: learnedHistory } = useLearningToReviewHistory();
 
   if (isLoading) return <p className="text-slate-400">Carregando…</p>;
@@ -23,6 +32,7 @@ export function Dashboard() {
   // learning items are handled by the lesson flow.
   const reviewCount = (dueItems ?? []).filter((i) => i.card.state === "review").length;
   const tally = tallyGroups(items.map((i) => i.card));
+  const tiles = orderCharacterTiles(filter, { all: items, leeches: leechItems ?? [] });
 
   return (
     <div className="space-y-6">
@@ -56,20 +66,112 @@ export function Dashboard() {
         </Panel>
       </div>
 
-      <Panel title={`Caracteres (${items.length})`}>
-        {items.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Nada ainda.{" "}
-            <Link to="/add" className="text-accent-500 hover:underline">
-              Adicione itens
-            </Link>
-            .
-          </p>
-        ) : (
-          <ProgressTiles items={items} />
-        )}
+      <Panel
+        title="Caracteres"
+        action={
+          <CharacterFilterChips
+            filter={filter}
+            onChange={setFilter}
+            allCount={items.length}
+            leechCount={leechItems?.length ?? 0}
+          />
+        }
+      >
+        <CharacterPanelBody
+          filter={filter}
+          tiles={tiles}
+          allCount={items.length}
+          leechesLoading={leechesLoading}
+          leechesError={leechesError}
+        />
       </Panel>
     </div>
+  );
+}
+
+function CharacterPanelBody({
+  filter,
+  tiles,
+  allCount,
+  leechesLoading,
+  leechesError,
+}: {
+  filter: CharacterFilter;
+  tiles: StudyItem[];
+  allCount: number;
+  leechesLoading: boolean;
+  leechesError: Error | null;
+}) {
+  if (filter === "leeches") {
+    if (leechesLoading) return <p className="text-sm text-slate-400">Carregando sanguessugas…</p>;
+    if (leechesError) {
+      return <p className="text-sm text-rose-400">Falha ao carregar: {String(leechesError)}</p>;
+    }
+    if (tiles.length === 0) {
+      return <p className="text-sm text-slate-500">Nenhum sanguessuga no momento.</p>;
+    }
+    return <ProgressTiles items={tiles} />;
+  }
+  if (allCount === 0) {
+    return (
+      <p className="text-sm text-slate-500">
+        Nada ainda.{" "}
+        <Link to="/add" className="text-accent-500 hover:underline">
+          Adicione itens
+        </Link>
+        .
+      </p>
+    );
+  }
+  return <ProgressTiles items={tiles} />;
+}
+
+function CharacterFilterChips({
+  filter,
+  onChange,
+  allCount,
+  leechCount,
+}: {
+  filter: CharacterFilter;
+  onChange: (filter: CharacterFilter) => void;
+  allCount: number;
+  leechCount: number;
+}) {
+  return (
+    <fieldset className="flex min-w-0 gap-1 border-0 p-0">
+      <legend className="sr-only">Filtrar caracteres</legend>
+      <FilterChip pressed={filter === "all"} onClick={() => onChange("all")}>
+        Todas ({allCount})
+      </FilterChip>
+      <FilterChip pressed={filter === "leeches"} onClick={() => onChange("leeches")}>
+        Sanguessugas ({leechCount})
+      </FilterChip>
+    </fieldset>
+  );
+}
+
+function FilterChip({
+  pressed,
+  onClick,
+  children,
+}: {
+  pressed: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+        pressed
+          ? "border-accent-500 bg-accent-500/15 text-accent-300"
+          : "border-white/10 text-slate-400 hover:text-slate-200"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -99,10 +201,21 @@ function BigButton({
   );
 }
 
-function Panel({ title, children }: { title: string; children: ReactNode }) {
+function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
+        {action}
+      </div>
       {children}
     </section>
   );
