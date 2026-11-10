@@ -297,6 +297,105 @@ async def test_generate_defaults_the_topic_when_none_given(httpserver: HTTPServe
     assert user_payload["topic"] == "free choice, something everyday"
 
 
+async def test_generate_asks_for_reduced_reasoning_with_headroom_for_the_tool_call(httpserver: HTTPServer) -> None:
+    # Reasoning tokens count against max_tokens. A reasoning model left on its
+    # default effort spent the whole budget thinking and never called the tool
+    # (finish_reason=length), which surfaced as "'tool_calls'".
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(_TOOL_CALL_RESPONSE)
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        await gateway.generate(
+            working_set=_EMPTY_WS,
+            text_format=ReadingFormat.SENTENCES,
+            max_extra_words=2,
+            model="cascade-mechanical-leader",
+            topic=None,
+            budget_audience=BudgetAudience.INTERMEDIATE,
+        )
+
+    sent = _last_request_json(httpserver)
+    assert sent["reasoning_effort"] == "low"
+    assert sent["max_tokens"] >= 8000
+
+
+async def test_generate_uses_the_configured_reasoning_and_ceiling(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(_TOOL_CALL_RESPONSE)
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(
+            client,
+            httpserver.url_for("/"),
+            "sk-test",
+            reasoning_effort="high",
+            max_output_tokens=32000,
+        )
+        await gateway.generate(
+            working_set=_EMPTY_WS,
+            text_format=ReadingFormat.SENTENCES,
+            max_extra_words=2,
+            model="cascade-mechanical-leader",
+            topic=None,
+            budget_audience=BudgetAudience.INTERMEDIATE,
+        )
+
+    sent = _last_request_json(httpserver)
+    assert sent["reasoning_effort"] == "high"
+    assert sent["max_tokens"] == 32000
+
+
+async def test_generate_explains_a_response_truncated_before_the_tool_call(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(
+        {
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": "", "reasoning_content": "还在想……"},
+                    "finish_reason": "length",
+                }
+            ],
+            "usage": {},
+        }
+    )
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        with pytest.raises(ReadingGenerationError, match="finish_reason='length'"):
+            await gateway.generate(
+                working_set=_EMPTY_WS,
+                text_format=ReadingFormat.SENTENCES,
+                max_extra_words=2,
+                model="cascade-mechanical-leader",
+                topic=None,
+                budget_audience=BudgetAudience.INTERMEDIATE,
+            )
+
+
+async def test_generate_explains_a_truncated_tool_call(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(
+        {
+            "choices": [
+                {
+                    "message": {"tool_calls": [{"function": {"arguments": '{"text": "我是学'}}]},
+                    "finish_reason": "length",
+                }
+            ],
+            "usage": {},
+        }
+    )
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        with pytest.raises(ReadingGenerationError, match="malformed tool call"):
+            await gateway.generate(
+                working_set=_EMPTY_WS,
+                text_format=ReadingFormat.SENTENCES,
+                max_extra_words=2,
+                model="cascade-mechanical-leader",
+                topic=None,
+                budget_audience=BudgetAudience.INTERMEDIATE,
+            )
+
+
 async def test_generate_wraps_a_malformed_response_in_a_domain_error(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/chat/completions", method="POST").respond_with_json({"choices": []})
 

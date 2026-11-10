@@ -163,6 +163,8 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 | `GATEWAYS__APP__HOST` | `http://localhost:8080` | Self health-check base URL |
 | `GATEWAYS__AI__BASE_URL` | `http://localhost:4000` | LiteLLM proxy |
 | `GATEWAYS__AI__API_KEY` | `""` | LiteLLM auth |
+| `GATEWAYS__AI__REASONING_EFFORT` | `low` | Reasoning effort sent to the proxy (reasoning tokens count against the output ceiling) |
+| `GATEWAYS__AI__MAX_OUTPUT_TOKENS` | `16000` | Output-token ceiling for a reading generation |
 
 ## Quality gates
 

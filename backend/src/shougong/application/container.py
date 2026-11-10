@@ -139,6 +139,8 @@ class Container:
             self.http_client,
             settings.gateways.ai.base_url,
             settings.gateways.ai.api_key,
+            reasoning_effort=settings.gateways.ai.reasoning_effort,
+            max_output_tokens=settings.gateways.ai.max_output_tokens,
         )
         self._reading_history_repository = ReadingHistoryRepository(self.transaction_template)
         self._reading_word_usage_repository = ReadingWordUsageRepository(self.transaction_template)

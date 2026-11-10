@@ -44,10 +44,23 @@ _BUDGET_POLICY: dict[BudgetAudience, str] = {
     ),
 }
 
+# Defaults for the constructor below — the container passes the configured
+# values (GATEWAYS__AI__MAX_OUTPUT_TOKENS / GATEWAYS__AI__REASONING_EFFORT).
+#
 # Generous ceiling so a runaway response can't rack up cost — the correction
-# loop can call the model several times per request. Sized well above any
-# reasonable reading text so it never truncates legitimate output.
-_MAX_OUTPUT_TOKENS = 1200
+# loop can call the model several times per request. Reasoning models count
+# their reasoning tokens against this budget: a dialogue request was observed
+# spending ~12k before it emitted the tool call, so a small ceiling truncates
+# the response mid-thought and no tool call ever arrives.
+_MAX_OUTPUT_TOKENS = 16000
+
+# The proxy's models reason by default (chain-of-thought, counted against
+# max_tokens above). "low" keeps enough reasoning to hold the vocabulary
+# ceiling — it measurably reduced out-of-vocabulary words versus disabling
+# reasoning — while leaving room to finish well inside the ceiling. "none"
+# was cheaper but converged more slowly in the correction loop; the default
+# effort used the whole budget and truncated.
+_REASONING_EFFORT = "low"
 
 _TOOL_SCHEMA = {
     "type": "function",
@@ -144,10 +157,20 @@ def _build_messages(
 
 
 class LiteLlmReadingGateway(IReadingTextGateway):
-    def __init__(self, client: httpx.AsyncClient, base_url: str, api_key: str) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        base_url: str,
+        api_key: str,
+        *,
+        reasoning_effort: str = _REASONING_EFFORT,
+        max_output_tokens: int = _MAX_OUTPUT_TOKENS,
+    ) -> None:
         self._client = client
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
+        self._reasoning_effort = reasoning_effort
+        self._max_output_tokens = max_output_tokens
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -189,7 +212,8 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             ),
             "tools": [_TOOL_SCHEMA],
             "tool_choice": {"type": "function", "function": {"name": _TOOL_NAME}},
-            "max_tokens": _MAX_OUTPUT_TOKENS,
+            "max_tokens": self._max_output_tokens,
+            "reasoning_effort": self._reasoning_effort,
         }
 
         try:
@@ -198,7 +222,21 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             )
             response.raise_for_status()
             body = response.json()
-            arguments = json.loads(body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])
+            choices = body.get("choices") or []
+            message = choices[0].get("message") or {} if choices else {}
+            tool_calls = message.get("tool_calls") or []
+            if not tool_calls:
+                finish_reason = choices[0].get("finish_reason") if choices else None
+                raise ReadingGenerationError(
+                    f"ai gateway returned no tool call (finish_reason={finish_reason!r}) — "
+                    "the model likely spent the whole output budget reasoning before calling the tool"
+                )
+            try:
+                arguments = json.loads(tool_calls[0]["function"]["arguments"])
+            except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+                raise ReadingGenerationError(
+                    "ai gateway returned a malformed tool call — the response was likely truncated"
+                ) from exc
             usage = body.get("usage") or {}
             lines = _parse_lines(arguments.get("lines"))
             # `text` is required by the schema, but models frequently omit it for
