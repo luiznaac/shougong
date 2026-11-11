@@ -41,6 +41,7 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | `GET` | `/study-items/{item_id}/history` | Card-state snapshot trail, newest first |
 | `GET` | `/study-items/history/learning-to-review` | Every learning -> review graduation row, newest first |
 | `GET` | `/study/insights/extra-study?from=&to=` | Recent failures and graduations in an instant range |
+| `GET` | `/study/overview?tz_offset_minutes=` | Dashboard aggregate: counts, SRS distribution, 7-day forecast, learned curve |
 
 ### Reading
 
@@ -183,6 +184,48 @@ most 200 items.
   excluded states drops out.
 - **Recently Learned**: items whose learning-to-review transition row landed in
   range, newest transition first.
+
+### Study overview
+
+`GET /study/overview?tz_offset_minutes=<int>` is the dashboard's one-read
+aggregate: queue counts, the SRS display distribution, a seven-day forecast and
+the learned curve. `tz_offset_minutes` defaults to `0`, accepts `-840..840`, and
+is minutes **east** of UTC (the client sends `-new Date().getTimezoneOffset()`).
+It affects only day bucketing; due counts compare against the server's now. No
+pagination and no mutation.
+
+```json
+{
+  "new_count": 3,
+  "due_count": 24,
+  "due_review_count": 21,
+  "due_learning_count": 3,
+  "item_count": 57,
+  "leech_count": 4,
+  "srs_distribution": { "novice": 6, "apprentice": 15, "journeyman": 2, "expert": 0, "master": 0 },
+  "next_seven_days": [{ "date": "2026-11-12", "due": 8 }],
+  "learned": { "total": 45, "points": [{ "date": "2026-09-18", "count": 1 }] }
+}
+```
+
+- **new_count** — every `learning` item (the lesson queue; no due predicate).
+- **due_count** — every item with `card.due <= now`.
+- **due_review_count** — due items whose state is not `learning` (`review` +
+  `relearning`); **due_learning_count** — due `learning` items, a subset of
+  `new_count`.
+- **item_count** / **leech_count** — all items / all leeches.
+- **srs_distribution** — every item grouped by `stability` days: `≤4` novice,
+  `≤14` apprentice, `≤60` journeyman, `≤365` expert, else master; a missing
+  stability counts as zero.
+- **next_seven_days** — exactly seven rows starting **tomorrow** in the learner's
+  local calendar; each counts **non-learning** items whose `card.due` falls in
+  `[local midnight, next midnight)`. Overdue items are not in the forecast — they
+  live in `due_review_count`.
+- **learned** — learning→review transitions from the first transition's local day
+  through today, one cumulative point per day (flat on empty days); `total` is
+  the graduation count. No transitions → `total: 0`, `points: []`.
+
+`tz_offset_minutes` outside the range is a `422`.
 
 ### Review request
 

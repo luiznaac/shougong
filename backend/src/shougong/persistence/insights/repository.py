@@ -10,7 +10,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 
 from shougong.persistence.configuration.time import as_utc as _as_utc
 from shougong.persistence.configuration.time import naive_utc as _naive_utc
@@ -20,7 +20,7 @@ from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity
 from shougong.persistence.study.repository import to_domain
 from shougong.persistence.study_item_history.entity import StudyItemHistoryEntity
 from shougong.usecase.insights.gateway import IInsightRepository
-from shougong.usecase.insights.model import GradeWindow, InsightBucket, ReviewGrade
+from shougong.usecase.insights.model import DueWindow, GradeWindow, InsightBucket, ReviewGrade, StudyCounts
 from shougong.usecase.srs.model import SrsRating, SrsState
 
 
@@ -135,5 +135,122 @@ class InsightRepository(IInsightRepository):
                 total=int(total or 0),
                 items=tuple(to_domain(item, entry) for item, entry in rows),
             )
+
+        return await self._tx.execute(_run)
+
+    async def study_counts(self, *, now: datetime) -> StudyCounts:
+        async def _run() -> StudyCounts:
+            session = current_session()
+            is_due = StudyItemEntity.card_due <= _naive_utc(now)
+            is_learning = StudyItemEntity.card_state == int(SrsState.LEARNING)
+            stmt = select(
+                func.count().label("total"),
+                func.coalesce(func.sum(case((is_learning, 1), else_=0)), 0).label("learning"),
+                func.coalesce(func.sum(case((is_due, 1), else_=0)), 0).label("due"),
+                func.coalesce(func.sum(case((and_(is_due, is_learning), 1), else_=0)), 0).label("due_learning"),
+            ).select_from(StudyItemEntity)
+            row = (await session.execute(stmt)).one()
+            return StudyCounts(
+                total=int(row.total),
+                learning=int(row.learning),
+                due=int(row.due),
+                due_learning=int(row.due_learning),
+            )
+
+        return await self._tx.execute(_run)
+
+    async def stability_counts(self, *, boundaries: Sequence[float]) -> list[int]:
+        async def _run() -> list[int]:
+            session = current_session()
+            stability = func.coalesce(StudyItemEntity.card_stability, 0.0)
+            bucket = case(
+                *[(stability <= bound, index) for index, bound in enumerate(boundaries)],
+                else_=len(boundaries),
+            )
+            stmt = select(bucket.label("bucket"), func.count()).select_from(StudyItemEntity).group_by(bucket)
+            counts = [0] * (len(boundaries) + 1)
+            for index, total in (await session.execute(stmt)).all():
+                counts[int(index)] = int(total)
+            return counts
+
+        return await self._tx.execute(_run)
+
+    async def leech_count(self, *, window_size: int, threshold: int) -> int:
+        async def _run() -> int:
+            session = current_session()
+            ranked = select(
+                ReviewLogEntity.study_item_id.label("item_id"),
+                ReviewLogEntity.rating.label("rating"),
+                func.row_number()
+                .over(
+                    partition_by=ReviewLogEntity.study_item_id,
+                    order_by=(ReviewLogEntity.review_datetime.desc(), ReviewLogEntity.id.desc()),
+                )
+                .label("position"),
+            ).subquery()
+            failures = (
+                select(ranked.c.item_id)
+                .where(
+                    ranked.c.position <= window_size,
+                    ranked.c.rating == int(SrsRating.AGAIN),
+                )
+                .group_by(ranked.c.item_id)
+                .having(func.count() >= threshold)
+                .subquery()
+            )
+            total = await session.scalar(select(func.count()).select_from(failures))
+            return int(total or 0)
+
+        return await self._tx.execute(_run)
+
+    async def due_counts_in_windows(self, windows: Sequence[DueWindow]) -> list[int]:
+        if not windows:
+            return []
+
+        async def _run() -> list[int]:
+            session = current_session()
+            due = StudyItemEntity.card_due
+            windows_utc = [(_naive_utc(start), _naive_utc(end)) for start, end in windows]
+            columns = [
+                func.coalesce(func.sum(case((and_(due >= start, due < end), 1), else_=0)), 0)
+                for start, end in windows_utc
+            ]
+            stmt = (
+                select(*columns)
+                .select_from(StudyItemEntity)
+                .where(
+                    StudyItemEntity.card_state != int(SrsState.LEARNING),
+                    due >= min(start for start, _ in windows_utc),
+                    due < max(end for _, end in windows_utc),
+                )
+            )
+            row = (await session.execute(stmt)).one()
+            return [int(value) for value in row]
+
+        return await self._tx.execute(_run)
+
+    async def learning_to_review_instants(self) -> list[datetime]:
+        async def _run() -> list[datetime]:
+            session = current_session()
+            history = StudyItemHistoryEntity
+            previous_state = func.lag(history.card_state).over(
+                partition_by=history.study_item_id,
+                order_by=(history.created_at.asc(), history.id.asc()),
+            )
+            ranked = select(
+                history.created_at.label("created_at"),
+                history.card_state.label("state"),
+                previous_state.label("previous_state"),
+            ).subquery()
+            stmt = (
+                select(ranked.c.created_at)
+                .where(
+                    ranked.c.state == int(SrsState.REVIEW),
+                    ranked.c.previous_state == int(SrsState.LEARNING),
+                )
+                .order_by(ranked.c.created_at.asc())
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+            return [_as_utc(instant) for instant in rows]
 
         return await self._tx.execute(_run)

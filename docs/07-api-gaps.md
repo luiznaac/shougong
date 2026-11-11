@@ -6,7 +6,7 @@ These endpoints are suggestions to support the desktop interface proposals in [0
 
 | # | Endpoint | Priority | Unlocks |
 | --- | --- | --- | --- |
-| 1 | `GET /dashboard` | High | Today hub without client-side aggregation |
+| 1 | ~~`GET /dashboard`~~ → `GET /study/overview` | Done | Today hub without client-side aggregation |
 | 2 | `GET /study-items` filters | High | Library, board, batch views |
 | 3 | `DELETE /study-items/{id}` | High | Queue management (remove item) |
 | 4 | `PATCH /study-items/{id}` | Medium | Pause/reschedule an item |
@@ -16,30 +16,14 @@ These endpoints are suggestions to support the desktop interface proposals in [0
 | 8 | ~~`GET /dictionary-entries/{id}/related`~~ | Done | Shared-character family with `study_item_id` (see below) |
 | 9 | ~~`GET /study-items/next`~~ | Superseded | Session endpoint (`GET /study/session`) covers lean quiz clients |
 
-## 1. `GET /dashboard` - aggregate today state
+## 1. `GET /study/overview` — shipped
 
-The current client fetches all study items and learning-to-review history to compute lesson/review counts, SRS distribution, and upcoming due dates. A server-side summary keeps the day-boundary logic authoritative and reduces the payload.
-
-```json
-{
-  "now": "2026-09-11T12:00:00Z",
-  "new_count": 3,
-  "due_count": 24,
-  "due_review_count": 21,
-  "due_learning_count": 3,
-  "srs_distribution": { "learning": 6, "review": 15, "relearning": 2 },
-  "next_seven_days": [
-    { "date": "2026-09-11", "due": 24 },
-    { "date": "2026-09-12", "due": 8 },
-    { "date": "2026-09-13", "due": 6 }
-  ],
-  "vocabulary": { "known_count": 45, "estimated_hsk_level": 2 },
-  "last_reading": { "id": 7, "format": "paragraph", "created_at": "..." },
-  "recently_graduated": [
-    { "study_item_id": 9, "entry": { "simplified": "学习" }, "created_at": "..." }
-  ]
-}
-```
+The dashboard aggregate shipped as `GET /study/overview` (renamed from the
+`/dashboard` proposal; see [04-api.md](04-api.md#study-overview)). The settled
+shape drops the client-only `vocabulary`, `last_reading` and `recently_graduated`
+fields, replaces the state distribution with the five-group `srs_distribution`,
+and adds the cumulative `learned` curve; the forecast is seven local days starting
+tomorrow and excludes overdue and learning items.
 
 ## 2. Filtering on `GET /study-items`
 

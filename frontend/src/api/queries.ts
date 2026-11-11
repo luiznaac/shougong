@@ -31,6 +31,7 @@ export const keys = {
   readingText: (id: number) => ["reading-texts", "detail", id] as const,
   insightsPrefix: ["insights"] as const,
   extraStudy: (from: string, to: string) => ["insights", "extra-study", { from, to }] as const,
+  studyOverview: (tzOffsetMinutes: number) => ["study-overview", { tzOffsetMinutes }] as const,
 };
 
 export interface ExtraStudyQueryOptions {
@@ -44,6 +45,13 @@ export function useExtraStudy(from: string, to: string, opts: ExtraStudyQueryOpt
     queryFn: () => api.getExtraStudy(from, to),
     staleTime: opts.staleTime,
     enabled: opts.enabled ?? true,
+  });
+}
+
+export function useStudyOverview(tzOffsetMinutes = -new Date().getTimezoneOffset()) {
+  return useQuery({
+    queryKey: keys.studyOverview(tzOffsetMinutes),
+    queryFn: () => api.getStudyOverview(tzOffsetMinutes),
   });
 }
 

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntry
 from shougong.usecase.health.checker import HealthCheckResult
-from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket
+from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket, StudyOverview
 from shougong.usecase.reading.model import (
     GenerationAttempt,
     ReadingFormat,
@@ -297,6 +297,52 @@ class ExtraStudyResponse(BaseModel):
             end=report.end,
             recent_mistakes=InsightBucketResponse.from_domain(report.recent_mistakes, report.leech_flags),
             recently_learned=InsightBucketResponse.from_domain(report.recently_learned, report.leech_flags),
+        )
+
+
+class DailyDueResponse(BaseModel):
+    date: date
+    due: int
+
+
+class LearnedPointResponse(BaseModel):
+    date: date
+    count: int
+
+
+class LearnedProgressResponse(BaseModel):
+    total: int
+    points: list[LearnedPointResponse]
+
+
+class StudyOverviewResponse(BaseModel):
+    """The dashboard aggregate; dates are in the learner's local calendar."""
+
+    new_count: int
+    due_count: int
+    due_review_count: int
+    due_learning_count: int
+    item_count: int
+    leech_count: int
+    srs_distribution: dict[str, int]
+    next_seven_days: list[DailyDueResponse]
+    learned: LearnedProgressResponse
+
+    @classmethod
+    def from_domain(cls, overview: StudyOverview) -> Self:
+        return cls(
+            new_count=overview.new_count,
+            due_count=overview.due_count,
+            due_review_count=overview.due_review_count,
+            due_learning_count=overview.due_learning_count,
+            item_count=overview.item_count,
+            leech_count=overview.leech_count,
+            srs_distribution={stage.value: count for stage, count in overview.srs_distribution.items()},
+            next_seven_days=[DailyDueResponse(date=row.date, due=row.due) for row in overview.next_seven_days],
+            learned=LearnedProgressResponse(
+                total=overview.learned.total,
+                points=[LearnedPointResponse(date=point.date, count=point.count) for point in overview.learned.points],
+            ),
         )
 
 

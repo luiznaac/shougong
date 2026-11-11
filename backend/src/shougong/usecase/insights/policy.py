@@ -9,12 +9,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from shougong.usecase.insights.model import GradeWindow
+from shougong.usecase.insights.model import GradeWindow, SrsStage
 from shougong.usecase.srs.model import SrsRating
 
 # A leech is three or more `again` grades among the item's ten most recent entries.
 WINDOW_SIZE = 10
 THRESHOLD = 3
+
+# Stability (days) upper bounds for novice, apprentice, journeyman and expert; above
+# the last bound is master. Sub-levels collapse into these five display groups.
+STABILITY_BOUNDS: tuple[float, ...] = (4.0, 14.0, 60.0, 365.0)
+STAGES: tuple[SrsStage, ...] = tuple(SrsStage)
 
 # Extra Study accepts at most a 32-day instant range and returns at most 200 items per bucket.
 MAX_RANGE_DAYS = 32

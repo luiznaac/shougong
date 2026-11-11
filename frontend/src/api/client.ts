@@ -16,6 +16,7 @@ import type {
   SrsRating,
   StudyItem,
   StudyItemHistory,
+  StudyOverview,
   StudySession,
   VocabularyOverview,
 } from "./types.ts";
@@ -158,6 +159,10 @@ export const api = {
   getExtraStudy(from: string, to: string): Promise<ExtraStudy> {
     const params = new URLSearchParams({ from, to });
     return request(`/study/insights/extra-study?${params}`);
+  },
+  getStudyOverview(tzOffsetMinutes = 0): Promise<StudyOverview> {
+    const params = new URLSearchParams({ tz_offset_minutes: String(tzOffsetMinutes) });
+    return request(`/study/overview?${params}`);
   },
 
   // --- reading ---
