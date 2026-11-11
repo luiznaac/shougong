@@ -13,12 +13,15 @@ npm run dev          # vite dev server
 npm run typecheck    # tsc -b --noEmit
 npm run lint         # biome check
 npm run lint:fix     # biome check --write
-npm run test         # vitest run — src/**/*.test.{ts,tsx}, node environment
+npm run test         # vitest run — node + jsdom lanes, split by file name
 npm run check        # typecheck + lint + test — run before considering a change done
 npm run build        # tsc -b && vite build
 ```
 
-Tests run in Vitest's node environment: pure helpers in `src/lib/**/*.test.ts` and, where a rendered contract matters, markup-only component tests (`src/components/**/*.test.tsx`) using `react-dom/server` — no DOM/Testing Library dependency.
+Tests run in two Vitest projects, split by file name:
+
+- `*.test.{ts,tsx}` — node environment: pure helpers in `src/lib/`, and markup-only component tests (`src/components/**/*.test.tsx`) through `react-dom/server` for what a single render shows.
+- `*.dom.test.tsx` — jsdom + React Testing Library: component interaction contracts — clicks, keyboard, state changes and what the learner sees afterwards. Use this lane whenever the behaviour depends on an event or on state after render; keep pure-helper and single-render markup assertions in the node lane. `src/components/Quiz.dom.test.tsx` is the representative test.
 
 ### Fresh worktree setup (sandbox)
 

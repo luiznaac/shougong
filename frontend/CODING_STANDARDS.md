@@ -1,6 +1,6 @@
 # Coding standards — React lane
 
-The React-idiom rules this scaffold's tooling — Biome (`biome.json`, `linter.rules.recommended: true`) and the TypeScript compiler (`tsc -b`) — does **not** enforce. The `code-review` Standards axis reads this file; a rule the tooling already fails on is not restated here. The rules come from the official React documentation (react.dev) — the *Learn* section and the Hooks reference; each names the page and the section it derives from, and, where it matters, the Biome rule that is inactive.
+The React-idiom rules this scaffold's tooling — Biome (`biome.json`, `linter.rules.recommended: true`) and the TypeScript compiler (`tsc -b`) — does **not** enforce. The `code-review` Standards axis reads this file; a rule the tooling already fails on is not restated here. The rules come from the official React documentation (react.dev) — the *Learn* section and the Hooks reference; each names the page and the section it derives from, and, where it matters, the Biome rule that is inactive. The exception is *Tests*, which comes from this lane's `AGENTS.md` and the responsive-redesign spec's testing decisions.
 
 The boundary this doc starts after: Biome's recommended rules already fail a Hook's dependency array (`useExhaustiveDependencies`), a Hook called outside a component (`useHookAtTopLevel`), an array-index key (`noArrayIndexKey`), `any` (`noExplicitAny`), a non-null assertion (`noNonNullAssertion`), an unused variable (`noUnusedVariables`), a `let` that could be `const` (`useConst`), `==` (`noDoubleEquals`), `debugger` (`noDebugger`) and a duplicated element id (`useUniqueElementIds`), and the formatter owns indent, quotes and line width. No rule about those belongs in this file. What is left is the set of *shapes* Biome has no rule for — where state lives, when an effect is the wrong tool, and how data flows.
 
@@ -222,3 +222,11 @@ Source: *You Might Not Need an Effect* → Caching expensive calculations.
 Every call goes typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component; `fetch` is never called from a component. The query layer owns caching, deduping, retries and race handling that a hand-rolled effect would have to reimplement (see this lane's `AGENTS.md`).
 
 Source: this lane's `AGENTS.md` → Layout; *You Might Not Need an Effect* → Fetching data.
+
+## Tests
+
+### Test an interaction contract through the DOM lane
+
+A behaviour that depends on an event or on state after render belongs in a `*.dom.test.tsx` file — jsdom plus React Testing Library. Drive it the way a learner would (`userEvent.click`/`keyboard`) and assert through accessible roles or the visible outcome, not class names. Pure helpers stay in `*.test.ts` and a single-render markup contract stays in `*.test.tsx` through `react-dom/server`; do not recreate a DOM-dependent contract as substring matching over static markup.
+
+Source: this lane's `AGENTS.md` → Tests; the responsive-redesign spec's *Testing Decisions* (React Testing Library).
