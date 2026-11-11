@@ -274,3 +274,34 @@ export interface SavedReadingText {
   speakers: ReadingSpeaker[]; // non-empty only for dialogue readings
   created_at: string;
 }
+
+// Context around the first occurrence of the entry_id-filtered word — the
+// token slice (punctuation included), up to 12 tokens each side.
+export interface ReadingMatch {
+  before: string;
+  hit: string;
+  after: string;
+}
+
+// One row of the reading-history list. Deliberately token-free — open a row to
+// fetch the full SavedReadingText by id.
+export interface ReadingSummary {
+  id: number;
+  format: ReadingFormat;
+  topic: string | null;
+  topic_generated: boolean;
+  model: string;
+  extra_word_count: number; // of the chosen draft
+  token_count: number; // words + punctuation
+  attempt_count: number; // 1 for rows saved before the correction loop existed
+  created_at: string;
+  preview: string; // first 48 characters of the concatenated text
+  match: ReadingMatch | null; // set only when the list is filtered by entry_id
+}
+
+export interface ReadingSummaryPage {
+  items: ReadingSummary[];
+  total: number; // exact count of the matching set
+  limit: number;
+  offset: number;
+}

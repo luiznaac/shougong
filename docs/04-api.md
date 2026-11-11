@@ -47,7 +47,8 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/reading-texts` | Generate + persist a vocabulary-restricted reading (`201`) |
-| `GET` | `/reading-texts?limit=&offset=` | Saved readings, newest first |
+| `GET` | `/reading-texts?entry_id=&limit=&offset=` | Reading summary page, newest first; optional entry filter with a match snippet |
+| `GET` | `/reading-texts/{reading_id}` | Fetch one full reading (`SavedReadingTextResponse`) |
 | `GET` | `/reading-texts/models` | Model ids exposed by the LiteLLM proxy |
 | `GET` | `/reading-vocabulary` | Known-word profiles + summary (HSK/POS/proficiency) |
 | `GET` | `/reading-topics` | All scenario topics with active flags |
@@ -235,6 +236,39 @@ Request: `{ "rows": [ { "hanzi": "学习", "pinyin": "xue2 xi2" } ] }` (1-1000 r
 
 For dialogue readings, words carry a `speaker`; `speakers` at the reading level gives the cast and pinyin for first-use names.
 
+### Reading summary list
+
+`GET /reading-texts` returns a page of summary rows — never the token/attempt payload — inside the shared envelope:
+
+```json
+{
+  "items": [
+    {
+      "id": 204,
+      "format": "dialogue",
+      "topic": "No restaurante",
+      "topic_generated": false,
+      "model": "openai/gpt-4.1-mini",
+      "extra_word_count": 1,
+      "token_count": 96,
+      "attempt_count": 2,
+      "created_at": "2026-11-02T19:12:00Z",
+      "preview": "服务员：这个菜很辣。我：知道了，谢谢！…",
+      "match": null
+    }
+  ],
+  "total": 38,
+  "limit": 8,
+  "offset": 0
+}
+```
+
+- `limit` is `1..100` (default `20`), `offset` is `>= 0`; `total` is the exact count of the filtered set.
+- `extra_word_count` is the chosen draft's own count (`attempt_count` is `1` on rows written before the correction loop); `token_count` counts words and punctuation; `preview` is the first 48 characters of the concatenated token text.
+- **`entry_id` filter** (optional int): only readings containing a word token that resolves to that dictionary entry under the same hydration rule used on read (the studied reading wins, else the dictionary's first candidate by id); extra words included. An unknown id is `200` with an empty page, not `404`.
+- With `entry_id`, each row also carries `match: { "before", "hit", "after" }` — the first occurrence's token slice, punctuation included, up to 12 tokens each side and clamped to the article edges. Without it, `match` is `null`.
+- `GET /reading-texts/{reading_id}` returns the full `SavedReadingTextResponse` (hydration included) and `404`s for an unknown id.
+
 ## Error model
 
 The app maps domain exceptions to a consistent problem shape:
@@ -253,7 +287,7 @@ The app maps domain exceptions to a consistent problem shape:
 
 ## Conventions
 
-- **Pagination**: `limit` (defaults vary, caps at 100-200 depending on route) + `offset`. Clients page through until a short page is returned.
+- **Pagination**: the redesign's list routes return `{ items, total, limit, offset }` (`/reading-texts` today; study items and dictionary lists as their tickets land). `limit` is `1..100` (default `20`), `offset` is `>= 0`, `total` is the exact filtered count. The older bare-array routes keep their own `limit`/`offset` caps (100-200).
 - **Ordering**: study items by due date then id (unless `leech=true`, which orders worst-first); review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
 - **`Location` headers** are set on created resources.
 - **Idempotency**: dictionary autoload and HSK enrichment are idempotent; adding the same entry twice is a conflict, not a duplicate insert.

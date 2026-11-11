@@ -26,7 +26,9 @@ export const keys = {
   dictionary: (q: string) => ["dictionary", q] as const,
   relatedEntries: (id: number, limit: number, offset: number) =>
     ["dictionary", "related", id, { limit, offset }] as const,
-  readingHistory: ["reading-texts"] as const,
+  readingHistoryPrefix: ["reading-texts"] as const,
+  readingHistory: (limit = 20, offset = 0) => ["reading-texts", "list", { limit, offset }] as const,
+  readingText: (id: number) => ["reading-texts", "detail", id] as const,
   insightsPrefix: ["insights"] as const,
   extraStudy: (from: string, to: string) => ["insights", "extra-study", { from, to }] as const,
 };
@@ -203,10 +205,18 @@ export function usePriorityActions() {
   };
 }
 
-export function useReadingHistory() {
+export function useReadingHistory(limit = 20, offset = 0) {
   return useQuery({
-    queryKey: keys.readingHistory,
-    queryFn: () => api.listReadingHistory(),
+    queryKey: keys.readingHistory(limit, offset),
+    queryFn: () => api.listReadingHistory(limit, offset),
+  });
+}
+
+export function useReadingText(id: number | null) {
+  return useQuery({
+    queryKey: keys.readingText(id ?? 0),
+    queryFn: () => api.getReading(id ?? 0),
+    enabled: id !== null,
   });
 }
 
@@ -222,7 +232,7 @@ export function useGenerateReading() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (req: GenerateReadingRequest) => api.generateReading(req),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.readingHistory }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.readingHistoryPrefix }),
   });
 }
 

@@ -149,3 +149,40 @@ class SavedReadingText:
     request: ReadingRequest
     reading: GeneratedReading
     created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ReadingMatch:
+    """The context around the first occurrence of a filtered word: the token
+    slice (punctuation included) up to 12 tokens each side, clamped to the
+    article edges."""
+
+    before: str
+    hit: str
+    after: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReadingSummary:
+    """One row of the reading-history list. Deliberately token-free: the full
+    reading is fetched by id when the client opens it."""
+
+    id: int
+    format: ReadingFormat
+    topic: str | None
+    topic_generated: bool
+    model: str
+    extra_word_count: int
+    token_count: int
+    attempt_count: int
+    created_at: datetime
+    preview: str  # first 48 characters of the concatenated token text
+    match: ReadingMatch | None  # set only when the list is filtered by entry_id
+
+
+@dataclass(frozen=True, slots=True)
+class ReadingSummaryPage:
+    items: tuple[ReadingSummary, ...]
+    total: int
+    limit: int
+    offset: int
