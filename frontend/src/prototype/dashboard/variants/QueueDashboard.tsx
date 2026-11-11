@@ -1,8 +1,8 @@
-// PROTOTYPE (wayfinder ticket #107) — Variant A "Fila de hoje", revision 3.
+// PROTOTYPE (wayfinder ticket #107) — Variant A "Fila de hoje", revision 4.
 // Adopted direction. Main column on the left: today's queue, the character grid,
 // the learned chart, then Extra Study. A sticky right rail carries the SRS
-// Stages half-pie and Upcoming Reviews. Hanzi-only character tiles; desktop
-// pages the grid explicitly, mobile grows it with a "Carregar mais".
+// Stages half-pie and Upcoming Reviews. Hanzi-only character tiles; the grid
+// grows with a HanziHero-style "+" tile at both widths (no paging).
 
 import { useState } from "react";
 import { GROUP_COLOR, GROUP_LABEL, GROUP_ORDER, type SrsGroup } from "../../../lib/srs.ts";
@@ -144,121 +144,99 @@ function UpcomingRows({ limit }: { limit?: number }) {
   );
 }
 
-/** Cumulative learned chart with both axes drawn (date ticks + count ticks). */
-function LearnedChart({ className = "h-36 w-full" }: { className?: string }) {
-  const W = 320;
-  const H = 140;
-  const L = 30;
-  const R = 8;
-  const T = 8;
-  const B = 22;
+/** Cumulative learned chart — full width, taller, with drawn X and Y axes. */
+function LearnedChart({ height = 176 }: { height?: number }) {
   const max = Math.max(...LEARNED_SERIES);
-  const px = (i: number) => L + (i / (LEARNED_SERIES.length - 1)) * (W - L - R);
-  const py = (v: number) => T + (1 - v / max) * (H - T - B);
-  const points = LEARNED_SERIES.map((v, i) => `${px(i)},${py(v)}`).join(" ");
-  const ticks = [0, Math.round(max / 2), max];
+  const points = LEARNED_SERIES.map(
+    (v, i) => `${(i / (LEARNED_SERIES.length - 1)) * 100},${100 - (v / max) * 100}`,
+  ).join(" ");
+  const ticks = [max, Math.round(max / 2), 0];
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={`mt-2 ${className}`}>
-      <title>Itens aprendidos ao longo do tempo</title>
-      {ticks.map((t) => (
-        <g key={t}>
-          <line x1={L} x2={W - R} y1={py(t)} y2={py(t)} stroke="rgba(255,255,255,0.07)" />
-          <text x={L - 5} y={py(t) + 3} textAnchor="end" fontSize="8" className="fill-slate-500">
-            {t}
-          </text>
-        </g>
-      ))}
-      <line x1={L} x2={L} y1={T} y2={H - B} stroke="rgba(255,255,255,0.18)" />
-      <line x1={L} x2={W - R} y1={H - B} y2={H - B} stroke="rgba(255,255,255,0.18)" />
-      <polygon
-        points={`${L},${H - B} ${points} ${W - R},${H - B}`}
-        fill="var(--color-accent-500)"
-        fillOpacity="0.15"
-      />
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--color-accent-500)"
-        strokeWidth="1.5"
-        vectorEffect="non-scaling-stroke"
-      />
-      <text x={L} y={H - 6} fontSize="8" className="fill-slate-500">
-        14 out
-      </text>
-      <text
-        x={(L + W - R) / 2}
-        y={H - 6}
-        textAnchor="middle"
-        fontSize="8"
-        className="fill-slate-500"
+    <div className="mt-3 flex gap-2">
+      <div
+        className="flex flex-col justify-between text-right text-[10px] tabular-nums text-slate-500"
+        style={{ height }}
       >
-        outubro — novembro
-      </text>
-      <text x={W - R} y={H - 6} textAnchor="end" fontSize="8" className="fill-slate-500">
-        10 nov
-      </text>
-    </svg>
+        {ticks.map((t) => (
+          <span key={t}>{t}</span>
+        ))}
+      </div>
+      <div className="min-w-0 flex-1">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ height }} className="w-full">
+          <title>Itens aprendidos ao longo do tempo</title>
+          {[0, 50, 100].map((y) => (
+            <line
+              key={y}
+              x1="0"
+              x2="100"
+              y1={y}
+              y2={y}
+              stroke="rgba(255,255,255,0.07)"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          <polygon
+            points={`0,100 ${points} 100,100`}
+            fill="var(--color-accent-500)"
+            fillOpacity="0.15"
+          />
+          <polyline
+            points={points}
+            fill="none"
+            stroke="var(--color-accent-500)"
+            strokeWidth="1.5"
+            vectorEffect="non-scaling-stroke"
+          />
+          <line
+            x1="0"
+            x2="0"
+            y1="0"
+            y2="100"
+            stroke="rgba(255,255,255,0.18)"
+            vectorEffect="non-scaling-stroke"
+          />
+          <line
+            x1="0"
+            x2="100"
+            y1="100"
+            y2="100"
+            stroke="rgba(255,255,255,0.18)"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <div className="mt-1 flex justify-between text-[10px] text-slate-500">
+          <span>14 out</span>
+          <span className="hidden sm:inline">outubro — novembro</span>
+          <span>10 nov</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function Pager({
-  page,
-  pages,
-  onPage,
-  from,
-  to,
-  total,
+/** HanziHero-style "+" tile: appends the next batch instead of paging. */
+function AddMoreTile({
+  onClick,
+  compact = false,
+  fluid = false,
 }: {
-  page: number;
-  pages: number;
-  onPage: (p: number) => void;
-  from: number;
-  to: number;
-  total: number;
+  onClick: () => void;
+  compact?: boolean;
+  fluid?: boolean;
 }) {
-  const btn =
-    "grid h-7 min-w-7 place-items-center rounded-md border border-white/10 px-1.5 text-xs " +
-    "tabular-nums text-slate-400 hover:border-white/25 hover:text-slate-200 disabled:opacity-30";
   return (
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-      <span className="text-xs text-slate-500">
-        {total === 0 ? "Nada para mostrar" : `Mostrando ${from}–${to} de ${total}`}
-      </span>
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          className={btn}
-          onClick={() => onPage(page - 1)}
-          disabled={page <= 1}
-          aria-label="Página anterior"
-        >
-          ‹
-        </button>
-        {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => onPage(n)}
-            aria-current={n === page ? "page" : undefined}
-            className={`${btn} ${
-              n === page ? "border-accent-500/60 bg-accent-500/15 text-accent-300" : ""
-            }`}
-          >
-            {n}
-          </button>
-        ))}
-        <button
-          type="button"
-          className={btn}
-          onClick={() => onPage(page + 1)}
-          disabled={page >= pages}
-          aria-label="Próxima página"
-        >
-          ›
-        </button>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Carregar mais caracteres"
+      title="Carregar mais"
+      className={`grid place-items-center rounded-lg border border-dashed border-white/15 text-slate-500 transition-colors hover:border-accent-500/60 hover:text-accent-300 ${
+        fluid ? "h-[52px] w-full min-w-0" : compact ? "h-11 w-11" : "h-[54px] w-[54px]"
+      }`}
+    >
+      <Icon name="plus" className={compact ? "h-4 w-4" : "h-5 w-5"} />
+    </button>
   );
 }
 
@@ -297,17 +275,13 @@ function ExtraStudyStrip({ empty }: { empty: boolean }) {
 
 function DesktopDashboard({ state }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
-  const [page, setPage] = useState(1);
+  const [shown, setShown] = useState(PAGE_SIZE);
   const loading = state === "loading";
   const empty = state === "empty";
   const items = empty ? [] : DASH_ITEMS;
   const leeches = empty ? [] : DASH_LEECHES;
   const active = filter === "leeches" ? leeches : items;
-  const pages = Math.max(1, Math.ceil(active.length / PAGE_SIZE));
-  const current = Math.min(page, pages);
-  const from = active.length === 0 ? 0 : (current - 1) * PAGE_SIZE + 1;
-  const to = Math.min(current * PAGE_SIZE, active.length);
-  const visible = active.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+  const visible = active.slice(0, shown);
   const counts = empty ? { lessons: 0, reviews: 0, streak: 0 } : DASH_COUNTS;
   const tally = (
     empty ? { novice: 0, apprentice: 0, journeyman: 0, expert: 0, master: 0 } : DASH_TALLY
@@ -381,7 +355,7 @@ function DesktopDashboard({ state }: Props) {
                   filter={filter}
                   onChange={(f) => {
                     setFilter(f);
-                    setPage(1);
+                    setShown(PAGE_SIZE);
                   }}
                   allCount={items.length}
                   leechCount={leeches.length}
@@ -406,15 +380,13 @@ function DesktopDashboard({ state }: Props) {
                     {visible.map((item) => (
                       <CharTile key={item.hanzi} item={item} />
                     ))}
+                    {shown < active.length ? (
+                      <AddMoreTile onClick={() => setShown((n) => n + PAGE_SIZE)} />
+                    ) : null}
                   </div>
-                  <Pager
-                    page={current}
-                    pages={pages}
-                    onPage={setPage}
-                    from={from}
-                    to={to}
-                    total={active.length}
-                  />
+                  <p className="mt-3 text-xs text-slate-500">
+                    Mostrando {visible.length} de {active.length}
+                  </p>
                 </>
               )}
             </Panel>
@@ -557,13 +529,7 @@ function MobileDashboard({ state }: Props) {
               ))}
             </div>
             {shown < active.length ? (
-              <button
-                type="button"
-                onClick={() => setShown((n) => n + MOBILE_STEP)}
-                className="mt-3 w-full rounded-lg border border-white/10 py-2 text-[11px] font-medium text-slate-300"
-              >
-                Carregar mais ({visible.length} de {active.length})
-              </button>
+              <AddMoreTile compact fluid onClick={() => setShown((n) => n + MOBILE_STEP)} />
             ) : null}
           </>
         )}
@@ -581,7 +547,7 @@ function MobileDashboard({ state }: Props) {
         ) : empty ? (
           <p className="text-[10px] text-slate-500">Nenhum item aprendido ainda.</p>
         ) : (
-          <LearnedChart className="h-28 w-full" />
+          <LearnedChart height={140} />
         )}
       </div>
 
@@ -643,7 +609,7 @@ export function QueueDashboard({ state }: Props) {
         <h2 className="mb-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
           Mobile — coluna principal primeiro, rail por último
         </h2>
-        <PhoneFrame caption="Ações, caracteres (5 colunas sem sobreposição), gráfico com eixos, estudo extra com tiles, SRS Stages e próximas revisões.">
+        <PhoneFrame caption="Ações, caracteres (5 colunas sem sobreposição + tile de carregar mais), gráfico largo com eixos, estudo extra com tiles, SRS Stages e próximas revisões.">
           <MobileChrome>
             <MobileDashboard state={state} />
           </MobileChrome>
