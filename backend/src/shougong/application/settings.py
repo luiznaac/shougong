@@ -7,6 +7,8 @@ Pick the profile with `APP_ENV=dev|prod|test`.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,6 +37,16 @@ class AiGatewayConfig(BaseModel):
     # lists the proxy's models and sends one), never configured here.
     base_url: str = "http://localhost:4000"
     api_key: str = ""
+    # Reasoning tokens count against max_output_tokens, so a reasoning model left
+    # at its default effort can spend the whole budget thinking and never emit
+    # the tool call. "low" is the measured sweet spot for the constrained
+    # reading-text task: higher effort doubled latency without reducing
+    # out-of-vocabulary words in the correction loop.
+    reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] = "low"
+    # Ceiling, not an allocation: the response is truncated once it is reached.
+    # Observed reasoning peaked near 12k, so 16k leaves headroom without paying
+    # for tokens the model never generates.
+    max_output_tokens: int = Field(default=16_000, ge=256)
 
 
 class GatewaysConfig(BaseModel):
