@@ -27,7 +27,7 @@ No DI framework — `application/container.py` is the one place that knows every
 ```bash
 uv run poe check              # lint + format-check + mypy --strict + contracts + unit tests — run this
 uv run poe test               # + integration tests (Testcontainers MySQL, slower — CI runs this)
-uv run poe run                # dev server, :8080, --reload
+uv run poe run                # module entrypoint on $HTTP_PORT (8130), reload in dev
 uv run poe migrate:generate -- --autogenerate -m "add_something"
 uv run poe migrate            # apply pending migrations locally
 ```

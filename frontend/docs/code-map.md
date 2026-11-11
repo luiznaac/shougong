@@ -61,7 +61,7 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 **Seam(s)**:
 - **Theme seam** (`src/index.css`) — the `@theme` block owns the hanzi font, the accent, the pinyin tone colours (`--color-tone-*`), the SRS stage colours (`--color-srs-*`) and the `.tone-*` classes; components consume those names.
 - **Base-path seam** (`vite.config.ts`) — `base` is `/shougong/` in production and `/` in dev; `main.tsx` derives the router `basename` from `import.meta.env.BASE_URL`.
-- **Dev server** (`vite.config.ts`) — port 5273 with the `/api` proxy to `VITE_API_TARGET ?? http://localhost:8080`.
+- **Dev server** (`vite.config.ts`) — reads `.env` via `loadEnv`; port `FRONTEND_DEV_PORT ?? 8133` (strict), `/api` proxy to `VITE_API_TARGET ?? http://localhost:8130`.
 - **Quality gate** (`package.json`) — `check` runs `typecheck` + `lint` (Biome) + `test` (Vitest, node environment: pure helpers in `src/lib` and markup-only tile tests through `react-dom/server`).
 
 ## Entry points

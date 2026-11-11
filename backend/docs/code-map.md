@@ -64,7 +64,7 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 **Seam(s)**:
 - **`Container`** (`application/container.py`) — builds the engine, HTTP client, every adapter/service (including the `RandomShuffler`) and the `controllers`/`health_checkers` lists, then `build_app(..., lifespan=...)`; adding a slice is a class plus one wiring line here. Tests construct their own `Container` with fakes/fixed clock.
 - **Lifespan** (`application/container.py`) — the async lifespan starts the dictionary/HSK autoload and the jieba warm-up, and cancels them plus `aclose()` on shutdown.
-- **Settings** (`application/settings.py`) — `pydantic-settings`, `__`-nested env vars, `APP_ENV` profile; `MySqlConfig.url` is the one DB URL shape.
+- **Settings** (`application/settings.py`) — `pydantic-settings`, `__`-nested env vars, `APP_ENV` profile; `MySqlConfig.url` is the one DB URL shape. `Settings.app_host` derives the self-health base URL from `HTTP_PORT` unless `GATEWAYS__APP__HOST` is set explicitly.
 
 ### `alembic`, tests and packaging
 **Purpose**: the migration chain and its baseline logic, the unit/integration suites, and the image/CI story.
@@ -77,7 +77,7 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 
 ## Entry points
 
-- `backend/src/shougong/application/boot.py` — `app` (what uvicorn imports: `shougong.application.boot:app`) and `main()` (`poe run`).
+- `backend/src/shougong/application/boot.py` — `app` (what uvicorn imports: `shougong.application.boot:app`) and `main()` (`poe run`), which serves on `HTTP_PORT` (8130) with reload only in `dev`.
 - `backend/src/shougong/application/container.py` — the composition root; builds the object graph, controllers and FastAPI app.
 - `backend/src/shougong/httpapi/configuration/server.py` — `build_app(...)`: mounts every `IController` router and installs the exception handlers.
 - `backend/scripts/migrate.py` — the migration entry (`poe migrate`, `deploy/entrypoint.sh`); baseline-stamp then upgrade to head.

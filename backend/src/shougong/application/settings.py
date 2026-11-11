@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class MySqlConfig(BaseModel):
     host: str = "localhost"
-    port: int = 3306
+    port: int = 8132
     user: str = "root"
     password: str = ""
     database: str = "shougong"
@@ -27,7 +27,8 @@ class MySqlConfig(BaseModel):
 
 class AppGatewayConfig(BaseModel):
     # Base URL the service uses to call its own /health/internal (see AppHealthGateway).
-    host: str = "http://localhost:8080"
+    # Unset derives from `HTTP_PORT`; an explicit host wins for container/deploy.
+    host: str | None = None
 
 
 class AiGatewayConfig(BaseModel):
@@ -63,7 +64,7 @@ class Settings(BaseSettings):
     )
 
     app_env: str = "dev"
-    http_port: int = 8080
+    http_port: int = 8130
     log_level: str = "INFO"
 
     # On startup, download CC-CEDICT and fill `dictionary_entry` if it is empty.
@@ -86,5 +87,13 @@ class Settings(BaseSettings):
     gateways: GatewaysConfig = Field(default_factory=GatewaysConfig)
 
     @property
+    def is_dev(self) -> bool:
+        return self.app_env == "dev"
+
+    @property
     def log_as_json(self) -> bool:
-        return self.app_env != "dev"
+        return not self.is_dev
+
+    @property
+    def app_host(self) -> str:
+        return self.gateways.app.host or f"http://localhost:{self.http_port}"
