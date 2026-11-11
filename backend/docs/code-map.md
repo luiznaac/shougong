@@ -66,6 +66,11 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 - **Lifespan** (`application/container.py`) — the async lifespan starts the dictionary/HSK autoload and the jieba warm-up, and cancels them plus `aclose()` on shutdown.
 - **Settings** (`application/settings.py`) — `pydantic-settings`, `__`-nested env vars, `APP_ENV` profile; `MySqlConfig.url` is the one DB URL shape.
 
+### `acceptance` — dev-only fixture
+**Purpose**: the committed seed `docs/acceptance-runbook.md` applies on a clean MySQL so the list-surface walkthroughs need no manual SQL. It is excluded from the production image (`.dockerignore`) and nothing in the service imports it.
+**Files**: `backend/src/shougong/acceptance/fixture.py`
+**Seam(s)**: **`build_fixture(now)`** is the pure data plan the unit test pins (more than one 24-row page, every SRS state, HSK 1..9 + none, a leech, a pin); **`apply_acceptance_fixture(settings)`** writes it in one transaction, only when `dictionary_entry` is empty, so re-running the runbook is a no-op.
+
 ### `alembic`, tests and packaging
 **Purpose**: the migration chain and its baseline logic, the unit/integration suites, and the image/CI story.
 **Files**: `backend/alembic/env.py`, `alembic/versions/{0001_baseline,0002_dictionary_hsk,0003_reading,0004_study_item_priority,0005_insights,0006_merge_priority_insights}.py`; `backend/scripts/migrate.py`; `backend/tests/unit/*`, `backend/tests/integration/*`, `tests/{conftest,fixtures}.py`; `backend/pyproject.toml`; `deploy/{entrypoint.sh,nginx.conf.template,supervisord.conf}`, `Dockerfile`, `docker-compose.yml`, `.github/workflows/*`
