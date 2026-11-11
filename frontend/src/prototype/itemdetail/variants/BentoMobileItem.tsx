@@ -1,7 +1,7 @@
 // Variant K — "Bento validado, mobile-first" (wayfinder #110, validation pass).
-// J's structure with three fixes: Leituras is G's pane in a true horizontal split,
-// the mobile chart gets a mobile-sized viewBox (readable axes), and Traços is the
-// first section on mobile.
+// J's structure: Leituras is G's pane copied as-is (list above detail), the mobile
+// chart gets a mobile-sized viewBox (readable axes), and Traços is the first
+// section on mobile and compact enough to be fully visible without scrolling.
 
 import { useState } from "react";
 import { PhoneFrame } from "../../PhoneFrame.tsx";
@@ -11,7 +11,6 @@ import {
   AppChrome,
   BadgeRow,
   ChartLegend,
-  FormatChip,
   FxChartAxes,
   HskChip,
   ItemGlyph,
@@ -87,8 +86,8 @@ function ReadingsPane() {
         </h2>
         <span className="text-[11px] tabular-nums text-slate-500">{READINGS.length}</span>
       </div>
-      <div className="grid grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-3">
-        <div className="max-h-[20rem] space-y-0.5 overflow-y-auto pr-1">
+      <div className="flex flex-col gap-3">
+        <div className="max-h-[18rem] space-y-0.5 overflow-y-auto pr-1">
           {READINGS.map((reading) => (
             <ReadingRow
               key={reading.id}
@@ -98,9 +97,7 @@ function ReadingsPane() {
             />
           ))}
         </div>
-        <div className="self-start">
-          <ReadingDetail reading={selected} />
-        </div>
+        <ReadingDetail reading={selected} />
       </div>
     </section>
   );
@@ -195,34 +192,34 @@ function ValidatedDesktop() {
 }
 
 function ValidatedMobile() {
-  const [selectedId, setSelectedId] = useState<number>(READINGS[0].id);
-  const selected = READINGS.find((r) => r.id === selectedId) ?? READINGS[0];
+  const [selectedId, setSelectedId] = useState<number | null>(READINGS[0].id);
+  const selected = READINGS.find((r) => r.id === selectedId) ?? null;
   const [relShown, setRelShown] = useState(MOBILE_STEP);
 
   return (
     <MobileChrome>
-      <div className="space-y-3 p-4">
+      <div className="space-y-2 p-3">
         <button type="button" className="flex items-center gap-1 text-[11px] text-slate-400">
           <Icon name="chevron-left" className="h-3.5 w-3.5" />
           Biblioteca
         </button>
 
-        <section className="relative rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/40 p-4 ring-1 ring-white/10">
-          <div className="absolute top-3 right-3">
+        <section className="relative rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/40 p-3 ring-1 ring-white/10">
+          <div className="absolute top-2.5 right-2.5">
             <BadgeRow item={ITEM} />
           </div>
-          <ItemGlyph item={ITEM} singleCharPx={56} boxPx={200} />
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
+          <ItemGlyph item={ITEM} singleCharPx={46} boxPx={170} />
+          <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
             <HskChip level={ITEM.entry.hsk_level} />
             <StateChip state={ITEM.card.state} />
             <LevelChip item={ITEM} />
           </div>
-          <p className="mt-1.5 text-center text-[11px] text-slate-400">
+          <p className="mt-1 text-center text-[10px] text-slate-400">
             {ITEM.entry.definitions.join(" · ")}
           </p>
         </section>
 
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5 border-y border-white/10 py-2.5">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-y border-white/10 py-2">
           {FACTS.slice(0, 4).map(([label, value]) => (
             <div key={label}>
               <div className="text-[9px] tracking-wide text-slate-500 uppercase">{label}</div>
@@ -234,11 +231,11 @@ function ValidatedMobile() {
         <PriorityBar compact />
 
         <details open className="group rounded-xl bg-slate-900/40 ring-1 ring-white/10">
-          <summary className="cursor-pointer px-3 py-2.5 text-[10px] font-semibold tracking-wide text-slate-400 uppercase">
+          <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold tracking-wide text-slate-400 uppercase">
             Ordem dos traços
           </summary>
-          <div className="px-3 pb-4">
-            <StrokeMock sizePx={150} />
+          <div className="px-2 pb-2">
+            <StrokeMock sizePx={104} />
           </div>
         </details>
 
@@ -263,38 +260,24 @@ function ValidatedMobile() {
             </span>
           </summary>
           <div className="px-3 pb-3">
-            <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
-              <div className="max-h-56 divide-y divide-white/5 overflow-y-auto pr-1">
-                {READINGS.map((reading) => (
-                  <button
-                    key={reading.id}
-                    type="button"
-                    onClick={() => setSelectedId(reading.id)}
-                    className={`w-full px-1 py-1.5 text-left transition-colors ${
-                      reading.id === selectedId ? "bg-accent-500/10" : "hover:bg-white/5"
-                    }`}
-                  >
-                    <div className="flex items-center gap-1 text-[9px] text-slate-500">
-                      <FormatChip format={reading.format} />
-                      <span className="ml-auto shrink-0 text-[8px] tabular-nums">
-                        {new Date(reading.created_at).toLocaleDateString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                        })}
-                      </span>
+            <div className="divide-y divide-white/5">
+              {READINGS.slice(0, 4).map((reading) => (
+                <div key={reading.id}>
+                  <ReadingRow
+                    reading={reading}
+                    selected={reading.id === selectedId}
+                    onSelect={() => setSelectedId(selectedId === reading.id ? null : reading.id)}
+                  />
+                  {selected?.id === reading.id && (
+                    <div className="pb-2">
+                      <ReadingDetail reading={reading} />
                     </div>
-                    <p className="mt-0.5 truncate text-[11px] text-slate-300">
-                      {reading.topic ?? "tema sorteado"}
-                    </p>
-                  </button>
-                ))}
-              </div>
-              <div className="self-start">
-                <ReadingDetail reading={selected} compact />
-              </div>
+                  )}
+                </div>
+              ))}
             </div>
             <p className="pt-2 text-[10px] text-slate-600">
-              Selecione uma leitura para ver o trecho ao lado.
+              Toque numa leitura para abrir o trecho aqui mesmo.
             </p>
           </div>
         </details>
