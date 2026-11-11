@@ -32,7 +32,7 @@ export function StudyItemPage() {
       </Link>
 
       <header className="relative flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-10">
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 w-28">
           <StudyItemTile item={item} />
         </div>
         <Hanzi

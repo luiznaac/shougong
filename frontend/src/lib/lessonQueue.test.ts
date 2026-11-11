@@ -5,40 +5,10 @@ import { studyItem } from "../test/studyItemFixture.ts";
 import {
   PRIORITY_CONFLICT_MESSAGE,
   applyCachedPriority,
-  lessonQueueRows,
   predictPriorityPosition,
   priorityErrorMessage,
   priorityStatus,
 } from "./lessonQueue.ts";
-
-describe("lessonQueueRows", () => {
-  it("leads with pinned items by position then id, then unpinned by creation then id", () => {
-    const items = [
-      studyItem({ id: 1, created_at: "2026-10-02T00:00:00Z", card: { state: "learning" } }),
-      studyItem({ id: 2, created_at: "2026-10-01T00:00:00Z", card: { state: "learning" } }),
-      studyItem({ id: 3, priority_position: 5, card: { state: "learning" } }),
-      studyItem({ id: 4, priority_position: -1, card: { state: "learning" } }),
-      studyItem({ id: 5, priority_position: 5, card: { state: "learning" } }),
-      studyItem({ id: 6, created_at: "2026-10-01T00:00:00Z", card: { state: "learning" } }),
-      studyItem({ id: 7, card: { state: "review" }, priority_position: -9 }),
-    ];
-
-    const rows = lessonQueueRows(items);
-
-    expect(rows.map((row) => row.item.id)).toEqual([4, 3, 5, 2, 6, 1]);
-    expect(rows.map((row) => row.ordinal)).toEqual([1, 2, 3, 4, 5, 6]);
-  });
-
-  it("filters out items that are no longer learning", () => {
-    const rows = lessonQueueRows([
-      studyItem({ id: 1, card: { state: "review" } }),
-      studyItem({ id: 2, card: { state: "relearning" } }),
-      studyItem({ id: 3, card: { state: "learning" } }),
-    ]);
-
-    expect(rows.map((row) => row.item.id)).toEqual([3]);
-  });
-});
 
 describe("priorityStatus", () => {
   it("distinguishes a pinned item from an unpinned one", () => {

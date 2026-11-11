@@ -1,53 +1,42 @@
-import type { StudyItem } from "../api/types.ts";
+import type { DailyDue } from "../api/types.ts";
+import { formatDayLabel, formatWeekdayLabel } from "../lib/format.ts";
+
+const FORECAST_DAYS = 7;
 
 /**
- * HanziHero-style "Upcoming Reviews": one row per upcoming day (starting
- * tomorrow — today and overdue items are shown by the Reviews button), each with
- * a proportional bar and a "+N" count.
+ * Próximas revisões: exactly seven local-day rows from the overview aggregate,
+ * each with a quiet proportional bar and its count. Day bucketing is the
+ * backend's — the client never reconstructs it from due instants.
  */
-export function UpcomingReviews({ items, days = 7 }: { items: StudyItem[]; days?: number }) {
-  const now = new Date();
-  const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-
-  const rows = Array.from({ length: days }, (_, i) => {
-    const dayStart = new Date(startOfTomorrow.getTime() + i * 86_400_000);
-    const dayEnd = new Date(dayStart.getTime() + 86_400_000);
-    const count = items.filter((it) => {
-      const t = new Date(it.card.due).getTime();
-      return t >= dayStart.getTime() && t < dayEnd.getTime();
-    }).length;
-    return {
-      id: dayStart.toISOString(),
-      label: dayStart.toLocaleDateString("pt-BR", { weekday: "long" }),
-      count,
-    };
-  });
-
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  const total = rows.reduce((n, r) => n + r.count, 0);
+export function UpcomingReviews({ days }: { days: DailyDue[] }) {
+  const rows = days.slice(0, FORECAST_DAYS);
+  const max = Math.max(1, ...rows.map((day) => day.due));
+  const total = rows.reduce((n, day) => n + day.due, 0);
 
   return (
     <div>
-      {rows.map((r) => (
-        <div
-          key={r.id}
-          className="my-2 grid grid-cols-12 items-center gap-2 text-sm text-slate-300"
-        >
-          <span className="col-span-3 truncate capitalize text-slate-400">{r.label}</span>
-          <div className="col-span-7 h-2.5 overflow-hidden rounded-full bg-slate-800">
-            <div
-              className="h-full rounded-full bg-accent-500"
-              style={{ width: `${(r.count / max) * 100}%` }}
-            />
-          </div>
-          <span className="col-span-2 text-right tabular-nums">
-            <span className="text-slate-500">+</span>
-            {r.count}
-          </span>
-        </div>
-      ))}
-      <p className="mt-3 text-right text-xs text-slate-500">
-        {total} reviews nos próximos {days} dias
+      <ul className="space-y-1.5">
+        {rows.map((day) => (
+          <li
+            key={day.date}
+            title={formatDayLabel(day.date)}
+            className="flex items-center gap-2 text-[11px]"
+          >
+            <span className="w-9 capitalize text-slate-500">{formatWeekdayLabel(day.date)}</span>
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
+              <span
+                className="block h-full rounded-full bg-accent-500/70"
+                style={{ width: `${(day.due / max) * 100}%` }}
+              />
+            </span>
+            <span className="w-5 text-right tabular-nums text-slate-400">{day.due}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-right text-[10px] text-slate-500">
+        {total === 0
+          ? "Nenhuma revisão nos próximos 7 dias."
+          : `${total} revisões nos próximos ${rows.length} dias`}
       </p>
     </div>
   );

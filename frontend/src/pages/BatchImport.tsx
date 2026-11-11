@@ -98,6 +98,7 @@ export function BatchImport() {
       setCurrentIndex(-1);
       setRunning(false);
       qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+      qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
     }
   };
 
@@ -123,6 +124,7 @@ export function BatchImport() {
         return next;
       });
       qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+      qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
     } catch (e) {
       const alreadyQueued = e instanceof ApiError && e.status === 409;
       setOutcomes((prev) => {

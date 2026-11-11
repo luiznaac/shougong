@@ -6,7 +6,7 @@ import { invalidateAfterReview, keys, priorityMutationOptions } from "./queries.
 import type { StudyItem } from "./types.ts";
 
 describe("invalidateAfterReview", () => {
-  it("invalidates both prefixes so Extra Study counts refresh", () => {
+  it("invalidates the grids, the insights and the overview so every Hoje panel refreshes", () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
 
@@ -15,6 +15,7 @@ describe("invalidateAfterReview", () => {
     const invalidated = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
     expect(invalidated).toContainEqual(keys.studyItemsPrefix);
     expect(invalidated).toContainEqual(keys.insightsPrefix);
+    expect(invalidated).toContainEqual(keys.studyOverviewPrefix);
     expect(invalidated).toContainEqual(keys.studyItem(42));
     expect(invalidated).toContainEqual(keys.reviews(42));
   });

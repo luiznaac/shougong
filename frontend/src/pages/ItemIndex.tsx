@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { useStudyItemPages } from "../api/queries.ts";
+import { useStudyItemPageQueries } from "../api/queries.ts";
 import type { StudyItem } from "../api/types.ts";
 import { DataList, type DataListColumn } from "../components/DataList.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
@@ -79,7 +79,7 @@ export function ItemIndex() {
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
   const query = itemIndexQuery(state);
-  const pages = useStudyItemPages(
+  const pages = useStudyItemPageQueries(
     query,
     itemIndexRequests(state, isDesktop ? "desktop" : "mobile"),
   );

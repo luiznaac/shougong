@@ -1,6 +1,8 @@
 import type { StudyItem } from "../api/types.ts";
-import { tileBadges } from "../lib/tileBadges.ts";
-import { Icon } from "./icons.tsx";
+import { type TileBadgeKind, tileBadges } from "../lib/tileBadges.ts";
+import { Icon, type IconName } from "./icons.tsx";
+
+const BADGE_ICON: Record<TileBadgeKind, IconName> = { leech: "ghost", priority: "bolt" };
 
 /**
  * The status marks for a study item — the same ghost/bolt chips the character
@@ -17,7 +19,7 @@ export function ItemBadges({ item, size = 14 }: { item: StudyItem; size?: number
           title={badge.title}
           className="inline-flex rounded-full bg-slate-950/85 p-1 text-slate-300"
         >
-          <Icon name={badge.icon} size={size} />
+          <Icon name={BADGE_ICON[badge.kind]} size={size} />
         </span>
       ))}
     </>

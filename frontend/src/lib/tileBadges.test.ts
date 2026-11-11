@@ -22,11 +22,17 @@ describe("tileBadges", () => {
     expect(tileBadges(item())).toEqual([]);
   });
 
-  it("carries the drawn glyph, a pt-BR accessible name and a title for each badge", () => {
+  it("names each badge in pt-BR and carries a title, with no emoji", () => {
     const [ghost, bolt] = tileBadges(item({ is_leech: true, priority_position: 2 }));
-    expect(ghost).toMatchObject({ icon: "ghost", label: "Sanguessuga" });
-    expect(ghost.title).toContain("Sanguessuga");
-    expect(bolt).toMatchObject({ icon: "bolt", label: "Prioridade" });
-    expect(bolt.title).toContain("Prioridade");
+    expect(ghost).toEqual({
+      kind: "leech",
+      label: "Sanguessuga",
+      title: "Sanguessuga — falhas recorrentes",
+    });
+    expect(bolt).toEqual({
+      kind: "priority",
+      label: "Prioridade",
+      title: "Prioridade — fixado na fila de lições",
+    });
   });
 });
