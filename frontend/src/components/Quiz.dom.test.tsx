@@ -57,6 +57,16 @@ describe("Quiz interaction", () => {
     );
   });
 
+  it("links the revealed item to its page under Biblioteca", async () => {
+    const user = userEvent.setup();
+    renderQuiz();
+
+    await user.click(screen.getByRole("button", { name: /Revelar/ }));
+
+    const link = screen.getByRole("link", { name: /ver página do item/ });
+    expect(link.getAttribute("href")).toBe("/biblioteca/itens/1");
+  });
+
   it("selects a grade from the keyboard hotkey and advances on Enter", async () => {
     const user = userEvent.setup();
     renderQuiz();

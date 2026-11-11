@@ -5,6 +5,7 @@ import type { StudyItem } from "../api/types.ts";
 import { ExtraStudyPanel } from "../components/ExtraStudyPanel.tsx";
 import { ItemsLearnedChart } from "../components/ItemsLearnedChart.tsx";
 import { LessonQueuePanel } from "../components/LessonQueuePanel.tsx";
+import { Panel } from "../components/Panel.tsx";
 import { ProgressTiles } from "../components/ProgressTiles.tsx";
 import { SrsDistribution } from "../components/SrsDistribution.tsx";
 import { UpcomingReviews } from "../components/UpcomingReviews.tsx";
@@ -130,7 +131,7 @@ function CharacterPanelBody({
     return (
       <p className="text-sm text-slate-500">
         Nada ainda.{" "}
-        <Link to="/add" className="text-accent-500 hover:underline">
+        <Link to="/biblioteca/adicionar" className="text-accent-500 hover:underline">
           Adicione itens
         </Link>
         .
@@ -212,25 +213,5 @@ function BigButton({
       <span className="text-5xl font-semibold tabular-nums">{count}</span>
       <span className="mt-1 text-lg font-medium">{label}</span>
     </Link>
-  );
-}
-
-function Panel({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
   );
 }

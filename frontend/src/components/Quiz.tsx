@@ -8,6 +8,7 @@ import {
   useHandwritingEnabled,
   useHandwritingTolerance,
 } from "../lib/localSettings.ts";
+import { itemPath } from "../lib/navigation.ts";
 import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
 import {
   type QuizMode,
@@ -373,7 +374,7 @@ export function Quiz({
         </button>
 
         {phase === "revealed" && (
-          <Link to={`/items/${current.id}`} className="text-xs text-slate-500 hover:text-slate-300">
+          <Link to={itemPath(current.id)} className="text-xs text-slate-500 hover:text-slate-300">
             ver página do item
           </Link>
         )}

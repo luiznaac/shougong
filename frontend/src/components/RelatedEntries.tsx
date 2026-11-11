@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useAddStudyItem, useDictionarySearch, useStudyItems } from "../api/queries.ts";
 import type { DictionaryEntry } from "../api/types.ts";
+import { itemPath } from "../lib/navigation.ts";
 import { Hanzi } from "./Hanzi.tsx";
 import { Pinyin } from "./Pinyin.tsx";
 
@@ -81,7 +82,7 @@ function Row({
     return (
       <li>
         <Link
-          to={`/items/${studyItemId}`}
+          to={itemPath(studyItemId)}
           className="flex items-center gap-4 py-3 transition-colors hover:bg-white/5"
         >
           {body}
