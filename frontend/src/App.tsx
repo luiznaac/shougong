@@ -9,6 +9,7 @@ import { Reading } from "./pages/Reading.tsx";
 import { Review } from "./pages/Review.tsx";
 import { StudyItemPage } from "./pages/StudyItemPage.tsx";
 import { AddImportPrototype } from "./prototype/AddImportPrototype.tsx";
+import { ReadingPrototype } from "./prototype/ReadingPrototype.tsx";
 
 export const routes: RouteObject[] = [
   {
@@ -24,6 +25,8 @@ export const routes: RouteObject[] = [
   },
   // Throwaway wayfinder prototype (#108) — not for merge.
   { path: "/prototype/add-import", element: <AddImportPrototype /> },
+  // Throwaway wayfinder prototype (#109) — not for merge.
+  { path: "/prototype/reading", element: <ReadingPrototype /> },
   // Lesson, Review and Practice run full-screen, outside the chrome.
   { path: "/lesson", element: <Lesson /> },
   { path: "/review", element: <Review /> },
