@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
-from shougong.usecase.insights.model import GradeWindow, InsightBucket
+from shougong.usecase.insights.model import DueWindow, GradeWindow, InsightBucket, StudyCounts
 
 
 class IInsightRepository(Protocol):
@@ -31,5 +31,36 @@ class IInsightRepository(Protocol):
     async def recently_learned(self, *, start: datetime, end: datetime, limit: int) -> InsightBucket:
         """Items whose learning-to-review transition row landed in `[start, end)`,
         newest transition first. `total` counts every matching transition.
+        """
+        ...
+
+    async def study_counts(self, *, now: datetime) -> StudyCounts:
+        """The queue-wide dashboard counts, computed as one aggregate over the item table."""
+        ...
+
+    async def stability_counts(self, *, boundaries: Sequence[float]) -> list[int]:
+        """A stability histogram with `len(boundaries) + 1` buckets, ascending.
+
+        Bucket `i` counts items whose stability is at most `boundaries[i]` and greater
+        than `boundaries[i - 1]`; a missing stability counts as zero.
+        """
+        ...
+
+    async def leech_count(self, *, window_size: int, threshold: int) -> int:
+        """How many items have at least `threshold` failures in their latest `window_size` grades."""
+        ...
+
+    async def due_counts_in_windows(self, windows: Sequence[DueWindow]) -> list[int]:
+        """Non-learning items whose `card.due` falls in each `[start, end)` window.
+
+        Returns one count per window, in the same order. Overdue items are never
+        counted, because every window is in the future.
+        """
+        ...
+
+    async def learning_to_review_instants(self) -> list[datetime]:
+        """When each learning→review graduation row was written, oldest first.
+
+        No cap: the dashboard's learned curve spans the whole history.
         """
         ...

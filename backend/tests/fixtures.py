@@ -21,7 +21,7 @@ from shougong.usecase.dictionary.model import (
     RelatedEntryPage,
 )
 from shougong.usecase.insights.gateway import IInsightRepository
-from shougong.usecase.insights.model import GradeWindow, InsightBucket
+from shougong.usecase.insights.model import GradeWindow, InsightBucket, StudyCounts
 from shougong.usecase.reading.gateway import (
     DialogueLine,
     IReadingHistoryRepository,
@@ -392,13 +392,28 @@ class FakeInsightRepository(IInsightRepository):
         *,
         mistakes: InsightBucket | None = None,
         learned: InsightBucket | None = None,
+        counts: StudyCounts | None = None,
+        stability: Sequence[int] | None = None,
+        due_windows: Sequence[int] | None = None,
+        transitions: Sequence[datetime] | None = None,
+        leeches: int = 0,
     ) -> None:
         self.windows: list[GradeWindow] = list(windows or [])
         self.mistakes = mistakes or InsightBucket(total=0, items=())
         self.learned = learned or InsightBucket(total=0, items=())
+        self.counts = counts or StudyCounts(total=0, learning=0, due=0, due_learning=0)
+        self.stability = list(stability or [0, 0, 0, 0, 0])
+        self.due_windows = list(due_windows or [])
+        self.transitions = list(transitions or [])
+        self.leeches = leeches
         self.window_calls: list[tuple[tuple[int, ...] | None, int]] = []
         self.mistake_calls: list[tuple[datetime, datetime, int]] = []
         self.learned_calls: list[tuple[datetime, datetime, int]] = []
+        self.counts_calls: list[datetime] = []
+        self.stability_calls: list[tuple[float, ...]] = []
+        self.due_window_calls: list[list[tuple[datetime, datetime]]] = []
+        self.leech_count_calls: list[tuple[int, int]] = []
+        self.transition_calls = 0
 
     async def list_grade_windows(self, item_ids: Sequence[int] | None, *, window_size: int) -> list[GradeWindow]:
         self.window_calls.append((None if item_ids is None else tuple(item_ids), window_size))
@@ -414,6 +429,26 @@ class FakeInsightRepository(IInsightRepository):
     async def recently_learned(self, *, start: datetime, end: datetime, limit: int) -> InsightBucket:
         self.learned_calls.append((start, end, limit))
         return self.learned
+
+    async def study_counts(self, *, now: datetime) -> StudyCounts:
+        self.counts_calls.append(now)
+        return self.counts
+
+    async def stability_counts(self, *, boundaries: Sequence[float]) -> list[int]:
+        self.stability_calls.append(tuple(boundaries))
+        return list(self.stability)
+
+    async def leech_count(self, *, window_size: int, threshold: int) -> int:
+        self.leech_count_calls.append((window_size, threshold))
+        return self.leeches
+
+    async def due_counts_in_windows(self, windows: Sequence[tuple[datetime, datetime]]) -> list[int]:
+        self.due_window_calls.append(list(windows))
+        return list(self.due_windows)
+
+    async def learning_to_review_instants(self) -> list[datetime]:
+        self.transition_calls += 1
+        return list(self.transitions)
 
 
 # A canned gateway response: a plain string is the text; a dict is

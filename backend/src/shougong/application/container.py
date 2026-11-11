@@ -36,6 +36,7 @@ from shougong.httpapi.controller.base import IController
 from shougong.httpapi.controller.dictionary_controller import DictionaryController
 from shougong.httpapi.controller.health_controller import HealthController
 from shougong.httpapi.controller.insights_controller import InsightsController
+from shougong.httpapi.controller.overview_controller import OverviewController
 from shougong.httpapi.controller.reading_controller import ReadingController
 from shougong.httpapi.controller.reading_topic_controller import ReadingTopicController
 from shougong.httpapi.controller.strokes_controller import StrokesController
@@ -62,6 +63,7 @@ from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
+from shougong.usecase.insights.overview_service import StudyOverviewService
 from shougong.usecase.insights.service import InsightService
 from shougong.usecase.reading.service import ReadingService
 from shougong.usecase.reading.topic_service import ReadingTopicService
@@ -132,6 +134,7 @@ class Container:
             self._study_item_repository,
             self.transaction_template,
         )
+        self._overview_service = StudyOverviewService(self._insight_repository, self.clock)
 
         # --- reading slice -----------------------------------------------
         self._segmenter = JiebaSegmenter()
@@ -170,6 +173,7 @@ class Container:
             StudySessionController(self._study_service),
             StudyItemHistoryController(self._study_item_history_service),
             InsightsController(self._insight_service),
+            OverviewController(self._overview_service),
             ReadingController(self._reading_service),
             VocabularyController(self._vocabulary_overview_service),
             ReadingTopicController(self._reading_topic_service),

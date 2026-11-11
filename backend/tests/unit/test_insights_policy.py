@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from shougong.usecase.insights.model import GradeWindow, ReviewGrade
-from shougong.usecase.insights.policy import is_leech, order_leeches
+from shougong.usecase.insights.model import GradeWindow, ReviewGrade, SrsStage
+from shougong.usecase.insights.policy import STABILITY_BOUNDS, STAGES, is_leech, order_leeches
 from shougong.usecase.srs.model import SrsRating
 
 _EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
@@ -64,3 +64,15 @@ def test_leech_order_is_worst_first_then_most_recent_failure_then_id() -> None:
 
     assert [rank.study_item_id for rank in ranked] == [1, 3, 5, 2]
     assert [rank.failure_count for rank in ranked] == [4, 3, 3, 3]
+
+
+def test_the_five_stages_line_up_with_the_four_stability_bounds() -> None:
+    assert STAGES == (
+        SrsStage.NOVICE,
+        SrsStage.APPRENTICE,
+        SrsStage.JOURNEYMAN,
+        SrsStage.EXPERT,
+        SrsStage.MASTER,
+    )
+    # N bounds split N + 1 buckets, one per stage.
+    assert len(STABILITY_BOUNDS) + 1 == len(STAGES)

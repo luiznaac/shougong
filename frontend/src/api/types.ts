@@ -136,6 +136,35 @@ export interface ExtraStudy {
   recently_learned: InsightBucket;
 }
 
+export interface DailyDue {
+  date: string; // local calendar day, YYYY-MM-DD
+  due: number;
+}
+
+export interface LearnedPoint {
+  date: string; // local calendar day, YYYY-MM-DD
+  count: number;
+}
+
+export interface LearnedProgress {
+  total: number;
+  points: LearnedPoint[];
+}
+
+// The dashboard's server-side aggregate (GET /study/overview). Dates are the
+// learner's local calendar days; the client sends its UTC offset in minutes east.
+export interface StudyOverview {
+  new_count: number;
+  due_count: number;
+  due_review_count: number;
+  due_learning_count: number;
+  item_count: number;
+  leech_count: number;
+  srs_distribution: Record<"novice" | "apprentice" | "journeyman" | "expert" | "master", number>;
+  next_seven_days: DailyDue[];
+  learned: LearnedProgress;
+}
+
 export type ReadingFormat = "paragraph" | "sentences" | "dialogue";
 
 // Grammatical class of a word, from the backend's own vocabulary (English) —
