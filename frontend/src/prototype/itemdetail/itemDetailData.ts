@@ -299,6 +299,102 @@ export const RELATED: MockRelated[] = [
   },
 ];
 
+export interface MockReading {
+  id: number;
+  format: "dialogue" | "paragraph" | "sentences";
+  topic: string | null;
+  model: string;
+  created_at: string;
+  before: string;
+  hit: string;
+  after: string;
+  extraWords: string[];
+  tokens: number;
+}
+
+export const FORMAT_LABEL: Record<MockReading["format"], string> = {
+  dialogue: "Diálogo",
+  paragraph: "Parágrafo",
+  sentences: "Frases",
+};
+
+// Generated readings whose text contains the word — the backlink from an item to
+// the reading surface. Newest first.
+export const READINGS: MockReading[] = [
+  {
+    id: 204,
+    format: "dialogue",
+    topic: "No restaurante",
+    model: "openai/gpt-4.1-mini",
+    created_at: "2026-11-02T19:12:00Z",
+    before: "服务员：这个菜很辣。我：",
+    hit: "知道",
+    after: "了，谢谢！我需要一杯水。",
+    extraWords: ["辣"],
+    tokens: 96,
+  },
+  {
+    id: 188,
+    format: "paragraph",
+    topic: "Primeiro dia de aula",
+    model: "anthropic/claude-sonnet-4",
+    created_at: "2026-10-28T08:05:00Z",
+    before: "第一天上课，老师问我们：",
+    hit: "知道",
+    after: "学校的图书馆在哪儿吗？大家都不说话。",
+    extraWords: [],
+    tokens: 142,
+  },
+  {
+    id: 171,
+    format: "sentences",
+    topic: "Perguntas no trabalho",
+    model: "openai/gpt-4.1-mini",
+    created_at: "2026-10-21T17:40:00Z",
+    before: "你",
+    hit: "知道",
+    after: "怎么去火车站吗？我不知道，你可以问警察。",
+    extraWords: [],
+    tokens: 88,
+  },
+  {
+    id: 155,
+    format: "dialogue",
+    topic: null,
+    model: "google/gemini-2.5-flash",
+    created_at: "2026-10-12T12:26:00Z",
+    before: "老板娘：",
+    hit: "知道",
+    after: "附近有没有邮局？客人：知道，往前走。",
+    extraWords: ["邮局"],
+    tokens: 74,
+  },
+  {
+    id: 142,
+    format: "paragraph",
+    topic: "Mudança de casa",
+    model: "anthropic/claude-sonnet-4",
+    created_at: "2026-10-03T20:18:00Z",
+    before: "搬家以后，我才",
+    hit: "知道",
+    after: "邻居是一位老师。她很喜欢中国茶。",
+    extraWords: [],
+    tokens: 168,
+  },
+  {
+    id: 137,
+    format: "sentences",
+    topic: "Conversa no telefone",
+    model: "openai/gpt-4.1-mini",
+    created_at: "2026-09-27T07:54:00Z",
+    before: "妈妈问我：",
+    hit: "知道",
+    after: "今天几点回家吗？我说：知道了。",
+    extraWords: [],
+    tokens: 81,
+  },
+];
+
 export const FACTS: Array<[label: string, value: string]> = [
   ["Estado FSRS", "Em revisão"],
   ["Próximo review", "14 de nov"],

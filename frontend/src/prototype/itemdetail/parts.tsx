@@ -10,7 +10,9 @@ import { Pinyin } from "../../components/Pinyin.tsx";
 import { levelColor, levelLabel, levelOf } from "../../lib/srs.ts";
 import { Icon } from "../icons.tsx";
 import {
+  FORMAT_LABEL,
   type MockItem,
+  type MockReading,
   type MockRelated,
   type MockSnapshot,
   STATE_LABEL,
@@ -403,6 +405,135 @@ export function RelatedRow({ entry, action }: { entry: MockRelated; action?: Rea
           </button>
         ))}
     </div>
+  );
+}
+
+export function FormatChip({ format }: { format: MockReading["format"] }) {
+  return (
+    <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-400">
+      {FORMAT_LABEL[format]}
+    </span>
+  );
+}
+
+export function ReadingSnippet({
+  reading,
+  size = "sm",
+  clamp = false,
+}: {
+  reading: MockReading;
+  size?: "sm" | "base";
+  clamp?: boolean;
+}) {
+  return (
+    <p
+      lang="zh-Hans"
+      className={`font-hanzi leading-relaxed ${size === "base" ? "text-base" : "text-sm"} ${
+        clamp ? "truncate" : ""
+      }`}
+    >
+      <span className="text-slate-500">…{reading.before}</span>
+      <mark className="rounded bg-accent-500/20 px-0.5 text-accent-200">{reading.hit}</mark>
+      <span className="text-slate-300">{reading.after}…</span>
+    </p>
+  );
+}
+
+/** One generated reading that contains the word. */
+export function ReadingRow({
+  reading,
+  selected = false,
+  onSelect,
+}: {
+  reading: MockReading;
+  selected?: boolean;
+  onSelect?: () => void;
+}) {
+  const body = (
+    <>
+      <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+        <FormatChip format={reading.format} />
+        <span className="truncate">{reading.topic ?? "tema sorteado"}</span>
+        {reading.extraWords.length > 0 && (
+          <span className="shrink-0 text-amber-400">+{reading.extraWords.length}</span>
+        )}
+        <span className="ml-auto shrink-0 tabular-nums">
+          {new Date(reading.created_at).toLocaleDateString("pt-BR", {
+            day: "2-digit",
+            month: "short",
+          })}
+        </span>
+      </div>
+      <div className="mt-1">
+        <ReadingSnippet reading={reading} clamp />
+      </div>
+    </>
+  );
+
+  if (!onSelect) return <div className="py-2.5">{body}</div>;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full rounded-lg px-2 py-2.5 text-left transition-colors ${
+        selected ? "bg-accent-500/10 ring-1 ring-accent-500/30" : "hover:bg-white/5"
+      }`}
+    >
+      {body}
+    </button>
+  );
+}
+
+export function ReadingDetail({ reading }: { reading: MockReading }) {
+  return (
+    <div className="rounded-xl bg-slate-950/50 p-3 ring-1 ring-white/10">
+      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+        <FormatChip format={reading.format} />
+        <span className="truncate">{reading.topic ?? "tema sorteado"}</span>
+        <span className="ml-auto font-mono text-slate-600">{reading.model}</span>
+      </div>
+      <div className="mt-2">
+        <ReadingSnippet reading={reading} size="base" />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+        <span>{reading.tokens} tokens</span>
+        {reading.extraWords.length > 0 ? (
+          <span className="text-amber-400">{reading.extraWords.join(" ")} fora do vocabulário</span>
+        ) : (
+          <span className="text-emerald-300/80">só vocabulário conhecido</span>
+        )}
+        <span className="ml-auto flex items-center gap-1 text-accent-300">
+          Abrir na Leitura
+          <Icon name="arrow-right" className="h-3 w-3" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Small arrow control used by the horizontal strips and compact pagers. */
+export function ArrowButton({
+  dir,
+  disabled,
+  onClick,
+  label,
+}: {
+  dir: -1 | 1;
+  disabled: boolean;
+  onClick: () => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label ?? (dir === -1 ? "Anterior" : "Próximo")}
+      className="rounded-full border border-white/10 p-1.5 text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200 disabled:opacity-25"
+    >
+      <Icon name={dir === -1 ? "chevron-left" : "chevron-right"} className="h-3.5 w-3.5" />
+    </button>
   );
 }
 

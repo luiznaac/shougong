@@ -9,6 +9,7 @@ import { Icon } from "../../icons.tsx";
 import { FACTS, HISTORY, ITEM, RELATED } from "../itemDetailData.ts";
 import {
   AppChrome,
+  ArrowButton,
   BadgeRow,
   ChartLegend,
   FxChart,
@@ -48,28 +49,6 @@ function Chapter({
       </div>
       {children}
     </section>
-  );
-}
-
-function ArrowButton({
-  dir,
-  disabled,
-  onClick,
-}: {
-  dir: -1 | 1;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={dir === -1 ? "Anterior" : "Próximo"}
-      className="rounded-full border border-white/10 p-1.5 text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200 disabled:opacity-25"
-    >
-      <Icon name={dir === -1 ? "chevron-left" : "chevron-right"} className="h-3.5 w-3.5" />
-    </button>
   );
 }
 
