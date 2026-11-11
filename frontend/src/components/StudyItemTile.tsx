@@ -2,9 +2,8 @@ import { Link } from "react-router-dom";
 import type { StudyItem } from "../api/types.ts";
 import { itemPath } from "../lib/navigation.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
-import { tileBadges } from "../lib/tileBadges.ts";
 import { Hanzi } from "./Hanzi.tsx";
-import { BoltIcon, GhostIcon } from "./icons.tsx";
+import { ItemBadges } from "./ItemBadges.tsx";
 
 /**
  * The one character tile: hanzi-only, fluid inside its grid, with the SRS level
@@ -21,17 +20,7 @@ export function StudyItemTile({ item }: { item: StudyItem }) {
       style={{ borderColor: levelColor(level) }}
     >
       <span className="absolute top-0.5 right-0.5 flex gap-0.5">
-        {tileBadges(item).map((badge) => (
-          <span
-            key={badge.kind}
-            role="img"
-            aria-label={badge.label}
-            title={badge.title}
-            className="rounded-full bg-slate-950/85 p-0.5 text-slate-300 leading-none"
-          >
-            {badge.kind === "leech" ? <GhostIcon size={11} /> : <BoltIcon size={11} />}
-          </span>
-        ))}
+        <ItemBadges item={item} size={11} />
       </span>
       <Hanzi text={item.entry.simplified} singleCharPx={30} boxPx={54} className="text-slate-50" />
     </Link>

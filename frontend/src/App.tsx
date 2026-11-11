@@ -4,6 +4,7 @@ import { Placeholder } from "./components/Placeholder.tsx";
 import { AddItems } from "./pages/AddItems.tsx";
 import { BatchImport } from "./pages/BatchImport.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
+import { ItemIndex } from "./pages/ItemIndex.tsx";
 import { Lesson } from "./pages/Lesson.tsx";
 import { Practice } from "./pages/Practice.tsx";
 import { Reading } from "./pages/Reading.tsx";
@@ -21,16 +22,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <Dashboard /> },
       {
         path: "biblioteca",
-        element: (
-          <Placeholder
-            title="Itens"
-            description="A lista completa de itens de estudo chega na próxima etapa da reformulação."
-            links={[
-              { label: "Adicionar", to: "/biblioteca/adicionar" },
-              { label: "Importar CSV", to: "/biblioteca/importar" },
-            ]}
-          />
-        ),
+        element: <ItemIndex />,
       },
       { path: "biblioteca/itens/:id", element: <StudyItemPage /> },
       { path: "biblioteca/adicionar", element: <AddItems /> },
