@@ -19,6 +19,19 @@ import {
 
 const NAV = ["Hoje", "Biblioteca", "Leitura", "Progresso"];
 
+function TileBadge({ icon, tone, label }: { icon: string; tone: string; label: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className={`grid h-4 w-4 place-items-center rounded-full bg-slate-950/85 ring-1 ring-white/10 ${tone}`}
+    >
+      <Icon name={icon} className="h-3 w-3" strokeWidth={2.6} />
+    </span>
+  );
+}
+
 function Tile({ item }: { item: MockItem }) {
   return (
     <div
@@ -26,9 +39,9 @@ function Tile({ item }: { item: MockItem }) {
       style={{ borderColor: GROUP_COLOR[item.group] }}
       title={`${SRS_LABEL[item.group]} · ${item.due}`}
     >
-      <div className="flex h-4 items-center gap-1 self-end">
-        {item.leech ? <span className="text-[10px]">👻</span> : null}
-        {item.pinned ? <span className="text-[10px]">📌</span> : null}
+      <div className="flex h-4 items-center gap-0.5 self-end">
+        {item.leech ? <TileBadge icon="ghost" tone="text-rose-300" label="Sanguessuga" /> : null}
+        {item.pinned ? <TileBadge icon="bolt" tone="text-amber-300" label="Prioridade" /> : null}
       </div>
       <Pinyin value={item.pinyin} className="max-w-full truncate text-[10px] leading-tight" />
       <Hanzi text={item.hanzi} singleCharPx={28} boxPx={88} className="my-1 text-slate-50" />
@@ -136,7 +149,6 @@ function MobileShell() {
         {[
           ["Progresso", "chart"],
           ["Adicionar", "plus"],
-          ["Importar CSV", "upload"],
           ["Ajustes", "sliders"],
         ].map(([label, icon]) => (
           <div

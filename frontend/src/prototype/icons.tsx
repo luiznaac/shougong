@@ -21,21 +21,27 @@ const PATHS: Record<string, string> = {
   "arrow-right": "M5 12h14M13 6l6 6-6 6",
   layers: "M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5",
   spark: "M12 3v5M12 16v5M3 12h5M16 12h5",
+  // Custom-drawn replacements for the 👻 (leech) and ⚡ (priority) emoji.
+  ghost:
+    "M5 21V11a7 7 0 0 1 14 0v10l-2.3-1.6L14.4 21 12 19.4 9.6 21 6.7 19.4 5 21ZM9.5 11h.01M14.5 11h.01",
+  bolt: "M13 2 4 14h6l-1 8 10-12h-6V2Z",
 };
 
 export function Icon({
   name,
   className = "h-5 w-5",
+  strokeWidth = 1.7,
 }: {
   name: keyof typeof PATHS | string;
   className?: string;
+  strokeWidth?: number;
 }) {
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.7}
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
