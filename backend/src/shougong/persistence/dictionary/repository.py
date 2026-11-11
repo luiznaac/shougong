@@ -9,15 +9,22 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import cast
 
-from sqlalchemy import Table, bindparam, func, insert, or_, select, update
+from sqlalchemy import ColumnElement, Table, and_, bindparam, case, func, insert, literal, or_, select, update
 
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
 )
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
+from shougong.persistence.study.entity import StudyItemEntity
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
+from shougong.usecase.dictionary.model import (
+    CedictRecord,
+    DictionaryEntry,
+    HskDatasetWord,
+    RelatedEntry,
+    RelatedEntryPage,
+)
 
 _BULK_BATCH = 1000
 
@@ -93,6 +100,45 @@ class DictionaryRepository(IDictionaryRepository):
             session = current_session()
             row = await session.get(DictionaryEntryEntity, entry_id)
             return to_domain(row) if row is not None else None
+
+        return await self._tx.execute(_run)
+
+    async def find_related(self, target: DictionaryEntry, *, limit: int, offset: int) -> RelatedEntryPage:
+        characters = sorted(set(target.simplified))
+        if not characters:
+            return [], 0
+
+        async def _run() -> RelatedEntryPage:
+            session = current_session()
+            flags = [func.instr(DictionaryEntryEntity.simplified, literal(character)) > 0 for character in characters]
+            shared_count: ColumnElement[int] = case((flags[0], 1), else_=0)
+            for flag in flags[1:]:
+                shared_count = shared_count + case((flag, 1), else_=0)
+            predicate = and_(
+                or_(*flags),
+                DictionaryEntryEntity.id != target.id,
+                DictionaryEntryEntity.simplified != target.simplified,
+            )
+            stmt = (
+                select(DictionaryEntryEntity, StudyItemEntity.id)
+                .outerjoin(StudyItemEntity, StudyItemEntity.entry_id == DictionaryEntryEntity.id)
+                .where(predicate)
+                .order_by(
+                    shared_count.desc(),
+                    DictionaryEntryEntity.hsk_level.is_(None),
+                    DictionaryEntryEntity.hsk_level,
+                    func.char_length(DictionaryEntryEntity.simplified),
+                    DictionaryEntryEntity.id,
+                )
+                .limit(limit)
+                .offset(offset)
+            )
+            rows = (await session.execute(stmt)).all()
+            total = await session.scalar(select(func.count()).select_from(DictionaryEntryEntity).where(predicate))
+            return (
+                [RelatedEntry(entry=to_domain(row), study_item_id=study_item_id) for row, study_item_id in rows],
+                int(total or 0),
+            )
 
         return await self._tx.execute(_run)
 

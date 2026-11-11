@@ -24,6 +24,8 @@ export const keys = {
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
   dictionary: (q: string) => ["dictionary", q] as const,
+  relatedEntries: (id: number, limit: number, offset: number) =>
+    ["dictionary", "related", id, { limit, offset }] as const,
   readingHistory: ["reading-texts"] as const,
   insightsPrefix: ["insights"] as const,
   extraStudy: (from: string, to: string) => ["insights", "extra-study", { from, to }] as const,
@@ -91,6 +93,14 @@ export function useDictionarySearch(q: string, limit = 20) {
     queryKey: ["dictionary", q, limit],
     queryFn: () => api.searchDictionary(q, limit),
     enabled: q.trim().length > 0,
+  });
+}
+
+export function useRelatedEntries(entryId: number, limit = 8, offset = 0) {
+  return useQuery({
+    queryKey: keys.relatedEntries(entryId, limit, offset),
+    queryFn: () => api.listRelatedEntries(entryId, limit, offset),
+    enabled: entryId > 0,
   });
 }
 

@@ -23,6 +23,19 @@ class DictionaryEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class RelatedEntry:
+    """An entry sharing at least one hanzi with a target word, plus the id of
+    the study item queuing it — `None` when the word is not queued."""
+
+    entry: DictionaryEntry
+    study_item_id: int | None = None
+
+
+# One page of related entries, plus the family's total size.
+type RelatedEntryPage = tuple[list[RelatedEntry], int]
+
+
+@dataclass(frozen=True, slots=True)
 class CedictRecord:
     """A parsed CC-CEDICT line, before it is persisted (no id yet)."""
 

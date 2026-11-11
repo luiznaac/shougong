@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
-from shougong.usecase.dictionary.model import CedictRecord, HskDatasetWord
+from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
 from shougong.usecase.dictionary.service import DictionaryService
 from tests.fixtures import (
     FakeCedictSource,
@@ -90,3 +90,77 @@ async def test_enrich_hsk_is_a_noop_once_any_row_has_a_level() -> None:
     assert applied == 0
     assert source.fetch_calls == 0
     assert repo.entries[0].hsk_level == 1  # not re-stamped
+
+
+def _knowing_family() -> list[DictionaryEntry]:
+    return [
+        make_dictionary_entry(entry_id=1, simplified="知道", pinyin="zhi1 dao4"),
+        make_dictionary_entry(entry_id=2, simplified="知识", pinyin="zhi1 shi5"),
+        make_dictionary_entry(entry_id=3, simplified="知", pinyin="zhi1"),
+        make_dictionary_entry(entry_id=4, simplified="道", pinyin="dao4"),
+        make_dictionary_entry(entry_id=5, simplified="认识", pinyin="ren4 shi5"),
+        make_dictionary_entry(entry_id=6, simplified="知道", pinyin="zhi1 dao5"),
+    ]
+
+
+async def test_related_matches_shared_characters_excluding_target_and_its_readings() -> None:
+    service = DictionaryService(FakeDictionaryRepository(_knowing_family()))
+
+    rows, total = await service.related(1)
+
+    assert total == 3
+    # single-character neighbours come before the two-character word (length ASC)
+    assert [row.entry.simplified for row in rows] == ["知", "道", "知识"]
+
+
+async def test_related_orders_by_shared_characters_then_hsk_then_length() -> None:
+    entries = [
+        make_dictionary_entry(entry_id=1, simplified="知道"),
+        make_dictionary_entry(entry_id=2, simplified="知识", hsk_level=1),
+        make_dictionary_entry(entry_id=3, simplified="知道路"),
+        make_dictionary_entry(entry_id=4, simplified="知道者", hsk_level=2),
+    ]
+    service = DictionaryService(FakeDictionaryRepository(entries))
+
+    rows, _ = await service.related(1)
+
+    # two shared hanzi first; within them hsk_level ASC NULLS LAST put 知道者 before 知道路
+    assert [row.entry.id for row in rows] == [4, 3, 2]
+
+
+async def test_related_unknown_target_raises_not_found() -> None:
+    service = DictionaryService(FakeDictionaryRepository(_knowing_family()))
+
+    with pytest.raises(ResourceNotFoundError):
+        await service.related(123)
+
+
+async def test_related_returns_an_empty_page_when_nothing_shares_a_character() -> None:
+    entries = [
+        make_dictionary_entry(entry_id=1, simplified="水"),
+        make_dictionary_entry(entry_id=2, simplified="山"),
+    ]
+    service = DictionaryService(FakeDictionaryRepository(entries))
+
+    rows, total = await service.related(1)
+
+    assert rows == []
+    assert total == 0
+
+
+async def test_related_carries_the_queued_study_item_id() -> None:
+    repo = FakeDictionaryRepository(_knowing_family(), study_items={3: 99})
+    service = DictionaryService(repo)
+
+    rows, _ = await service.related(1)
+
+    assert {row.entry.id: row.study_item_id for row in rows} == {2: None, 3: 99, 4: None}
+
+
+async def test_related_pages_without_changing_total() -> None:
+    service = DictionaryService(FakeDictionaryRepository(_knowing_family()))
+
+    rows, total = await service.related(1, limit=1, offset=1)
+
+    assert total == 3
+    assert [row.entry.id for row in rows] == [4]

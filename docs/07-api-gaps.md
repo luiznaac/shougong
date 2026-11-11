@@ -13,7 +13,7 @@ These endpoints are suggestions to support the desktop interface proposals in [0
 | 5 | `GET /reading-texts/{id}` | Medium | Deep links and single-reading views |
 | 6 | `GET /review-logs` | Medium | Global accuracy/streak analytics |
 | 7 | `POST /characters/strokes/batch` | Medium | Preload stroke data for sessions |
-| 8 | `GET /dictionary-entries/{id}/related` | Low | Related entries without client search |
+| 8 | ~~`GET /dictionary-entries/{id}/related`~~ | Done | Shared-character family with `study_item_id` (see below) |
 | 9 | ~~`GET /study-items/next`~~ | Superseded | Session endpoint (`GET /study/session`) covers lean quiz clients |
 
 ## 1. `GET /dashboard` - aggregate today state
@@ -85,9 +85,14 @@ Response rows: `{ study_item_id, entry, rating, review_datetime }`. Client-side 
 
 Quiz sessions and multi-character words need stroke data for several characters at once. Today the client issues one request per character. A batch endpoint (or `GET /characters/strokes?chars=学,习`) returns a map keyed by character, reusing the same cache/negative-cache behavior.
 
-## 8. `GET /dictionary-entries/{id}/related`
+## 8. `GET /dictionary-entries/{id}/related` — implemented
 
-The item page currently derives related entries by searching the dictionary for the character and filtering client-side. A server endpoint would return entries sharing any character in `simplified`, excluding the item itself, with `is_studied` flags.
+Shipped as `GET /dictionary-entries/{entry_id}/related?limit=&offset=` (see
+[04-api.md](04-api.md)): related = an entry whose `simplified` shares at least one hanzi
+with the target's, excluding the target and every entry with the same `simplified`.
+Ordered by distinct shared hanzi `DESC`, then `hsk_level ASC NULLS LAST`, then
+`char_length(simplified) ASC`, then `id ASC`; paginated with `{ items, total, limit,
+offset }` and each row carrying the study item's id (`study_item_id`, or `null`).
 
 ## 9. `GET /study-items/next?mode=lesson|review` — superseded
 

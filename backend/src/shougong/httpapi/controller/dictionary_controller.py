@@ -11,7 +11,11 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from shougong.httpapi.controller.base import IController
-from shougong.httpapi.schema import DictionaryEntryResponse
+from shougong.httpapi.schema import (
+    DictionaryEntryResponse,
+    RelatedEntriesResponse,
+    RelatedEntryResponse,
+)
 from shougong.usecase.dictionary.service import DictionaryService
 
 _MAX_LIMIT = 100
@@ -36,5 +40,19 @@ class DictionaryController(IController):
         async def get(entry_id: int) -> DictionaryEntryResponse:
             entry = await self._service.get(entry_id)
             return DictionaryEntryResponse.from_domain(entry)
+
+        @router.get("/dictionary-entries/{entry_id}/related")
+        async def related(
+            entry_id: int,
+            limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 20,
+            offset: Annotated[int, Query(ge=0)] = 0,
+        ) -> RelatedEntriesResponse:
+            rows, total = await self._service.related(entry_id, limit=limit, offset=offset)
+            return RelatedEntriesResponse(
+                items=[RelatedEntryResponse.from_related(row) for row in rows],
+                total=total,
+                limit=limit,
+                offset=offset,
+            )
 
         return router

@@ -13,7 +13,13 @@ from typing import TypeVar
 
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
+from shougong.usecase.dictionary.model import (
+    CedictRecord,
+    DictionaryEntry,
+    HskDatasetWord,
+    RelatedEntry,
+    RelatedEntryPage,
+)
 from shougong.usecase.insights.gateway import IInsightRepository
 from shougong.usecase.insights.model import GradeWindow, InsightBucket
 from shougong.usecase.reading.gateway import (
@@ -105,8 +111,15 @@ class FakeTransactionTemplate(ITransactionTemplate):
 
 
 class FakeDictionaryRepository(IDictionaryRepository):
-    def __init__(self, entries: list[DictionaryEntry] | None = None) -> None:
+    def __init__(
+        self,
+        entries: list[DictionaryEntry] | None = None,
+        *,
+        study_items: Mapping[int, int] | None = None,
+    ) -> None:
         self.entries: list[DictionaryEntry] = list(entries or [])
+        # entry id -> the id of the study item queuing it
+        self.study_items: dict[int, int] = dict(study_items or {})
         self._ids = count(1)
 
     async def search(self, query: str, limit: int) -> list[DictionaryEntry]:
@@ -122,6 +135,28 @@ class FakeDictionaryRepository(IDictionaryRepository):
 
     async def get(self, entry_id: int) -> DictionaryEntry | None:
         return next((e for e in self.entries if e.id == entry_id), None)
+
+    async def find_related(self, target: DictionaryEntry, *, limit: int, offset: int) -> RelatedEntryPage:
+        target_chars = set(target.simplified)
+        related = [
+            entry
+            for entry in self.entries
+            if entry.id != target.id and entry.simplified != target.simplified and target_chars & set(entry.simplified)
+        ]
+        related.sort(
+            key=lambda entry: (
+                -len(target_chars & set(entry.simplified)),
+                entry.hsk_level is None,
+                entry.hsk_level or 0,
+                len(entry.simplified),
+                entry.id,
+            )
+        )
+        page = related[offset : offset + limit]
+        return (
+            [RelatedEntry(entry=entry, study_item_id=self.study_items.get(entry.id)) for entry in page],
+            len(related),
+        )
 
     async def count(self) -> int:
         return len(self.entries)

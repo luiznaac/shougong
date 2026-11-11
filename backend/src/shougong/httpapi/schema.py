@@ -8,7 +8,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shougong.usecase.dictionary.model import DictionaryEntry
+from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntry
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket
 from shougong.usecase.reading.model import (
@@ -69,6 +69,23 @@ class DictionaryEntryResponse(BaseModel):
             hsk_level=entry.hsk_level,
             pos_tags=list(entry.pos_tags),
         )
+
+
+class RelatedEntryResponse(DictionaryEntryResponse):
+    # The study item queuing this word, or None when it is not queued.
+    study_item_id: int | None
+
+    @classmethod
+    def from_related(cls, related: RelatedEntry) -> Self:
+        entry = DictionaryEntryResponse.from_domain(related.entry)
+        return cls(**entry.model_dump(), study_item_id=related.study_item_id)
+
+
+class RelatedEntriesResponse(BaseModel):
+    items: list[RelatedEntryResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class CharacterStrokesResponse(BaseModel):
