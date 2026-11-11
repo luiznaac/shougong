@@ -31,7 +31,7 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 - **Character tile** (`components/StudyItemTile.tsx`, `lib/tileBadges.ts`) — the one tile used by every character grid and the item page header, fixed at `w-28` with the SRS level border. `tileBadges(item)` derives the overlays from the DTO alone: a ghost for `is_leech`, then a bolt for a non-null `priority_position`, rendered as dark `role="img"` chips with a pt-BR `aria-label` and a `title`. `ProgressTiles` only wraps a grid and never re-sorts its input. The quiz runner renders none of this.
 - **Chrome seam** (`components/Layout.tsx`) — the header nav (`/`, `/add`, `/add/batch`, `/reading`) and the routed `<Outlet />`; `Lesson`/`Review`/`Practice` are deliberately outside it.
 - **Stroke coordinate seam** (`components/StrokeOrder.tsx`, `HandwritingQuiz.tsx`) — converts hanzi-writer's raw (Y-up, top-left at `(0, 900)`) data into a top-down 0..1024 SVG box; `HandwritingQuiz` feeds the same cached data through `charDataLoader` so it never hits a CDN.
-- **Quiz phase seam** (`components/Quiz.tsx`) — the `info → prompt → revealed` phase machine over an item queue, with the `RATINGS` (`again`/`hard`/`good`/`easy`) as the review submission and keyboard hotkeys; `HandwritingQuiz` is the optional interactive check. Its `record` prop defaults to true; practice passes false, which skips the grade call entirely while keeping the same runner and local accuracy.
+- **Quiz phase seam** (`components/Quiz.tsx`) — the `info → prompt → revealed` phase machine over an item queue, with the `RATINGS` (`again`/`hard`/`good`/`easy`) as the review submission and keyboard hotkeys; `HandwritingQuiz` is the optional interactive check. Its `record` prop defaults to true; practice passes false, which skips the grade call entirely while keeping the same runner and local accuracy. `Quiz.dom.test.tsx` exercises the phase contract through the DOM lane: reveal by click, grade by hotkey, advance by Enter.
 - **Pinyin rendering** (`components/Pinyin.tsx`) — consumes `lib/pinyin.ts` syllables and the `.tone-1`–`.tone-5` classes from `index.css`.
 
 ### `src/i18n` — backend-enum display labels
@@ -55,6 +55,13 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 - **Practice copy and write seam** (`lib/quizPractice.ts`) — `topBarTitle`/`summaryCopy` own the practice variant's labels: `Prática`, the `SRS intact` run, and the summary saying nothing was recorded. `submitRevealedGrade` is the only place a revealed advance decides whether to call the grade mutation; with `record: false` it never calls the submit callback, so practice issues no write at all.
 - **Formatting** (`lib/format.ts`) — `fromNow`/`formatDateTime`/`formatDate`, all `pt-BR`.
 
+### `src/test` — two-lane test harness
+**Purpose**: the shared fixture and the DOM-lane setup behind Vitest's two projects.
+**Files**: `frontend/src/test/studyItemFixture.ts`, `frontend/src/test/domSetup.ts`, `frontend/vitest.config.ts`
+**Seam(s)**:
+- **Lane split** (`vitest.config.ts`) — `*.test.{ts,tsx}` runs in the node environment (pure helpers, markup-only renders through `react-dom/server`); `*.dom.test.tsx` runs in jsdom with `@testing-library/react` and `@testing-library/user-event`, after `test/domSetup.ts` registers RTL cleanup. An interaction contract — click, keyboard, state change and the visible outcome after it — belongs to the DOM lane; a single-render assertion stays markup-only.
+- **Study-item fixture** (`test/studyItemFixture.ts`) — `studyItem(overrides)` builds one minimal `StudyItem`; override only the fields the test is about.
+
 ### Theme and root wiring
 **Purpose**: the design tokens and the Vite/TypeScript build that serves the SPA.
 **Files**: `frontend/src/index.css`, `frontend/vite.config.ts`, `frontend/index.html`, `frontend/package.json`, `frontend/tsconfig*.json`
@@ -62,7 +69,7 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 - **Theme seam** (`src/index.css`) — the `@theme` block owns the hanzi font, the accent, the pinyin tone colours (`--color-tone-*`), the SRS stage colours (`--color-srs-*`) and the `.tone-*` classes; components consume those names.
 - **Base-path seam** (`vite.config.ts`) — `base` is `/shougong/` in production and `/` in dev; `main.tsx` derives the router `basename` from `import.meta.env.BASE_URL`.
 - **Dev server** (`vite.config.ts`) — port 5273 with the `/api` proxy to `VITE_API_TARGET ?? http://localhost:8080`.
-- **Quality gate** (`package.json`) — `check` runs `typecheck` + `lint` (Biome) + `test` (Vitest, node environment: pure helpers in `src/lib` and markup-only tile tests through `react-dom/server`).
+- **Quality gate** (`package.json`) — `check` runs `typecheck` + `lint` (Biome) + `test` (Vitest, two projects: the node lane — pure helpers in `src/lib` and markup-only renders through `react-dom/server` — and the jsdom lane — `*.dom.test.tsx` interaction contracts through React Testing Library; see `src/test` above).
 
 ## Entry points
 

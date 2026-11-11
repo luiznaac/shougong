@@ -1,10 +1,28 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
-// Pure helpers under src/lib and markup-only component tests (react-dom/server,
-// no DOM) run in the node environment. See AGENTS.md.
+// Two lanes, split by file name:
+// - `*.test.{ts,tsx}` — pure helpers and markup-only component tests, node environment.
+// - `*.dom.test.tsx` — DOM component interaction tests through React Testing Library, jsdom.
+// See AGENTS.md and CODING_STANDARDS.md.
 export default defineConfig({
   test: {
-    include: ["src/**/*.test.{ts,tsx}"],
-    environment: "node",
+    projects: [
+      {
+        test: {
+          name: "node",
+          environment: "node",
+          include: ["src/**/*.test.{ts,tsx}"],
+          exclude: [...configDefaults.exclude, "src/**/*.dom.test.tsx"],
+        },
+      },
+      {
+        test: {
+          name: "dom",
+          environment: "jsdom",
+          include: ["src/**/*.dom.test.tsx"],
+          setupFiles: ["./src/test/domSetup.ts"],
+        },
+      },
+    ],
   },
 });
