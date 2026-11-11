@@ -20,6 +20,10 @@ beforeEach(() => {
       if (url.pathname === "/api/study-items/7/history") return ok([]);
       if (url.pathname === "/api/study-items")
         return ok({ items: [ITEM], total: 1, limit: 100, offset: 0 });
+      if (url.pathname === "/api/dictionary-entries/10/related")
+        return ok({ items: [], total: 0, limit: 8, offset: 0 });
+      if (url.pathname === "/api/reading-texts")
+        return ok({ items: [], total: 0, limit: 20, offset: 0 });
       if (url.pathname === "/api/dictionary-entries") {
         return ok({ items: [], total: 0, limit: 25, offset: 0 });
       }
@@ -33,7 +37,24 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
+
+function setDesktopBreakpoint(desktop: boolean) {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: desktop,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
+  );
+}
 
 function renderPage(initialEntry: string | { pathname: string; state: unknown }) {
   const router = createMemoryRouter(
@@ -70,5 +91,62 @@ describe("StudyItemPage", () => {
     const back = await screen.findByRole("link", { name: "← Biblioteca" });
 
     expect(back.getAttribute("href")).toBe("/biblioteca");
+  });
+
+  it("leads with the identity and plain-language FSRS facts", async () => {
+    renderPage("/biblioteca/itens/7");
+
+    expect(await screen.findByRole("heading", { name: "estudar" })).toBeTruthy();
+    for (const label of [
+      "Estado",
+      "Próxima revisão",
+      "Estabilidade",
+      "Dificuldade",
+      "Último review",
+      "Adicionado",
+    ]) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(screen.getAllByText("Em revisão").length).toBeGreaterThan(0);
+    expect(screen.getByText("30.0 dias")).toBeTruthy();
+  });
+
+  it("puts the open stroke card first among the mobile study panels", async () => {
+    renderPage("/biblioteca/itens/7");
+
+    const headings = [
+      await screen.findByRole("heading", { name: "Ordem dos traços" }),
+      screen.getByRole("heading", { name: "Trajetória" }),
+      screen.getByRole("heading", { name: /Leituras com/ }),
+      screen.getByRole("heading", { name: "Relacionados" }),
+    ];
+
+    for (let index = 1; index < headings.length; index += 1) {
+      expect(
+        headings[index - 1].compareDocumentPosition(headings[index]) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+  });
+
+  it("keeps only the stroke player in the desktop rail after the main column", async () => {
+    setDesktopBreakpoint(true);
+    renderPage("/biblioteca/itens/7");
+
+    const trajectory = await screen.findByRole("heading", { name: "Trajetória" });
+    const readings = screen.getByRole("heading", { name: /Leituras com/ });
+    const related = screen.getByRole("heading", { name: "Relacionados" });
+    const strokes = screen.getByRole("heading", { name: "Ordem dos traços" });
+
+    expect(
+      trajectory.compareDocumentPosition(readings) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      readings.compareDocumentPosition(related) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      related.compareDocumentPosition(strokes) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Ordem dos traços" })).toHaveLength(1);
   });
 });

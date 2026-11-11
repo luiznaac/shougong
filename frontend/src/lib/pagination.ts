@@ -28,3 +28,16 @@ export function pageWindow(page: number, pages: number): (number | null)[] {
   }
   return out;
 }
+
+/**
+ * The next infinite-page offset for an envelope list: the rows received so far
+ * unless the page was empty or the exact total is reached. Every accumulating
+ * reader (study-item pages, related entries, item readings) shares this rule.
+ */
+export function nextPageOffset(
+  lastPage: { items: unknown[]; total: number },
+  offset: number,
+): number | undefined {
+  const next = offset + lastPage.items.length;
+  return lastPage.items.length > 0 && next < lastPage.total ? next : undefined;
+}

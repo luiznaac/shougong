@@ -1,12 +1,6 @@
 import { useState } from "react";
 import { useCharacterStrokes } from "../api/queries.ts";
-import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
-
-const VIEWBOX_SIZE = 1024;
-// hanzi-writer-data's raw coordinate space has Y increasing upward, with the
-// glyph's top-left at (0, 900) — this transform flips + shifts it into a
-// normal top-down 0..1024 SVG box.
-const RAW_Y_OFFSET = 900;
+import { StrokeGlyph } from "./StrokeGlyph.tsx";
 
 /**
  * Pleco-style stroke order viewer for a single character: full outline shown
@@ -29,23 +23,13 @@ export function StrokeOrder({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <svg
-        viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
-        style={{ width: sizePx, height: sizePx }}
+      <StrokeGlyph
+        character={character}
+        strokes={data.strokes}
+        revealed={revealed}
+        sizePx={sizePx}
         className="rounded-lg bg-slate-800/40"
-      >
-        <title>Ordem dos traços de {character}</title>
-        <g transform={`scale(1,-1) translate(0,-${RAW_Y_OFFSET})`}>
-          {keyedOccurrences(data.strokes, (stroke) => stroke).map(({ key, item: d }) => (
-            <path key={`bg-${key}`} d={d} className="fill-slate-400/20" />
-          ))}
-          {keyedOccurrences(data.strokes.slice(0, revealed), (stroke) => stroke).map(
-            ({ key, item: d }) => (
-              <path key={`fg-${key}`} d={d} className="fill-accent-500" />
-            ),
-          )}
-        </g>
-      </svg>
+      />
 
       <div className="flex items-center gap-2 text-sm">
         <button

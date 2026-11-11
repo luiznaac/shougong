@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { POS_TAG_OPTIONS } from "./posTag.ts";
+import { readingFormatLabel } from "./readingFormat.ts";
 import { SORT_ORDER, sortOrderLabel } from "./sortOrder.ts";
 import { srsStateLabel } from "./srsState.ts";
+
+describe("readingFormatLabel", () => {
+  it("names the three reading formats in Portuguese", () => {
+    expect(readingFormatLabel("paragraph")).toBe("Parágrafo");
+    expect(readingFormatLabel("sentences")).toBe("Frases soltas");
+    expect(readingFormatLabel("dialogue")).toBe("Diálogo");
+  });
+});
 
 describe("srsStateLabel", () => {
   it("names the three FSRS states in Portuguese", () => {
