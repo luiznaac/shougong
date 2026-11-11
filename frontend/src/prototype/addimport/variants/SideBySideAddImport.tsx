@@ -3,7 +3,6 @@
 // left, CSV import + live per-row results on the right, one shared queue counter.
 // Desktop keeps tables; mobile swaps to a segmented control and card lists.
 
-import { useState } from "react";
 import { PhoneFrame } from "../../PhoneFrame.tsx";
 import { Icon } from "../../icons.tsx";
 import { BATCH_FILE, BATCH_OUTCOMES, COUNTS, DICTIONARY, QUEUE_IDS } from "../addImportData.ts";
@@ -164,9 +163,9 @@ function DesktopVariant() {
 
       <div className="mx-auto max-w-6xl border-t border-white/10 px-6 py-10">
         <h2 className="mb-6 text-sm font-semibold tracking-wide text-slate-500 uppercase">
-          Mobile — controle segmentado e listas em cartão
+          Mobile — busca em cartões (CSV fica no desktop)
         </h2>
-        <PhoneFrame caption="Duas abas no topo; busca em cartões com “Carregar mais” e importação com progresso e resultados por linha.">
+        <PhoneFrame caption="Busca mobile em cartões com “Carregar mais”; a importação de CSV fica só no desktop, como no shell adotado.">
           <MobileVariant />
         </PhoneFrame>
       </div>
@@ -175,115 +174,42 @@ function DesktopVariant() {
 }
 
 function MobileVariant() {
-  const [tab, setTab] = useState<"search" | "import">("search");
   return (
     <MobileChrome>
       <div className="space-y-3 p-4">
         <div>
           <h1 className="text-lg font-semibold text-white">Adicionar</h1>
-          <p className="text-[11px] text-slate-500">
-            {COUNTS.queued} itens na fila · busque ou importe
-          </p>
+          <p className="text-[11px] text-slate-500">{COUNTS.queued} itens na fila</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-900 p-1 text-xs font-medium">
-          {(
-            [
-              ["search", "Buscar"],
-              ["import", "Importar CSV"],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              className={`rounded-lg py-1.5 text-center ${
-                tab === key ? "bg-accent-500 text-white" : "text-slate-400"
-              }`}
-              onClick={() => setTab(key)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {tab === "search" ? (
-          <div className="space-y-3">
-            <SearchField value="xue" compact />
-            <ul className="space-y-1.5">
-              {DICTIONARY.slice(0, 4).map((entry, i) => {
-                const enqueued = QUEUE_IDS.has(entry.id);
-                return (
-                  <li
-                    key={entry.id}
-                    className="flex items-center gap-2 rounded-xl bg-slate-900/60 p-2.5 ring-1 ring-white/5"
-                  >
-                    <EntryIdentity
-                      simplified={entry.simplified}
-                      pinyin={entry.pinyin}
-                      definitions={entry.definitions}
-                      size="sm"
-                    />
-                    <div className="ml-auto flex shrink-0 flex-col items-end gap-1">
-                      <HsxChip level={entry.hsk_level} />
-                      <EnqueueButton enqueued={enqueued} addedNow={i === 1} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            <LoadMore shown={4} total={16} />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="rounded-xl border border-dashed border-white/15 bg-slate-900/40 p-3">
-              <div className="flex items-center gap-2">
-                <Icon name="file" className="h-5 w-5 text-accent-400" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-slate-200">{BATCH_FILE}</p>
-                  <p className="text-[10px] text-slate-500 tabular-nums">1.000 linhas</p>
+        <SearchField value="xue" compact />
+        <ul className="space-y-1.5">
+          {DICTIONARY.slice(0, 4).map((entry, i) => {
+            const enqueued = QUEUE_IDS.has(entry.id);
+            return (
+              <li
+                key={entry.id}
+                className="flex items-center gap-2 rounded-xl bg-slate-900/60 p-2.5 ring-1 ring-white/5"
+              >
+                <EntryIdentity
+                  simplified={entry.simplified}
+                  pinyin={entry.pinyin}
+                  definitions={entry.definitions}
+                  size="sm"
+                />
+                <div className="ml-auto flex shrink-0 flex-col items-end gap-1">
+                  <HsxChip level={entry.hsk_level} />
+                  <EnqueueButton enqueued={enqueued} addedNow={i === 1} />
                 </div>
-                <Icon name="close" className="h-4 w-4 text-slate-500" />
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 flex items-center justify-between text-[10px]">
-                <span className="text-slate-400">
-                  Importando… <span className="tabular-nums text-slate-200">412</span>/1.000
-                </span>
-                <span className="text-slate-500">41%</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
-                <div className="h-full w-[41%] rounded-full bg-accent-500" />
-              </div>
-            </div>
-            <SummaryTiles created={287} skipped={96} errors={29} />
-            <ul className="space-y-1.5">
-              {BATCH_OUTCOMES.slice(0, 4).map((outcome) => (
-                <li
-                  key={outcome.row}
-                  className="rounded-xl bg-slate-900/60 p-2.5 ring-1 ring-white/5"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-hanzi text-base text-slate-100" lang="zh-Hans">
-                      {outcome.hanzi}
-                    </span>
-                    <span className="text-[11px] text-slate-400">{outcome.pinyin}</span>
-                    <span className="ml-auto">
-                      <StatusPill status={outcome.status} />
-                    </span>
-                  </div>
-                  {outcome.candidates.length > 0 && (
-                    <CandidatePicker candidates={outcome.candidates} compact />
-                  )}
-                  {outcome.candidates.length === 0 && outcome.detail && (
-                    <p className="mt-1 text-[10px] text-slate-500">{outcome.detail}</p>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <LoadMore shown={4} total={1000} />
-          </div>
-        )}
+              </li>
+            );
+          })}
+        </ul>
+        <LoadMore shown={4} total={16} />
+
+        <p className="rounded-xl border border-white/5 bg-slate-900/30 px-3 py-2 text-[10px] leading-relaxed text-slate-500">
+          Importação de CSV está disponível apenas no desktop.
+        </p>
       </div>
     </MobileChrome>
   );
