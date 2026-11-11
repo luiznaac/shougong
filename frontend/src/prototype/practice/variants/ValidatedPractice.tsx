@@ -149,7 +149,7 @@ export function ValidatedDesktop({
 
   return (
     <div className="flex h-[720px] flex-col overflow-hidden rounded-[2rem] bg-slate-950 ring-1 ring-white/10">
-      <section className={`relative bg-gradient-to-b ${meta.band} px-7 pt-5 pb-8`}>
+      <section className={`relative bg-gradient-to-b ${meta.band} px-7 pt-5 pb-7`}>
         <div className="flex items-center gap-3 text-sm">
           <Link to="/" className="text-white/80 hover:text-white">
             ← Sair
@@ -172,7 +172,7 @@ export function ValidatedDesktop({
 
         <ProgressSegments items={session.items} grades={session.grades} className="mt-4" />
 
-        <div className="mt-6 flex flex-col items-center gap-4">
+        <div className="mt-5 flex flex-col items-center gap-3">
           <div className="rounded-full bg-slate-950/45 px-5 py-1.5 backdrop-blur-sm">
             <Pinyin value={item.pinyin} className="text-2xl font-medium sm:text-3xl" />
           </div>
@@ -182,7 +182,7 @@ export function ValidatedDesktop({
             available={430}
             min={40}
             showPlayer={session.phase === "info" || (revealed && playerOn)}
-            playerSize={240}
+            playerSize={180}
           />
           <p className="max-w-xl text-center text-lg font-semibold text-white drop-shadow">
             {item.definitions.slice(0, 3).join(" · ")}

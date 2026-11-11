@@ -4,7 +4,7 @@
 // shared — each variant owns its own structure.
 
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { SrsRating } from "../../api/types.ts";
 import { keyedOccurrences } from "../../lib/occurrenceKeys.ts";
@@ -190,7 +190,11 @@ export function WritePad({
   );
 }
 
-/** Stand-in for StrokeOrderPanel: the glyph grid plus traço controls. */
+/**
+ * Stand-in for StrokeOrderPanel: pick *which* character of the word to study,
+ * then step through that character's strokes. The picker only appears for
+ * multi-character words; a one-character item is the player itself.
+ */
 export function StrokeMock({
   word,
   sizePx = 200,
@@ -200,8 +204,45 @@ export function StrokeMock({
   sizePx?: number;
   className?: string;
 }) {
+  const chars = [...word];
+  // One piece of state, tagged with the word it belongs to: switching items (or
+  // characters) falls back to the first character and its first stroke without
+  // an effect.
+  const [state, setState] = useState({ word, active: 0, steppedFor: chars[0] ?? "", step: 1 });
+  const current =
+    state.word === word ? state : { word, active: 0, steppedFor: chars[0] ?? "", step: 1 };
+  const index = Math.min(current.active, chars.length - 1);
+  const char = chars[index] ?? "";
+  const step = current.steppedFor === char ? current.step : 1;
+  // Deterministic mock stroke count so each character has its own total.
+  const total = 5 + ((char.codePointAt(0) ?? 0) % 8);
+
+  const pick = (next: number) =>
+    setState({ word, active: next, steppedFor: chars[next] ?? "", step: 1 });
+  const move = (delta: number) =>
+    setState({ ...current, step: Math.min(total, Math.max(1, step + delta)) });
+
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
+      {chars.length > 1 && (
+        <div className="flex flex-wrap justify-center gap-1.5">
+          {keyedOccurrences(chars, (c) => c).map(({ key: charKey, item: c }, i) => (
+            <button
+              key={charKey}
+              type="button"
+              onClick={() => pick(i)}
+              className={`font-hanzi rounded-md px-2 py-0.5 text-sm transition-colors ${
+                i === index
+                  ? "bg-white text-slate-900"
+                  : "bg-slate-950/50 text-slate-300 ring-1 ring-white/10 hover:text-white"
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div
         style={{ maxWidth: sizePx }}
         className="relative grid aspect-square w-full place-items-center rounded-2xl border border-white/10 bg-slate-950/50"
@@ -217,15 +258,39 @@ export function StrokeMock({
         <span
           lang="zh-Hans"
           className="font-hanzi leading-none text-slate-100"
-          style={{ fontSize: Math.min(96, Math.round(170 / Math.max(1, word.length))) }}
+          style={{ fontSize: Math.min(140, Math.round(sizePx * 0.55)) }}
         >
-          {word}
+          {char}
         </span>
       </div>
-      <div className="flex items-center gap-2 text-[11px] text-slate-400">
-        <span className="rounded bg-white/10 px-2 py-0.5">◀</span>
-        <span className="tabular-nums">traço 3/8</span>
-        <span className="rounded bg-white/10 px-2 py-0.5">▶</span>
+
+      <div className="flex items-center gap-2 rounded-full bg-slate-950/50 px-2 py-1 text-[11px] text-slate-300 ring-1 ring-white/10">
+        <button
+          type="button"
+          onClick={() => move(-1)}
+          disabled={step === 1}
+          className="rounded bg-white/10 px-2 py-0.5 hover:bg-white/20 disabled:opacity-30"
+          aria-label="Traço anterior"
+        >
+          ◀
+        </button>
+        <span className="tabular-nums">
+          {chars.length > 1 && (
+            <span className="mr-2 text-slate-500">
+              {index + 1}/{chars.length}
+            </span>
+          )}
+          traço {step}/{total}
+        </span>
+        <button
+          type="button"
+          onClick={() => move(1)}
+          disabled={step === total}
+          className="rounded bg-white/10 px-2 py-0.5 hover:bg-white/20 disabled:opacity-30"
+          aria-label="Próximo traço"
+        >
+          ▶
+        </button>
       </div>
     </div>
   );
