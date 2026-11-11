@@ -184,14 +184,19 @@ export function WritePad({
 /** Stand-in for StrokeOrderPanel: the glyph grid plus traço controls. */
 export function StrokeMock({
   word,
+  sizePx = 200,
   className = "",
 }: {
   word: string;
+  sizePx?: number;
   className?: string;
 }) {
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
-      <div className="relative grid aspect-square w-full max-w-[200px] place-items-center rounded-2xl border border-white/10 bg-slate-950/50">
+      <div
+        style={{ maxWidth: sizePx }}
+        className="relative grid aspect-square w-full place-items-center rounded-2xl border border-white/10 bg-slate-950/50"
+      >
         <div
           className="pointer-events-none absolute inset-0 opacity-30"
           style={{
