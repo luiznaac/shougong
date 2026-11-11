@@ -30,12 +30,26 @@ async def test_search_matches_hanzi_and_orders_by_length(container: Container, c
     response = await client.get("/dictionary-entries", params={"q": "学"})
 
     assert response.status_code == 200
-    assert [row["simplified"] for row in response.json()] == ["学", "学习"]
+    assert [row["simplified"] for row in response.json()["items"]] == ["学", "学习"]
+    assert response.json()["total"] == 2
+
+
+async def test_search_pages_with_offset_and_keeps_the_total(container: Container, client: httpx.AsyncClient) -> None:
+    await _seed(container)
+
+    first = (await client.get("/dictionary-entries", params={"q": "学", "limit": 1})).json()
+    second = (await client.get("/dictionary-entries", params={"q": "学", "limit": 1, "offset": 1})).json()
+    empty = (await client.get("/dictionary-entries", params={"q": "没有"})).json()
+
+    assert [row["simplified"] for row in first["items"]] == ["学"]
+    assert [row["simplified"] for row in second["items"]] == ["学习"]
+    assert first["total"] == second["total"] == 2
+    assert empty == {"items": [], "total": 0, "limit": 20, "offset": 0}
 
 
 async def test_get_by_id_returns_entry_and_missing_is_404(container: Container, client: httpx.AsyncClient) -> None:
     await _seed(container)
-    listed = (await client.get("/dictionary-entries", params={"q": "shui3"})).json()
+    listed = (await client.get("/dictionary-entries", params={"q": "shui3"})).json()["items"]
 
     found = await client.get(f"/dictionary-entries/{listed[0]['id']}")
     assert found.status_code == 200

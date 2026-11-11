@@ -15,7 +15,7 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/dictionary-entries?q=&limit=` | Search by simplified hanzi or pinyin |
+| `GET` | `/dictionary-entries?q=&limit=&offset=` | One page of matches (envelope), shortest-first |
 | `GET` | `/dictionary-entries/{entry_id}` | Fetch one entry |
 | `GET` | `/dictionary-entries/{entry_id}/related?limit=&offset=` | Shared-character family, most-shared first |
 
@@ -31,7 +31,7 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | --- | --- | --- |
 | `POST` | `/study-items` | Enqueue one dictionary entry (`201` + `Location`) |
 | `POST` | `/study-items/batch` | Import up to 1000 rows, per-row report |
-| `GET` | `/study-items?due=&leech=&limit=&offset=` | List queue, optionally due only or the worst-first leech list |
+| `GET` | `/study-items?due=&leech=&state=&hsk_level=&pos_tag=&search=&due_from=&due_to=&sort=&limit=&offset=` | One page of the filtered queue (envelope); a leech list stays worst-first unless `sort` is given |
 | `GET` | `/study-items/{item_id}` | Fetch one study item |
 | `POST` | `/study-items/{item_id}/reviews` | Grade a due card (`201`) |
 | `GET` | `/study-items/{item_id}/reviews` | Grade history, newest first |
@@ -58,6 +58,22 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | `DELETE` | `/reading-topics/{topic_id}` | Remove a scenario (`204`) |
 
 ## Core DTOs
+
+### List envelope
+
+The redesign's list routes wrap their rows in one page shape — live today on
+`GET /study-items` and `GET /dictionary-entries`, and specified for the
+related-entries and reading lists when they land:
+
+```json
+{ "items": [], "total": 137, "limit": 20, "offset": 0 }
+```
+
+`total` is the exact count of the filtered set; zero results is `200` with
+`items: []`. `limit` is `1..100` (default `20`) and `offset >= 0` (default `0`).
+The page's order is authoritative and the server has no "load more" mode — that is
+client presentation. `GET /study-items/{id}/reviews` and
+`GET /study-items/{id}/history` stay bare arrays.
 
 ### `DictionaryEntryResponse`
 
@@ -150,10 +166,33 @@ on the study-item list, the single study item, the study session, the Extra Stud
 buckets and the `leech=true` list. Review and history responses always carry
 `false`.
 
-`GET /study-items?leech=true` returns the leech list ordered worst-first — `again`
-count descending, then most recent failure descending, then item id ascending — and
-paginates that order. Without `leech`, the list keeps its due-then-id order (and
-`due=true` filters to what is due now).
+### Study item list
+
+`GET /study-items` returns one page of the filtered queue inside the list envelope.
+Every parameter is optional; values within one parameter OR, different parameters
+AND.
+
+| Param | Encoding | Semantics |
+| --- | --- | --- |
+| `due` | bool, default `false` | Shorthand for `due_to = now`; with an explicit `due_to`, the earlier bound wins. |
+| `leech` | bool, default `false` | 3+ `again` in the last ten review logs; keeps worst-first order unless `sort` is given. |
+| `state` | repeatable `learning\|review\|relearning` | Any-of. |
+| `hsk_level` | repeatable `1..9` or `none` | Any-of; `none` = `hsk_level IS NULL`. |
+| `pos_tag` | repeatable raw HSK/ICTCLAS tag (`v`, `n`) | Any-of; matches when the entry's `pos_tags` intersects the set. |
+| `search` | trimmed string, min 1 | Case-insensitive substring over `simplified` or `pinyin`. |
+| `due_from` | ISO instant | Inclusive; `card.due >= due_from`. |
+| `due_to` | ISO instant | Exclusive; `card.due < due_to`. |
+| `sort` | `due_asc` (default) \| `created_desc` \| `stability_asc` | See below. |
+
+Sorts: `due_asc` = `card_due ASC, id ASC`; `created_desc` = `created_at DESC, id
+DESC`; `stability_asc` = `card_stability ASC NULLS LAST, id ASC`. `leech=true`
+without `sort` orders by `again` count descending, then most recent failure
+descending, then item id ascending; an explicit `sort` overrides the leech ordering
+but not the leech filter. `priority_position` is never an ordering input.
+
+`GET /dictionary-entries?q=` applies the same envelope and window, keeping its
+`char_length(simplified) ASC, id ASC` order; `total` counts every entry matching
+`q`.
 
 ### Extra Study
 
@@ -330,8 +369,8 @@ The app maps domain exceptions to a consistent problem shape:
 
 ## Conventions
 
-- **Pagination**: the redesign's list routes return `{ items, total, limit, offset }` (`/reading-texts` today; study items and dictionary lists as their tickets land). `limit` is `1..100` (default `20`), `offset` is `>= 0`, `total` is the exact filtered count. The older bare-array routes keep their own `limit`/`offset` caps (100-200).
-- **Ordering**: study items by due date then id (unless `leech=true`, which orders worst-first); review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
+- **Pagination**: list routes return `{ items, total, limit, offset }` (`/reading-texts`, `/study-items`, `/dictionary-entries`); `limit` is `1..100` (default `20`), `offset` is `>= 0`, `total` is the exact filtered count. Item reviews and item history keep their bare arrays (`limit` 1..200 default 50). Clients page explicitly and never re-sort a page.
+- **Ordering**: study items by due date then id unless a filter/sort overrides it (`leech=true` orders worst-first, `sort` selects `created_desc` or `stability_asc`); dictionary search shortest-first; review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
 - **`Location` headers** are set on created resources.
 - **Idempotency**: dictionary autoload and HSK enrichment are idempotent; adding the same entry twice is a conflict, not a duplicate insert.
 - **Freshness**: reading history stores token text only and hydrates pinyin, definitions, and `dictionary_entry_id` on read against the current dictionary and study queue, so listed readings reflect the live vocabulary.

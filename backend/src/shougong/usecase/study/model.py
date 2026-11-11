@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from shougong.usecase.dictionary.model import DictionaryEntry
-from shougong.usecase.srs.model import SrsCard, SrsReviewLog
+from shougong.usecase.srs.model import SrsCard, SrsReviewLog, SrsState
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +28,39 @@ class StudyItem:
 class PriorityEdge(StrEnum):
     FRONT = "front"
     BACK = "back"
+
+
+class StudyItemSort(StrEnum):
+    """The orderings a filtered study-item list accepts.
+
+    A leech list with no explicit sort keeps its own worst-first order; `None`
+    therefore means "not given", distinct from the default `due_asc`.
+    """
+
+    DUE_ASC = "due_asc"
+    CREATED_DESC = "created_desc"
+    STABILITY_ASC = "stability_asc"
+
+
+@dataclass(frozen=True, slots=True)
+class StudyItemFilters:
+    """The optional filters on a study-item list read; values within a field OR,
+    different fields AND.
+
+    `due` is the shorthand for `due_to = now`; the service resolves it against the
+    clock before the adapter sees the filters, so an adapter only honours the
+    instant bounds. `hsk_levels` holds `None` for the `none` (outside HSK) bucket.
+    """
+
+    due: bool = False
+    leech: bool = False
+    states: tuple[SrsState, ...] = ()
+    hsk_levels: tuple[int | None, ...] = ()
+    pos_tags: tuple[str, ...] = ()
+    search: str | None = None
+    due_from: datetime | None = None
+    due_to: datetime | None = None
+    sort: StudyItemSort | None = None
 
 
 class SessionKind(StrEnum):

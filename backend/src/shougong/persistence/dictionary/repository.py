@@ -17,6 +17,7 @@ from shougong.persistence.configuration.transaction import (
 )
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
 from shougong.persistence.study.entity import StudyItemEntity
+from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import (
     CedictRecord,
@@ -44,26 +45,32 @@ class DictionaryRepository(IDictionaryRepository):
     def __init__(self, transaction_template: SqlAlchemyTransactionTemplate) -> None:
         self._tx = transaction_template
 
-    async def search(self, query: str, limit: int) -> list[DictionaryEntry]:
-        async def _run() -> list[DictionaryEntry]:
+    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryEntry]:
+        async def _run() -> Page[DictionaryEntry]:
             session = current_session()
             pattern = f"%{query}%"
+            predicate = or_(
+                DictionaryEntryEntity.simplified.like(pattern),
+                DictionaryEntryEntity.pinyin.like(pattern),
+            )
             stmt = (
                 select(DictionaryEntryEntity)
-                .where(
-                    or_(
-                        DictionaryEntryEntity.simplified.like(pattern),
-                        DictionaryEntryEntity.pinyin.like(pattern),
-                    )
-                )
+                .where(predicate)
                 .order_by(
                     func.char_length(DictionaryEntryEntity.simplified),
                     DictionaryEntryEntity.id,
                 )
                 .limit(limit)
+                .offset(offset)
             )
             rows = (await session.execute(stmt)).scalars().all()
-            return [to_domain(row) for row in rows]
+            total = await session.scalar(select(func.count()).select_from(DictionaryEntryEntity).where(predicate))
+            return Page(
+                items=tuple(to_domain(row) for row in rows),
+                total=int(total or 0),
+                limit=limit,
+                offset=offset,
+            )
 
         return await self._tx.execute(_run)
 

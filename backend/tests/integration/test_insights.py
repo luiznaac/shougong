@@ -103,7 +103,7 @@ async def test_the_leech_flag_is_annotated_on_the_list_and_detail(
     ordinary, _ = await _seed_item(container, simplified="虎")
     await _seed_failures(container, leech, 3, ending_at=_AT)
 
-    listed = {row["id"]: row for row in (await client.get("/study-items")).json()}
+    listed = {row["id"]: row for row in (await client.get("/study-items")).json()["items"]}
     assert listed[leech]["is_leech"] is True
     assert listed[ordinary]["is_leech"] is False
 
@@ -139,13 +139,14 @@ async def test_the_leech_filter_orders_worst_first_and_paginates(
     first = await client.get("/study-items", params={"leech": "true", "limit": 2, "offset": 0})
     second = await client.get("/study-items", params={"leech": "true", "limit": 2, "offset": 2})
 
-    assert [row["id"] for row in first.json()] == [five, four]
-    assert [row["id"] for row in second.json()] == [three]
-    assert all(row["is_leech"] is True for row in first.json() + second.json())
+    assert [row["id"] for row in first.json()["items"]] == [five, four]
+    assert [row["id"] for row in second.json()["items"]] == [three]
+    assert first.json()["total"] == 3
+    assert all(row["is_leech"] is True for row in first.json()["items"] + second.json()["items"])
 
     # the default list keeps its due-then-id ordering
     default = await client.get("/study-items")
-    assert [row["id"] for row in default.json()] == sorted(row["id"] for row in default.json())
+    assert [row["id"] for row in default.json()["items"]] == sorted(row["id"] for row in default.json()["items"])
 
 
 async def test_extra_study_buckets_are_seeded_deduped_and_ordered(

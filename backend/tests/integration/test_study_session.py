@@ -61,7 +61,7 @@ async def test_pin_move_and_unpin_survive_a_reload(container: Container, client:
     assert moved.status_code == 200
     assert moved.json()["priority_position"] == 2
 
-    reloaded = {row["id"]: row for row in (await client.get("/study-items")).json()}
+    reloaded = {row["id"]: row for row in (await client.get("/study-items")).json()["items"]}
     assert reloaded[third]["priority_position"] == -1
     assert reloaded[second]["priority_position"] == 1
     assert reloaded[first]["priority_position"] == 2

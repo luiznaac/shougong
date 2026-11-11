@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from itertools import count, pairwise
 from typing import TypeVar
 
+from shougong.usecase.commons.page import Page
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
 from shougong.usecase.dictionary.model import (
@@ -21,7 +22,8 @@ from shougong.usecase.dictionary.model import (
     RelatedEntryPage,
 )
 from shougong.usecase.insights.gateway import IInsightRepository
-from shougong.usecase.insights.model import GradeWindow, InsightBucket, StudyCounts
+from shougong.usecase.insights.model import GradeWindow, InsightBucket, ReviewGrade, StudyCounts
+from shougong.usecase.insights.policy import WINDOW_SIZE, is_leech, order_leeches
 from shougong.usecase.reading.gateway import (
     DialogueLine,
     IReadingHistoryRepository,
@@ -50,7 +52,7 @@ from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsStat
 from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeRepository
 from shougong.usecase.strokes.model import CharacterStrokes, StrokeLookupResult
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem
+from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem, StudyItemFilters, StudyItemSort
 from shougong.usecase.study.shuffler import IShuffler
 from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
 from shougong.usecase.study_item_history.model import StudyItemHistory
@@ -124,9 +126,14 @@ class FakeDictionaryRepository(IDictionaryRepository):
         self.study_items: dict[int, int] = dict(study_items or {})
         self._ids = count(1)
 
-    async def search(self, query: str, limit: int) -> list[DictionaryEntry]:
+    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryEntry]:
         matches = [e for e in self.entries if query in e.simplified or query in e.pinyin]
-        return matches[:limit]
+        return Page(
+            items=tuple(matches[offset : offset + limit]),
+            total=len(matches),
+            limit=limit,
+            offset=offset,
+        )
 
     async def find_by_simplified(self, simplified: str) -> list[DictionaryEntry]:
         return sorted((e for e in self.entries if e.simplified == simplified), key=lambda e: e.id)
@@ -355,11 +362,56 @@ class FakeStudyItemRepository(IStudyItemRepository):
         rows = [self._with_priority(i) for i in matching]
         return sorted(rows, key=lambda i: (i.priority_position is None, i.priority_position or 0, i.id))
 
-    async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]:
-        rows = sorted((self._with_priority(i) for i in self.items), key=lambda i: (i.card.due, i.id))
-        if due_before is not None:
-            rows = [i for i in rows if i.card.due <= due_before]
-        return rows[offset : offset + limit]
+    def _grade_windows(self) -> list[GradeWindow]:
+        windows: list[GradeWindow] = []
+        for item_id, logs in self.review_logs.items():
+            indexed = list(enumerate(logs))
+            newest = [
+                log
+                for _, log in sorted(indexed, key=lambda pair: (pair[1].review_datetime, pair[0]), reverse=True)[
+                    :WINDOW_SIZE
+                ]
+            ]
+            windows.append(
+                GradeWindow(
+                    study_item_id=item_id,
+                    grades=tuple(ReviewGrade(rating=log.rating, review_datetime=log.review_datetime) for log in newest),
+                )
+            )
+        return windows
+
+    async def list(self, filters: StudyItemFilters, *, limit: int, offset: int) -> Page[StudyItem]:
+        rows = [self._with_priority(i) for i in self.items]
+        if filters.due_from is not None:
+            rows = [i for i in rows if i.card.due >= filters.due_from]
+        if filters.due_to is not None:
+            rows = [i for i in rows if i.card.due < filters.due_to]
+        if filters.states:
+            rows = [i for i in rows if i.card.state in filters.states]
+        if filters.hsk_levels:
+            rows = [i for i in rows if i.entry.hsk_level in filters.hsk_levels]
+        if filters.pos_tags:
+            wanted = set(filters.pos_tags)
+            rows = [i for i in rows if wanted & set(i.entry.pos_tags)]
+        if filters.search is not None:
+            needle = filters.search.lower()
+            rows = [i for i in rows if needle in i.entry.simplified.lower() or needle in i.entry.pinyin.lower()]
+        windows = self._grade_windows() if filters.leech else []
+        if filters.leech:
+            leeches = [window.study_item_id for window in windows if is_leech(window)]
+            rows = [i for i in rows if i.id in leeches]
+        if filters.leech and filters.sort is None:
+            order = {rank.study_item_id: index for index, rank in enumerate(order_leeches(windows))}
+            rows.sort(key=lambda i: order[i.id])
+        else:
+            sort = filters.sort or StudyItemSort.DUE_ASC
+            if sort is StudyItemSort.CREATED_DESC:
+                rows.sort(key=lambda i: (i.created_at, i.id), reverse=True)
+            elif sort is StudyItemSort.STABILITY_ASC:
+                rows.sort(key=lambda i: (i.card.stability is None, i.card.stability or 0.0, i.id))
+            else:
+                rows.sort(key=lambda i: (i.card.due, i.id))
+        return Page(items=tuple(rows[offset : offset + limit]), total=len(rows), limit=limit, offset=offset)
 
     async def update_card(self, item_id: int, card: SrsCard, changed_at: datetime) -> StudyItem:
         for index, item in enumerate(self.items):

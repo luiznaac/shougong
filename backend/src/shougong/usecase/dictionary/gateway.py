@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
+from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.model import (
     CedictRecord,
     DictionaryEntry,
@@ -14,7 +15,9 @@ from shougong.usecase.dictionary.model import (
 
 
 class IDictionaryRepository(Protocol):
-    async def search(self, query: str, limit: int) -> list[DictionaryEntry]: ...
+    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryEntry]:
+        """One page of the substring matches, plus the exact total of all matches."""
+        ...
 
     async def find_by_simplified(self, simplified: str) -> list[DictionaryEntry]:
         """Every entry with exactly this simplified form (a hanzi can have several readings)."""

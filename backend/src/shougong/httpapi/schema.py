@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date, datetime
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntry
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket, StudyOverview
@@ -38,6 +39,31 @@ from shougong.usecase.study.model import (
     StudySession,
 )
 from shougong.usecase.study_item_history.model import StudyItemHistory
+
+
+class PageResponse[T](BaseModel):
+    """The redesign's list envelope: one page plus the exact filtered total.
+
+    The page's order is authoritative; the client pages by `limit`/`offset` and
+    never re-sorts.
+    """
+
+    items: list[T]
+    total: int
+    limit: int
+    offset: int
+
+
+def page_response[PageItem, ResponseItem](
+    page: Page[PageItem], mapper: Callable[[PageItem], ResponseItem]
+) -> PageResponse[ResponseItem]:
+    """Wrap a domain page in the envelope, mapping each row to its transport DTO."""
+    return PageResponse[ResponseItem](
+        items=[mapper(item) for item in page.items],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+    )
 
 
 class HealthCheckResponse(BaseModel):

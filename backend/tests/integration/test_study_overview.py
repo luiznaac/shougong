@@ -123,7 +123,7 @@ async def test_the_aggregate_matches_the_per_endpoint_reads(container: Container
     await _seed_failures(container, leech, 3)
 
     body = await _overview(client)
-    items = (await client.get("/study-items", params={"limit": 200})).json()
+    items = (await client.get("/study-items", params={"limit": 100})).json()["items"]
 
     learning = [item for item in items if item["card"]["state"] == "learning"]
     due = [item for item in items if datetime.fromisoformat(item["card"]["due"]) <= _NOW]
@@ -143,7 +143,7 @@ async def test_the_aggregate_matches_the_per_endpoint_reads(container: Container
         "master": 1,
     }
 
-    leeches = (await client.get("/study-items", params={"leech": "true", "limit": 200})).json()
+    leeches = (await client.get("/study-items", params={"leech": "true", "limit": 100})).json()["items"]
     assert body["leech_count"] == len(leeches) == 1
 
     assert [row["date"] for row in body["next_seven_days"]] == [

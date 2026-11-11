@@ -3,6 +3,33 @@
 export type SrsRating = "again" | "hard" | "good" | "easy";
 export type SrsState = "learning" | "review" | "relearning";
 
+/** One page of a filtered, ordered list — the redesign's shared envelope. */
+export interface Page<T> {
+  items: T[];
+  total: number; // exact count of the filtered set
+  limit: number;
+  offset: number;
+}
+
+export type StudyItemSort = "due_asc" | "created_desc" | "stability_asc";
+
+/**
+ * Filters for `GET /study-items`. Values within one field OR, different fields
+ * AND. `due` is the shorthand for `due_to = now`; `hsk_level: "none"` selects
+ * entries outside the HSK list.
+ */
+export interface StudyItemListQuery {
+  due?: boolean;
+  leech?: boolean;
+  state?: SrsState[];
+  hsk_level?: (number | "none")[];
+  pos_tag?: string[];
+  search?: string;
+  due_from?: string; // ISO instant, inclusive
+  due_to?: string; // ISO instant, exclusive
+  sort?: StudyItemSort;
+}
+
 export interface DictionaryEntry {
   id: number;
   simplified: string;

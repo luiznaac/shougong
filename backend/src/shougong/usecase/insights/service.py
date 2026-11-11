@@ -14,9 +14,8 @@ from shougong.usecase.commons.exceptions import InvalidRangeError
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.insights.gateway import IInsightRepository
 from shougong.usecase.insights.model import ExtraStudyReport
-from shougong.usecase.insights.policy import ITEM_CAP, MAX_RANGE_DAYS, WINDOW_SIZE, is_leech, order_leeches
+from shougong.usecase.insights.policy import ITEM_CAP, MAX_RANGE_DAYS, WINDOW_SIZE, is_leech
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import StudyItem
 
 type ItemFlags = dict[int, bool]
 
@@ -49,23 +48,6 @@ class InsightService:
 
         if not item_ids:
             return {}
-        return await self._tx.execute(_run)
-
-    async def leech_items(self, *, limit: int = 50, offset: int = 0) -> tuple[list[StudyItem], ItemFlags]:
-        """The queue-wide leech list, worst first, paginated in the policy's order.
-
-        Every leech on the page carries `True` in the returned flag map, so the
-        HTTP layer can use one response mapper for both list flavours.
-        """
-
-        async def _run() -> tuple[list[StudyItem], ItemFlags]:
-            windows = await self._insights.list_grade_windows(None, window_size=WINDOW_SIZE)
-            page = order_leeches(windows)[offset : offset + limit]
-            items = await self._study.get_many([rank.study_item_id for rank in page])
-            by_id = {item.id: item for item in items}
-            ordered = [by_id[rank.study_item_id] for rank in page if rank.study_item_id in by_id]
-            return ordered, {item.id: True for item in ordered}
-
         return await self._tx.execute(_run)
 
     async def extra_study(self, *, start: datetime, end: datetime) -> ExtraStudyReport:
