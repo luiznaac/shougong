@@ -28,14 +28,10 @@ def _window(item_id: int, ratings: list[SrsRating]) -> GradeWindow:
     return GradeWindow(study_item_id=item_id, grades=grades)
 
 
-def _service(
-    *,
-    insights: FakeInsightRepository | None = None,
-    study: FakeStudyItemRepository | None = None,
-) -> InsightService:
+def _service(*, insights: FakeInsightRepository | None = None) -> InsightService:
     return InsightService(
         insights or FakeInsightRepository(),
-        study or FakeStudyItemRepository(),
+        FakeStudyItemRepository(),
         FakeTransactionTemplate(),
     )
 
@@ -63,24 +59,6 @@ async def test_leech_flags_of_an_empty_page_skips_the_read() -> None:
 
     assert flags == {}
     assert insights.window_calls == []
-
-
-async def test_leech_items_returns_the_worst_first_page() -> None:
-    study = FakeStudyItemRepository([make_study_item(item_id=i) for i in range(1, 4)])
-    insights = FakeInsightRepository(
-        [
-            _window(1, [SrsRating.AGAIN] * 3),
-            _window(2, [SrsRating.AGAIN] * 4),
-            _window(3, [SrsRating.GOOD]),
-        ]
-    )
-    service = _service(insights=insights, study=study)
-
-    items, flags = await service.leech_items(limit=1, offset=0)
-
-    assert [item.id for item in items] == [2]
-    assert flags == {2: True}
-    assert insights.window_calls == [(None, 10)]  # queue-wide: no id filter
 
 
 async def test_extra_study_returns_both_buckets_and_their_leech_flags() -> None:

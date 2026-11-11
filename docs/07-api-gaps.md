@@ -7,7 +7,7 @@ These endpoints are suggestions to support the desktop interface proposals in [0
 | # | Endpoint | Priority | Unlocks |
 | --- | --- | --- | --- |
 | 1 | ~~`GET /dashboard`~~ → `GET /study/overview` | Done | Today hub without client-side aggregation |
-| 2 | `GET /study-items` filters | High | Library, board, batch views |
+| 2 | ~~`GET /study-items` filters~~ | Done | Library, board, batch views (shipped with the list envelope) |
 | 3 | `DELETE /study-items/{id}` | High | Queue management (remove item) |
 | 4 | `PATCH /study-items/{id}` | Medium | Pause/reschedule an item |
 | 5 | ~~`GET /reading-texts/{id}`~~ | Done | Deep links and single-reading views — implemented with the summary list and `entry_id` filter |
@@ -27,7 +27,13 @@ tomorrow and excludes overdue and learning items.
 
 ## 2. Filtering on `GET /study-items`
 
-Today the endpoint supports only `due`, `limit`, and `offset`. The Library and Board views need:
+**Done** in the list-contract build ticket: `GET /study-items` accepts the parameters
+below, returns the `{ items, total, limit, offset }` envelope, and
+`GET /dictionary-entries` gained `offset` plus the same envelope. The encoding below
+is the original proposal; the settled semantics (repeatable params, three sorts,
+leech ordering) are in [04-api.md](04-api.md#study-item-list).
+
+Before this change the endpoint supported only `due`, `limit`, and `offset`. The Library and Board views needed:
 
 ```text
 GET /study-items?state=learning,review&hsk_level=1,2&pos_tag=verb
@@ -85,4 +91,4 @@ offset }` and each row carrying the study item's id (`study_item_id`, or `null`)
 ## Non-endpoint suggestions
 
 - **Server-computed SRS level hints**: the client currently derives Novice/Apprentice/Journeyman/Expert/Master from `stability`. For consistency across future clients, consider a read-only presentation field (or separate ladder endpoint) derived in one place.
-- **Pagination metadata**: `X-Total-Count` or a `{ items, total, limit, offset }` envelope would remove the "page until short page" client pattern.
+- **Pagination metadata**: done — the `{ items, total, limit, offset }` envelope ships on the redesign's list routes (see [04-api.md](04-api.md#list-envelope)).

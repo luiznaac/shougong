@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Select, delete, exists, select
+from sqlalchemy import Select, case, delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.selectable import Subquery
 
 from shougong.persistence.configuration.time import as_utc as _as_utc
 from shougong.persistence.configuration.time import naive_utc as _naive_utc
@@ -18,10 +20,12 @@ from shougong.persistence.dictionary.entity import DictionaryEntryEntity
 from shougong.persistence.dictionary.repository import to_domain as _entry_to_domain
 from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity, StudyItemPriorityEntity
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
+from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.model import DictionaryEntry
+from shougong.usecase.insights.policy import THRESHOLD, WINDOW_SIZE
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem
+from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem, StudyItemFilters, StudyItemSort
 from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
 
 
@@ -60,6 +64,39 @@ def _with_priority_and_entry() -> Select[tuple[StudyItemEntity, DictionaryEntryE
         select(StudyItemEntity, DictionaryEntryEntity, StudyItemPriorityEntity.position)
         .join(DictionaryEntryEntity, StudyItemEntity.entry_id == DictionaryEntryEntity.id)
         .outerjoin(StudyItemPriorityEntity, StudyItemPriorityEntity.study_item_id == StudyItemEntity.id)
+    )
+
+
+def _leech_stats() -> Subquery:
+    """The leech set with its worst-first ordering keys, in one read.
+
+    The window and threshold come from the insight policy, so the rule's constants
+    live in one place; the integration suite pins this SQL result against the
+    derived `is_leech` flag over the same seed.
+    """
+    ranked = select(
+        ReviewLogEntity.study_item_id.label("item_id"),
+        ReviewLogEntity.rating.label("rating"),
+        ReviewLogEntity.review_datetime.label("review_datetime"),
+        func.row_number()
+        .over(
+            partition_by=ReviewLogEntity.study_item_id,
+            order_by=(ReviewLogEntity.review_datetime.desc(), ReviewLogEntity.id.desc()),
+        )
+        .label("position"),
+    ).subquery()
+    again = ranked.c.rating == int(SrsRating.AGAIN)
+    failures = func.sum(case((again, 1), else_=0))
+    return (
+        select(
+            ranked.c.item_id,
+            failures.label("failure_count"),
+            func.max(case((again, ranked.c.review_datetime))).label("latest_failure"),
+        )
+        .where(ranked.c.position <= WINDOW_SIZE)
+        .group_by(ranked.c.item_id)
+        .having(failures >= THRESHOLD)
+        .subquery()
     )
 
 
@@ -256,14 +293,73 @@ class StudyItemRepository(IStudyItemRepository):
     # NOTE: keep this method last — see the matching note on the port in
     # usecase/study/gateway.py (its name shadows the builtin `list` for any
     # annotation written after it in this class body).
-    async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]:
-        async def _run() -> list[StudyItem]:
+    async def list(self, filters: StudyItemFilters, *, limit: int, offset: int) -> Page[StudyItem]:
+        async def _run() -> Page[StudyItem]:
             session = current_session()
             stmt = _with_priority_and_entry()
-            if due_before is not None:
-                stmt = stmt.where(StudyItemEntity.card_due <= _naive_utc(due_before))
-            stmt = stmt.order_by(StudyItemEntity.card_due, StudyItemEntity.id).limit(limit).offset(offset)
-            rows = (await session.execute(stmt)).all()
-            return [to_domain(item, entry, position) for item, entry, position in rows]
+            leech = _leech_stats() if filters.leech else None
+            if leech is not None:
+                stmt = stmt.join(leech, leech.c.item_id == StudyItemEntity.id)
+
+            predicates = []
+            if filters.due_from is not None:
+                predicates.append(StudyItemEntity.card_due >= _naive_utc(filters.due_from))
+            if filters.due_to is not None:
+                predicates.append(StudyItemEntity.card_due < _naive_utc(filters.due_to))
+            if filters.states:
+                predicates.append(StudyItemEntity.card_state.in_([int(state) for state in filters.states]))
+            if filters.hsk_levels:
+                levels = [level for level in filters.hsk_levels if level is not None]
+                level_predicates = []
+                if levels:
+                    level_predicates.append(DictionaryEntryEntity.hsk_level.in_(levels))
+                if None in filters.hsk_levels:
+                    level_predicates.append(DictionaryEntryEntity.hsk_level.is_(None))
+                predicates.append(or_(*level_predicates))
+            if filters.pos_tags:
+                predicates.append(
+                    func.json_overlaps(
+                        DictionaryEntryEntity.pos_tags,
+                        json.dumps(list(filters.pos_tags)),
+                    )
+                )
+            if filters.search is not None:
+                pattern = f"%{filters.search}%"
+                predicates.append(
+                    or_(
+                        DictionaryEntryEntity.simplified.ilike(pattern),
+                        DictionaryEntryEntity.pinyin.ilike(pattern),
+                    )
+                )
+            if predicates:
+                stmt = stmt.where(*predicates)
+
+            total = await session.scalar(select(func.count()).select_from(stmt.subquery()))
+
+            if leech is not None and filters.sort is None:
+                stmt = stmt.order_by(
+                    leech.c.failure_count.desc(),
+                    leech.c.latest_failure.desc(),
+                    StudyItemEntity.id.asc(),
+                )
+            else:
+                sort = filters.sort or StudyItemSort.DUE_ASC
+                if sort is StudyItemSort.CREATED_DESC:
+                    stmt = stmt.order_by(StudyItemEntity.created_at.desc(), StudyItemEntity.id.desc())
+                elif sort is StudyItemSort.STABILITY_ASC:
+                    stmt = stmt.order_by(
+                        StudyItemEntity.card_stability.is_(None),
+                        StudyItemEntity.card_stability.asc(),
+                        StudyItemEntity.id.asc(),
+                    )
+                else:
+                    stmt = stmt.order_by(StudyItemEntity.card_due.asc(), StudyItemEntity.id.asc())
+            rows = (await session.execute(stmt.limit(limit).offset(offset))).all()
+            return Page(
+                items=tuple(to_domain(item, entry, position) for item, entry, position in rows),
+                total=int(total or 0),
+                limit=limit,
+                offset=offset,
+            )
 
         return await self._tx.execute(_run)

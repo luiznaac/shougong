@@ -1,15 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 
-from shougong.usecase.commons.exceptions import ConflictError, ResourceNotFoundError
+from shougong.usecase.commons.exceptions import ConflictError, InvalidRangeError, ResourceNotFoundError
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.srs.model import SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.strokes.service import StrokeService
-from shougong.usecase.study.model import BatchImportRow, BatchRowStatus, PriorityEdge, SessionKind
+from shougong.usecase.study.model import (
+    BatchImportRow,
+    BatchRowStatus,
+    PriorityEdge,
+    SessionKind,
+    StudyItemFilters,
+    StudyItemSort,
+)
 from shougong.usecase.study.service import StudyService
 from tests.fixtures import (
     DeterministicShuffler,
@@ -88,16 +97,190 @@ async def test_add_item_warms_the_stroke_cache_for_each_character() -> None:
     assert stroke_source.fetch_calls == 1
 
 
-async def test_list_items_due_only_filters_by_the_clock() -> None:
-    soon = make_study_item(item_id=1, card=make_srs_card(due=_NOW))
+async def test_list_items_pages_the_filtered_set_with_its_exact_total() -> None:
+    items = [make_study_item(item_id=i) for i in (1, 2, 3)]
+    service = _service(study=FakeStudyItemRepository(items))
+
+    first = await service.list_items(StudyItemFilters(), limit=2, offset=0)
+    second = await service.list_items(StudyItemFilters(), limit=2, offset=2)
+
+    assert [i.id for i in first.items] == [1, 2]
+    assert first.total == 3
+    assert (first.limit, first.offset) == (2, 0)
+    assert [i.id for i in second.items] == [3]
+    assert second.total == 3
+
+
+async def test_list_items_due_shorthand_uses_the_clock_as_its_upper_bound() -> None:
+    soon = make_study_item(item_id=1, card=make_srs_card(due=_NOW - timedelta(days=1)))
     later = make_study_item(item_id=2, card=make_srs_card(due=_NOW.replace(year=2027)))
     service = _service(study=FakeStudyItemRepository([soon, later]))
 
-    due = await service.list_items(due_only=True)
-    all_items = await service.list_items(due_only=False)
+    due = await service.list_items(StudyItemFilters(due=True))
+    everything = await service.list_items(StudyItemFilters())
 
-    assert [i.id for i in due] == [1]
-    assert [i.id for i in all_items] == [1, 2]
+    assert [i.id for i in due.items] == [1]
+    assert [i.id for i in everything.items] == [1, 2]
+
+
+async def test_list_items_due_keeps_the_earlier_of_clock_and_explicit_due_to() -> None:
+    explicit_upper = _NOW.replace(year=2025, month=12, day=1)
+    items = [
+        make_study_item(item_id=1, card=make_srs_card(due=explicit_upper - timedelta(days=1))),
+        make_study_item(item_id=2, card=make_srs_card(due=explicit_upper + timedelta(days=1))),
+        make_study_item(item_id=3, card=make_srs_card(due=_NOW)),
+    ]
+    service = _service(study=FakeStudyItemRepository(items))
+
+    page = await service.list_items(StudyItemFilters(due=True, due_to=explicit_upper))
+
+    assert [i.id for i in page.items] == [1]
+
+
+async def test_list_items_due_range_is_half_open() -> None:
+    start = _NOW.replace(month=3)
+    end = _NOW.replace(month=6)
+    items = [
+        make_study_item(item_id=1, card=make_srs_card(due=start)),
+        make_study_item(item_id=2, card=make_srs_card(due=end)),
+    ]
+    service = _service(study=FakeStudyItemRepository(items))
+
+    page = await service.list_items(StudyItemFilters(due_from=start, due_to=end))
+
+    assert [i.id for i in page.items] == [1]
+
+
+async def test_list_items_rejects_an_inverted_due_range() -> None:
+    service = _service()
+
+    with pytest.raises(InvalidRangeError):
+        await service.list_items(StudyItemFilters(due_from=_NOW, due_to=_NOW))
+
+
+async def test_list_items_state_filter_is_any_of() -> None:
+    review = make_srs_card(state=SrsState.REVIEW)
+    relearning = make_srs_card(state=SrsState.RELEARNING)
+    items = [
+        make_study_item(item_id=1, card=review),
+        make_study_item(item_id=2, card=relearning),
+        make_study_item(item_id=3),  # learning
+    ]
+    service = _service(study=FakeStudyItemRepository(items))
+
+    page = await service.list_items(StudyItemFilters(states=(SrsState.REVIEW, SrsState.RELEARNING)))
+
+    assert [i.id for i in page.items] == [1, 2]
+
+
+async def test_list_items_hsk_filter_accepts_levels_and_none() -> None:
+    items = [
+        make_study_item(item_id=1, entry=make_dictionary_entry(entry_id=1, hsk_level=1)),
+        make_study_item(item_id=2, entry=make_dictionary_entry(entry_id=2, hsk_level=3)),
+        make_study_item(item_id=3, entry=make_dictionary_entry(entry_id=3, hsk_level=None)),
+    ]
+    service = _service(study=FakeStudyItemRepository(items))
+
+    level_three = await service.list_items(StudyItemFilters(hsk_levels=(3,)))
+    outside_hsk = await service.list_items(StudyItemFilters(hsk_levels=(None,)))
+
+    assert [i.id for i in level_three.items] == [2]
+    assert [i.id for i in outside_hsk.items] == [3]
+
+
+async def test_list_items_pos_tag_filter_intersects_the_entry_tags() -> None:
+    items = [
+        make_study_item(item_id=1, entry=make_dictionary_entry(entry_id=1, pos_tags=("v", "n"))),
+        make_study_item(item_id=2, entry=make_dictionary_entry(entry_id=2, pos_tags=("a",))),
+    ]
+    service = _service(study=FakeStudyItemRepository(items))
+
+    page = await service.list_items(StudyItemFilters(pos_tags=("v",)))
+
+    assert [i.id for i in page.items] == [1]
+
+
+async def test_list_items_search_matches_simplified_or_pinyin_case_insensitively() -> None:
+    items = [
+        make_study_item(
+            item_id=1,
+            entry=make_dictionary_entry(entry_id=1, simplified="学习", pinyin="xue2 xi2"),
+        ),
+        make_study_item(
+            item_id=2,
+            entry=make_dictionary_entry(entry_id=2, simplified="水", pinyin="shui3"),
+        ),
+    ]
+    service = _service(study=FakeStudyItemRepository(items))
+
+    by_hanzi = await service.list_items(StudyItemFilters(search="学"))
+    by_pinyin = await service.list_items(StudyItemFilters(search="XUE2"))
+
+    assert [i.id for i in by_hanzi.items] == [1]
+    assert [i.id for i in by_pinyin.items] == [1]
+
+
+async def test_list_items_filters_combine_with_and() -> None:
+    items = [
+        make_study_item(
+            item_id=1,
+            entry=make_dictionary_entry(entry_id=1, simplified="学习", hsk_level=1),
+        ),
+        make_study_item(
+            item_id=2,
+            entry=make_dictionary_entry(entry_id=2, simplified="学", hsk_level=2),
+        ),
+    ]
+    service = _service(study=FakeStudyItemRepository(items))
+
+    page = await service.list_items(StudyItemFilters(search="学", hsk_levels=(1,)))
+
+    assert [i.id for i in page.items] == [1]
+
+
+async def test_list_items_sorts_by_created_desc_and_stability_asc_nulls_last() -> None:
+    items = [
+        make_study_item(item_id=1, created_at=_NOW, card=make_srs_card()),
+        make_study_item(item_id=2, created_at=_NOW.replace(year=2027), card=make_srs_card()),
+    ]
+    items[0] = replace(items[0], card=replace(items[0].card, stability=2.0))
+    items[1] = replace(items[1], card=replace(items[1].card, stability=None))
+    service = _service(study=FakeStudyItemRepository(items))
+
+    newest = await service.list_items(StudyItemFilters(sort=StudyItemSort.CREATED_DESC))
+    weakest = await service.list_items(StudyItemFilters(sort=StudyItemSort.STABILITY_ASC))
+
+    assert [i.id for i in newest.items] == [2, 1]
+    assert [i.id for i in weakest.items] == [1, 2]
+
+
+async def test_list_items_leech_filter_orders_worst_first() -> None:
+    study = FakeStudyItemRepository([make_study_item(item_id=i) for i in (1, 2, 3)])
+    study.review_logs = {
+        1: [SrsReviewLog(rating=SrsRating.AGAIN, review_datetime=_NOW)] * 3,
+        2: [SrsReviewLog(rating=SrsRating.AGAIN, review_datetime=_NOW)] * 5,
+        3: [SrsReviewLog(rating=SrsRating.GOOD, review_datetime=_NOW)],
+    }
+    service = _service(study=study)
+
+    page = await service.list_items(StudyItemFilters(leech=True))
+
+    assert [i.id for i in page.items] == [2, 1]
+    assert page.total == 2
+
+
+async def test_list_items_explicit_sort_overrides_the_leech_order_but_not_the_filter() -> None:
+    study = FakeStudyItemRepository([make_study_item(item_id=i) for i in (1, 2, 3)])
+    study.review_logs = {
+        1: [SrsReviewLog(rating=SrsRating.AGAIN, review_datetime=_NOW)] * 3,
+        2: [SrsReviewLog(rating=SrsRating.AGAIN, review_datetime=_NOW)] * 5,
+        3: [SrsReviewLog(rating=SrsRating.GOOD, review_datetime=_NOW)],
+    }
+    service = _service(study=study)
+
+    page = await service.list_items(StudyItemFilters(leech=True, sort=StudyItemSort.DUE_ASC))
+
+    assert [i.id for i in page.items] == [1, 2]
 
 
 async def test_get_item_missing_raises_not_found() -> None:

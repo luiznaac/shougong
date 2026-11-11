@@ -5,6 +5,7 @@ import type {
   DictionaryEntry,
   ExtraStudy,
   GenerateReadingRequest,
+  Page,
   PriorityEdge,
   ReadingSummaryPage,
   ReadingTopic,
@@ -16,6 +17,7 @@ import type {
   SrsRating,
   StudyItem,
   StudyItemHistory,
+  StudyItemListQuery,
   StudyOverview,
   StudySession,
   VocabularyOverview,
@@ -23,9 +25,9 @@ import type {
 
 const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
 
-export interface StudyItemListQuery {
-  due?: boolean;
-  leech?: boolean;
+interface PageRequest {
+  limit?: number;
+  offset?: number;
 }
 
 export class ApiError extends Error {
@@ -59,8 +61,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   // --- dictionary ---
-  searchDictionary(q: string, limit = 20): Promise<DictionaryEntry[]> {
-    return request(`/dictionary-entries?q=${encodeURIComponent(q)}&limit=${limit}`);
+  searchDictionary(q: string, limit = 20, offset = 0): Promise<Page<DictionaryEntry>> {
+    const p = new URLSearchParams({ q, limit: String(limit) });
+    if (offset) p.set("offset", String(offset));
+    return request(`/dictionary-entries?${p}`);
   },
   getDictionaryEntry(id: number): Promise<DictionaryEntry> {
     return request(`/dictionary-entries/${id}`);
@@ -75,29 +79,27 @@ export const api = {
   },
 
   // --- study items ---
-  listStudyItems(
-    opts: StudyItemListQuery & { limit?: number; offset?: number } = {},
-  ): Promise<StudyItem[]> {
-    // Backend caps limit at 200; page through when more are needed.
-    const pageSize = Math.min(opts.limit ?? 200, 200);
+  listStudyItems(opts: StudyItemListQuery & PageRequest = {}): Promise<Page<StudyItem>> {
     const p = new URLSearchParams();
     if (opts.due) p.set("due", "true");
     if (opts.leech) p.set("leech", "true");
-    p.set("limit", String(pageSize));
+    for (const state of opts.state ?? []) p.append("state", state);
+    for (const level of opts.hsk_level ?? []) p.append("hsk_level", String(level));
+    for (const tag of opts.pos_tag ?? []) p.append("pos_tag", tag);
+    if (opts.search) p.set("search", opts.search);
+    if (opts.due_from) p.set("due_from", opts.due_from);
+    if (opts.due_to) p.set("due_to", opts.due_to);
+    if (opts.sort) p.set("sort", opts.sort);
+    p.set("limit", String(Math.min(opts.limit ?? 20, 100)));
     if (opts.offset) p.set("offset", String(opts.offset));
     return request(`/study-items?${p}`);
   },
   async listAllStudyItems(opts: StudyItemListQuery = {}): Promise<StudyItem[]> {
     const all: StudyItem[] = [];
-    for (let offset = 0; ; offset += 200) {
-      const page = await api.listStudyItems({
-        due: opts.due,
-        leech: opts.leech,
-        limit: 200,
-        offset,
-      });
-      all.push(...page);
-      if (page.length < 200) break;
+    for (let offset = 0; ; offset += 100) {
+      const page = await api.listStudyItems({ ...opts, limit: 100, offset });
+      all.push(...page.items);
+      if (page.items.length < 100 || all.length >= page.total) break;
     }
     return all;
   },

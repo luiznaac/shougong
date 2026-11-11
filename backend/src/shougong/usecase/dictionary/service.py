@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.commons.logging import get_logger
+from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
 from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntryPage
 
@@ -14,10 +15,10 @@ class DictionaryService:
     def __init__(self, repository: IDictionaryRepository) -> None:
         self._repository = repository
 
-    async def search(self, query: str, limit: int = 20) -> list[DictionaryEntry]:
-        entries = await self._repository.search(query.strip(), limit)
-        _log.info("dictionary.searched", query=query, count=len(entries))
-        return entries
+    async def search(self, query: str, limit: int = 20, offset: int = 0) -> Page[DictionaryEntry]:
+        page = await self._repository.search(query.strip(), limit=limit, offset=offset)
+        _log.info("dictionary.searched", query=query, count=len(page.items), total=page.total)
+        return page
 
     async def get(self, entry_id: int) -> DictionaryEntry:
         entry = await self._repository.get(entry_id)

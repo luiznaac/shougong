@@ -2,8 +2,9 @@
 
 `POST /study-items`              enqueue a dictionary entry (201 + Location).
 `POST /study-items/batch`        enqueue many from CSV rows (hanzi + pinyin); returns a per-row report.
-`GET  /study-items`              list items; `?due=true` filters to what's due now;
-                                `?leech=true` returns the worst-first leech list.
+`GET  /study-items`              one page of the filtered, ordered queue (envelope);
+                                 `?leech=true` filters to leeches, worst-first unless
+                                 `sort` is given.
 `GET  /study-items/{id}`         a single item.
 `POST /study-items/{id}/reviews` grade an item and let FSRS reschedule it (201 + Location);
                                  409 if the item is not due yet.
@@ -18,24 +19,52 @@ selection lives in `StudySessionController`.
 
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Response
+from pydantic import AfterValidator
 
 from shougong.httpapi.controller.base import IController
 from shougong.httpapi.schema import (
     AddStudyItemRequest,
     BatchImportRequest,
     BatchImportResponse,
+    PageResponse,
     PriorityRequest,
     ReviewLogResponse,
     ReviewRequest,
     ReviewResponse,
     StudyItemResponse,
+    page_response,
 )
 from shougong.usecase.insights.service import InsightService
-from shougong.usecase.study.model import BatchImportRow
+from shougong.usecase.srs.model import SrsState
+from shougong.usecase.study.model import BatchImportRow, StudyItemFilters, StudyItemSort
 from shougong.usecase.study.service import StudyService
+
+type HskLevelParam = Literal["1", "2", "3", "4", "5", "6", "7", "8", "9", "none"]
+type StateParam = Literal["learning", "review", "relearning"]
+
+
+def _trimmed_search(value: str) -> str:
+    """Reject a whitespace-only search and hand the service the trimmed needle."""
+    trimmed = value.strip()
+    if not trimmed:
+        raise ValueError("search must not be blank")
+    return trimmed
+
+
+def _aware_instant(value: datetime) -> datetime:
+    """The range bounds are instants: a naive datetime would make the two bounds
+    uncomparable, so reject it as a validation error (422) rather than fail later."""
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("instant must include a timezone")
+    return value
+
+
+def _hsk_level(value: HskLevelParam) -> int | None:
+    return None if value == "none" else int(value)
 
 
 class StudyController(IController):
@@ -63,15 +92,33 @@ class StudyController(IController):
         async def list_items(
             due: bool = False,
             leech: bool = False,
-            limit: Annotated[int, Query(ge=1, le=200)] = 50,
+            state: Annotated[list[StateParam] | None, Query()] = None,
+            hsk_level: Annotated[list[HskLevelParam] | None, Query()] = None,
+            pos_tag: Annotated[list[str] | None, Query()] = None,
+            search: Annotated[str, AfterValidator(_trimmed_search)] | None = None,
+            due_from: Annotated[datetime, AfterValidator(_aware_instant)] | None = None,
+            due_to: Annotated[datetime, AfterValidator(_aware_instant)] | None = None,
+            sort: StudyItemSort | None = None,
+            limit: Annotated[int, Query(ge=1, le=100)] = 20,
             offset: Annotated[int, Query(ge=0)] = 0,
-        ) -> list[StudyItemResponse]:
-            if leech:
-                items, flags = await self._insights.leech_items(limit=limit, offset=offset)
-            else:
-                items = await self._service.list_items(due_only=due, limit=limit, offset=offset)
-                flags = await self._insights.leech_flags([item.id for item in items])
-            return [StudyItemResponse.from_domain(item, is_leech=flags.get(item.id, False)) for item in items]
+        ) -> PageResponse[StudyItemResponse]:
+            filters = StudyItemFilters(
+                due=due,
+                leech=leech,
+                states=tuple(SrsState[value.upper()] for value in state or ()),
+                hsk_levels=tuple(_hsk_level(value) for value in hsk_level or ()),
+                pos_tags=tuple(pos_tag or ()),
+                search=search,
+                due_from=due_from,
+                due_to=due_to,
+                sort=sort,
+            )
+            page = await self._service.list_items(filters, limit=limit, offset=offset)
+            flags = await self._insights.leech_flags([item.id for item in page.items])
+            return page_response(
+                page,
+                lambda item: StudyItemResponse.from_domain(item, is_leech=flags.get(item.id, False)),
+            )
 
         @router.get("/{item_id}")
         async def get(item_id: int) -> StudyItemResponse:

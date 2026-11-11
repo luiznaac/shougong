@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from shougong.usecase.commons.asyncx import fire_and_forget
-from shougong.usecase.commons.exceptions import ConflictError, ResourceNotFoundError
+from shougong.usecase.commons.exceptions import ConflictError, InvalidRangeError, ResourceNotFoundError
 from shougong.usecase.commons.logging import get_logger
+from shougong.usecase.commons.page import Page
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
@@ -28,6 +29,7 @@ from shougong.usecase.study.model import (
     ReviewResult,
     SessionKind,
     StudyItem,
+    StudyItemFilters,
     StudySession,
 )
 from shougong.usecase.study.shuffler import IShuffler
@@ -204,9 +206,27 @@ class StudyService:
             return _NeedsAChoice(detail=f"múltiplas entradas do dicionário casam: {listed}", candidates=tuple(matches))
         return matches[0]
 
-    async def list_items(self, *, due_only: bool, limit: int = 50, offset: int = 0) -> list[StudyItem]:
-        due_before = self._clock.now() if due_only else None
-        return await self._study.list(due_before=due_before, limit=limit, offset=offset)
+    async def list_items(
+        self,
+        filters: StudyItemFilters,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> Page[StudyItem]:
+        """One page of the filtered, ordered queue and the filtered set's exact total.
+
+        `due` is resolved here so adapters see only instant bounds: with an
+        explicit `due_to`, the earlier of it and the clock wins again.
+        """
+        if filters.due:
+            now = self._clock.now()
+            upper = now if filters.due_to is None else min(filters.due_to, now)
+            filters = replace(filters, due=False, due_to=upper)
+        if filters.search is not None:
+            filters = replace(filters, search=filters.search.strip())
+        if filters.due_from is not None and filters.due_to is not None and filters.due_from >= filters.due_to:
+            raise InvalidRangeError("study-item range is inverted: 'due_from' must be before 'due_to'")
+        return await self._study.list(filters, limit=limit, offset=offset)
 
     async def get_item(self, item_id: int) -> StudyItem:
         item = await self._study.get(item_id)

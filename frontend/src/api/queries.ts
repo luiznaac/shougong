@@ -7,19 +7,19 @@ import {
 } from "@tanstack/react-query";
 import { applyCachedPriority, predictPriorityPosition } from "../lib/lessonQueue.ts";
 import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
-import { type StudyItemListQuery, api } from "./client.ts";
+import { api } from "./client.ts";
 import type {
   GenerateReadingRequest,
   PriorityEdge,
   SessionKind,
   SrsRating,
   StudyItem,
+  StudyItemListQuery,
 } from "./types.ts";
 
 export const keys = {
   studyItemsPrefix: ["study-items"] as const,
-  studyItems: (opts: StudyItemListQuery = {}) =>
-    ["study-items", { due: opts.due ?? false, leech: opts.leech ?? false }] as const,
+  studyItems: (opts: StudyItemListQuery = {}) => ["study-items", opts] as const,
   studyItem: (id: number) => ["study-items", id] as const,
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
@@ -101,7 +101,8 @@ export function useLearningToReviewHistory() {
 export function useDictionarySearch(q: string, limit = 20) {
   return useQuery({
     queryKey: ["dictionary", q, limit],
-    queryFn: () => api.searchDictionary(q, limit),
+    // The envelope's total is available for the redesign; today's pages consume rows only.
+    queryFn: async () => (await api.searchDictionary(q, limit)).items,
     enabled: q.trim().length > 0,
   });
 }

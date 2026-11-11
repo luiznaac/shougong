@@ -6,9 +6,10 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
+from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.srs.model import SrsCard, SrsReviewLog
-from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem
+from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem, StudyItemFilters
 
 
 class IStudyItemRepository(Protocol):
@@ -58,4 +59,10 @@ class IStudyItemRepository(Protocol):
     # annotation written after it in this class body (mypy resolves the bare
     # `list[...]` forward reference against the class namespace, where `list`
     # is now this method).
-    async def list(self, *, due_before: datetime | None, limit: int, offset: int) -> list[StudyItem]: ...
+    async def list(self, filters: StudyItemFilters, *, limit: int, offset: int) -> Page[StudyItem]:
+        """One page of the filtered, ordered queue, plus the exact filtered total.
+
+        `filters.due` never reaches the adapter: the service resolves it into
+        `due_to`. An adapter honours `due_to` exclusively (`card.due < due_to`).
+        """
+        ...

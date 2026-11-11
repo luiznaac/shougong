@@ -31,7 +31,7 @@ async def test_add_lists_and_fetches_a_study_item(container: Container, client: 
     assert body["card"]["due"].endswith("T00:00:00Z")  # snapped to the day boundary
 
     listed = await client.get("/study-items")
-    assert [row["id"] for row in listed.json()] == [body["id"]]
+    assert [row["id"] for row in listed.json()["items"]] == [body["id"]]
 
     fetched = await client.get(f"/study-items/{body['id']}")
     assert fetched.status_code == 200
@@ -45,7 +45,7 @@ async def test_new_item_shows_up_as_due(container: Container, client: httpx.Asyn
     due = await client.get("/study-items", params={"due": "true"})
 
     assert due.status_code == 200
-    assert len(due.json()) == 1
+    assert len(due.json()["items"]) == 1
 
 
 async def test_adding_the_same_entry_twice_conflicts(container: Container, client: httpx.AsyncClient) -> None:
@@ -90,7 +90,7 @@ async def test_batch_import_reports_each_row(container: Container, client: httpx
     assert body["outcomes"][0]["study_item_id"] is not None
 
     listed = await client.get("/study-items")
-    assert {row["entry"]["simplified"] for row in listed.json()} == {"学习", "你好"}
+    assert {row["entry"]["simplified"] for row in listed.json()["items"]} == {"学习", "你好"}
 
     # re-uploading the same rows now skips everything that resolves
     again = (await client.post("/study-items/batch", json={"rows": [{"hanzi": "学习", "pinyin": "xue2 xi2"}]})).json()
@@ -141,7 +141,7 @@ async def test_batch_import_rejects_an_empty_row_list(container: Container, clie
 async def test_reviewing_an_item_reschedules_it(container: Container, client: httpx.AsyncClient) -> None:
     entry_id = await _seed_entry(container, simplified="木", pinyin="mu4")
     item_id = (await client.post("/study-items", json={"dictionary_entry_id": entry_id})).json()["id"]
-    assert len((await client.get("/study-items", params={"due": "true"})).json()) == 1
+    assert len((await client.get("/study-items", params={"due": "true"})).json()["items"]) == 1
 
     reviewed = await client.post(f"/study-items/{item_id}/reviews", json={"rating": "good"})
 
@@ -153,7 +153,7 @@ async def test_reviewing_an_item_reschedules_it(container: Container, client: ht
     assert body["item"]["card"]["last_review"] is not None
 
     # no longer due, and the card moved into the future
-    assert (await client.get("/study-items", params={"due": "true"})).json() == []
+    assert (await client.get("/study-items", params={"due": "true"})).json()["items"] == []
     fetched = await client.get(f"/study-items/{item_id}")
     assert fetched.json()["card"]["due"] > body["item"]["created_at"]
 

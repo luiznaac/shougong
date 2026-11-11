@@ -39,7 +39,21 @@ async def test_search_trims_query_and_respects_limit() -> None:
 
     results = await service.search("  学  ", limit=3)
 
-    assert len(results) == 3
+    assert len(results.items) == 3
+
+
+async def test_search_pages_matches_with_an_exact_total() -> None:
+    entries = [make_dictionary_entry(entry_id=i, simplified="学习") for i in range(1, 6)]
+    service = DictionaryService(FakeDictionaryRepository(entries))
+
+    first = await service.search("学", limit=2, offset=0)
+    second = await service.search("学", limit=2, offset=2)
+
+    assert [e.id for e in first.items] == [1, 2]
+    assert first.total == 5
+    assert (first.limit, first.offset) == (2, 0)
+    assert [e.id for e in second.items] == [3, 4]
+    assert second.total == 5
 
 
 async def test_populate_if_empty_loads_when_table_is_empty() -> None:
