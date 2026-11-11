@@ -6,6 +6,7 @@ import { AppShell } from "./components/AppShell.tsx";
 import { Placeholder } from "./components/Placeholder.tsx";
 import { AddItems } from "./pages/AddItems.tsx";
 import { BatchImport } from "./pages/BatchImport.tsx";
+import { ItemIndex } from "./pages/ItemIndex.tsx";
 import { Lesson } from "./pages/Lesson.tsx";
 import { Practice } from "./pages/Practice.tsx";
 import { Reading } from "./pages/Reading.tsx";
@@ -39,6 +40,7 @@ describe("route table", () => {
   });
 
   it("moves the migrated surfaces onto their new IA paths", () => {
+    expect(elementType(child("biblioteca")?.element)).toBe(ItemIndex);
     expect(elementType(child("biblioteca/adicionar")?.element)).toBe(AddItems);
     expect(elementType(child("biblioteca/importar")?.element)).toBe(BatchImport);
     expect(elementType(child("biblioteca/itens/:id")?.element)).toBe(StudyItemPage);
@@ -46,7 +48,7 @@ describe("route table", () => {
   });
 
   it("renders the one shared placeholder on surfaces that have not migrated", () => {
-    for (const path of ["biblioteca", "progresso", "ajustes"]) {
+    for (const path of ["progresso", "ajustes"]) {
       expect(elementType(child(path)?.element)).toBe(Placeholder);
     }
   });

@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import type { StudyItem } from "../api/types.ts";
 import { itemPath } from "../lib/navigation.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
-import { tileBadges } from "../lib/tileBadges.ts";
 import { Hanzi } from "./Hanzi.tsx";
+import { ItemBadges } from "./ItemBadges.tsx";
 import { Pinyin } from "./Pinyin.tsx";
 
 /**
@@ -21,17 +21,7 @@ export function StudyItemTile({ item }: { item: StudyItem }) {
       style={{ borderColor: levelColor(level) }}
     >
       <span className="absolute top-1 right-1 flex gap-0.5">
-        {tileBadges(item).map((badge) => (
-          <span
-            key={badge.kind}
-            role="img"
-            aria-label={badge.label}
-            title={badge.title}
-            className="rounded-full bg-slate-950/85 px-1 text-[10px] leading-4"
-          >
-            {badge.emoji}
-          </span>
-        ))}
+        <ItemBadges item={item} size={12} />
       </span>
       <span className="max-w-full truncate text-[11px] leading-tight">
         <Pinyin value={item.entry.pinyin} />

@@ -1,26 +1,28 @@
 import type { StudyItem } from "../api/types.ts";
+import type { IconName } from "../components/icons.tsx";
 import { isPinned } from "./lessonQueue.ts";
 
 export type TileBadgeKind = "leech" | "priority";
 
 export interface TileBadge {
   kind: TileBadgeKind;
-  emoji: string;
-  /** pt-BR accessible name — the meaning survives without the emoji or colour. */
+  /** The drawn badge glyph — the one icon source the tile and the list share. */
+  icon: IconName;
+  /** pt-BR accessible name — the meaning survives without the icon or colour. */
   label: string;
   title: string;
 }
 
 const LEECH: TileBadge = {
   kind: "leech",
-  emoji: "👻",
+  icon: "ghost",
   label: "Sanguessuga",
   title: "Sanguessuga — falhas recorrentes",
 };
 
 const PRIORITY: TileBadge = {
   kind: "priority",
-  emoji: "⚡",
+  icon: "bolt",
   label: "Prioridade",
   title: "Prioridade — fixado na fila de lições",
 };

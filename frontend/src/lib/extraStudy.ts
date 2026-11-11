@@ -73,11 +73,18 @@ export function clampRangeEndpoint(
   return { from: range.from, to: clamped < range.from ? range.from : clamped };
 }
 
+/** The instant a local calendar day starts (00:00 in the browser's zone). */
+export function dayStartInstant(day: Day): string {
+  return parseDay(day).toISOString();
+}
+
+/** The instant a local calendar day ends — the next day's 00:00 (exclusive). */
+export function dayEndInstant(day: Day): string {
+  return dayStartInstant(addDays(day, 1));
+}
+
 export function rangeInstants(range: ExtraStudyRange): { from: string; to: string } {
-  const start = parseDay(range.from);
-  const end = parseDay(range.to);
-  end.setDate(end.getDate() + 1);
-  return { from: start.toISOString(), to: end.toISOString() };
+  return { from: dayStartInstant(range.from), to: dayEndInstant(range.to) };
 }
 
 export interface PracticeSearch {

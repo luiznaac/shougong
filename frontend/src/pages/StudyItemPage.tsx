@@ -1,25 +1,22 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useItemHistory, useStudyItem } from "../api/queries.ts";
-import type { SrsState } from "../api/types.ts";
 import { Hanzi } from "../components/Hanzi.tsx";
 import { ItemMetricChart } from "../components/ItemMetricChart.tsx";
 import { ItemPrioritySection } from "../components/ItemPrioritySection.tsx";
 import { Pinyin } from "../components/Pinyin.tsx";
 import { RelatedEntries } from "../components/RelatedEntries.tsx";
+import { SrsStageChip } from "../components/SrsStageChip.tsx";
 import { StrokeOrderPanel } from "../components/StrokeOrderPanel.tsx";
 import { StudyItemTile } from "../components/StudyItemTile.tsx";
+import { srsStateLabel } from "../i18n/srsState.ts";
 import { formatDate, formatDateTime } from "../lib/format.ts";
+import { PATHS } from "../lib/navigation.ts";
 import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
-import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
-
-const FSRS_STATE_LABEL: Record<SrsState, string> = {
-  learning: "Aprendendo",
-  review: "Em revisão",
-  relearning: "Reaprendendo",
-};
 
 export function StudyItemPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const listHref = (location.state as { from?: string } | null)?.from ?? PATHS.biblioteca;
   const itemId = Number(id);
   const { data: item, isLoading, error } = useStudyItem(itemId);
   const { data: snapshots } = useItemHistory(itemId);
@@ -28,11 +25,9 @@ export function StudyItemPage() {
   if (error) return <p className="text-rose-400">Falha ao carregar: {String(error)}</p>;
   if (!item) return null;
 
-  const level = levelOf(item.card);
-
   return (
     <div className="space-y-8">
-      <Link to="/biblioteca" className="text-sm text-slate-500 hover:text-slate-300">
+      <Link to={listHref} className="text-sm text-slate-500 hover:text-slate-300">
         ← Biblioteca
       </Link>
 
@@ -47,12 +42,7 @@ export function StudyItemPage() {
           className="text-slate-50"
         />
         <Pinyin value={item.entry.pinyin} className="text-3xl font-light" />
-        <span
-          className="rounded-full px-3 py-0.5 text-xs font-semibold text-white"
-          style={{ background: levelColor(level) }}
-        >
-          {levelLabel(level)}
-        </span>
+        <SrsStageChip card={item.card} />
       </header>
 
       <ItemPrioritySection item={item} />
@@ -76,7 +66,7 @@ export function StudyItemPage() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2">
-        <Fact label="Estado FSRS" value={FSRS_STATE_LABEL[item.card.state]} />
+        <Fact label="Estado FSRS" value={srsStateLabel(item.card.state)} />
         <Fact label="Próximo review" value={formatDate(item.card.due)} />
         <Fact
           label="Estabilidade"

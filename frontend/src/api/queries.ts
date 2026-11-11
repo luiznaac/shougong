@@ -2,10 +2,12 @@ import {
   type QueryClient,
   type QueryKey,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { applyCachedPriority, predictPriorityPosition } from "../lib/lessonQueue.ts";
+import type { ItemPageRequest } from "../lib/pagination.ts";
 import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
 import { api } from "./client.ts";
 import type {
@@ -20,6 +22,8 @@ import type {
 export const keys = {
   studyItemsPrefix: ["study-items"] as const,
   studyItems: (opts: StudyItemListQuery = {}) => ["study-items", opts] as const,
+  studyItemPage: (opts: StudyItemListQuery, limit: number, offset: number) =>
+    ["study-items", "page", opts, { limit, offset }] as const,
   studyItem: (id: number) => ["study-items", id] as const,
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
@@ -66,6 +70,22 @@ export function useStudyItem(id: number) {
   return useQuery({
     queryKey: keys.studyItem(id),
     queryFn: () => api.getStudyItem(id),
+  });
+}
+
+/**
+ * The item index's server pages. Desktop asks for its one page; mobile asks for
+ * every 24-row page it has shown so far, so "Carregar mais" never exceeds the
+ * server's 100-row cap and the page order stays authoritative. A page or filter
+ * change has no placeholder rows, so the panel shows its own loading state
+ * instead of a caption that overstates what is rendered.
+ */
+export function useStudyItemPages(opts: StudyItemListQuery, requests: ItemPageRequest[]) {
+  return useQueries({
+    queries: requests.map((request) => ({
+      queryKey: keys.studyItemPage(opts, request.limit, request.offset),
+      queryFn: () => api.listStudyItems({ ...opts, ...request }),
+    })),
   });
 }
 
