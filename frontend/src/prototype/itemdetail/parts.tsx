@@ -689,16 +689,22 @@ export function ReadingRow({
   );
 }
 
-export function ReadingDetail({ reading }: { reading: MockReading }) {
+export function ReadingDetail({
+  reading,
+  compact = false,
+}: {
+  reading: MockReading;
+  compact?: boolean;
+}) {
   return (
-    <div className="rounded-xl bg-slate-950/50 p-3 ring-1 ring-white/10">
+    <div className={`rounded-xl bg-slate-950/50 ring-1 ring-white/10 ${compact ? "p-2" : "p-3"}`}>
       <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
         <FormatChip format={reading.format} />
         <span className="truncate">{reading.topic ?? "tema sorteado"}</span>
-        <span className="ml-auto font-mono text-slate-600">{reading.model}</span>
+        {!compact && <span className="ml-auto font-mono text-slate-600">{reading.model}</span>}
       </div>
       <div className="mt-2">
-        <ReadingSnippet reading={reading} size="base" />
+        <ReadingSnippet reading={reading} size={compact ? "sm" : "base"} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
         <span>{reading.tokens} tokens</span>

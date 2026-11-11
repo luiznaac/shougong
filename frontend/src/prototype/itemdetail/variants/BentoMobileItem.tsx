@@ -11,6 +11,7 @@ import {
   AppChrome,
   BadgeRow,
   ChartLegend,
+  FormatChip,
   FxChartAxes,
   HskChip,
   ItemGlyph,
@@ -86,7 +87,7 @@ function ReadingsPane() {
         </h2>
         <span className="text-[11px] tabular-nums text-slate-500">{READINGS.length}</span>
       </div>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <div className="grid grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-3">
         <div className="max-h-[20rem] space-y-0.5 overflow-y-auto pr-1">
           {READINGS.map((reading) => (
             <ReadingRow
@@ -194,8 +195,8 @@ function ValidatedDesktop() {
 }
 
 function ValidatedMobile() {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const selected = READINGS.find((r) => r.id === selectedId) ?? null;
+  const [selectedId, setSelectedId] = useState<number>(READINGS[0].id);
+  const selected = READINGS.find((r) => r.id === selectedId) ?? READINGS[0];
   const [relShown, setRelShown] = useState(MOBILE_STEP);
 
   return (
@@ -262,24 +263,38 @@ function ValidatedMobile() {
             </span>
           </summary>
           <div className="px-3 pb-3">
-            <div className="divide-y divide-white/5">
-              {READINGS.slice(0, 4).map((reading) => (
-                <div key={reading.id}>
-                  <ReadingRow
-                    reading={reading}
-                    selected={reading.id === selectedId}
-                    onSelect={() => setSelectedId(selectedId === reading.id ? null : reading.id)}
-                  />
-                  {selected?.id === reading.id && (
-                    <div className="pb-2">
-                      <ReadingDetail reading={reading} />
+            <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2">
+              <div className="max-h-56 divide-y divide-white/5 overflow-y-auto pr-1">
+                {READINGS.map((reading) => (
+                  <button
+                    key={reading.id}
+                    type="button"
+                    onClick={() => setSelectedId(reading.id)}
+                    className={`w-full px-1 py-1.5 text-left transition-colors ${
+                      reading.id === selectedId ? "bg-accent-500/10" : "hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 text-[9px] text-slate-500">
+                      <FormatChip format={reading.format} />
+                      <span className="ml-auto shrink-0 text-[8px] tabular-nums">
+                        {new Date(reading.created_at).toLocaleDateString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                        })}
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <p className="mt-0.5 truncate text-[11px] text-slate-300">
+                      {reading.topic ?? "tema sorteado"}
+                    </p>
+                  </button>
+                ))}
+              </div>
+              <div className="self-start">
+                <ReadingDetail reading={selected} compact />
+              </div>
             </div>
             <p className="pt-2 text-[10px] text-slate-600">
-              Toque numa leitura para abrir o trecho aqui mesmo.
+              Selecione uma leitura para ver o trecho ao lado.
             </p>
           </div>
         </details>
