@@ -8,6 +8,7 @@ import { Practice } from "./pages/Practice.tsx";
 import { Reading } from "./pages/Reading.tsx";
 import { Review } from "./pages/Review.tsx";
 import { StudyItemPage } from "./pages/StudyItemPage.tsx";
+import { ShellPrototype } from "./prototype/ShellPrototype.tsx";
 
 export const routes: RouteObject[] = [
   {
@@ -25,4 +26,6 @@ export const routes: RouteObject[] = [
   { path: "/lesson", element: <Lesson /> },
   { path: "/review", element: <Review /> },
   { path: "/practice", element: <Practice /> },
+  // Throwaway prototype (wayfinder #105) — not part of the app shell.
+  { path: "/prototype/shell", element: <ShellPrototype /> },
 ];
