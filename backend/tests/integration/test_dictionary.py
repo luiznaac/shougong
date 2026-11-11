@@ -68,3 +68,76 @@ async def test_apply_hsk_stamps_all_rows_and_hsk_words_dedupes(container: Contai
 
     entries = await repo.find_by_simplified("行")
     assert all(e.hsk_level == 2 and e.pos_tags == ("v", "n") for e in entries)
+
+
+_RELATED_SEED = [
+    {"s": "知道", "p": "zhi1 dao4", "d": ["to know"], "hsk": 1},
+    {"s": "知识", "p": "zhi1 shi5", "d": ["knowledge"], "hsk": 1},
+    {"s": "知", "p": "zhi1", "d": ["to know"], "hsk": None},
+    {"s": "道", "p": "dao4", "d": ["way"], "hsk": None},
+    {"s": "知道路", "p": "zhi1 dao4 lu4", "d": ["to know the way"], "hsk": 2},
+    {"s": "知道者", "p": "zhi1 dao4 zhe3", "d": ["knower"], "hsk": None},
+    {"s": "认识", "p": "ren4 shi5", "d": ["to recognise"], "hsk": 1},
+    {"s": "知道", "p": "zhi1 dao5", "d": ["alt reading"], "hsk": 1},
+]
+
+
+async def _seed_related(container: Container) -> dict[str, int]:
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO dictionary_entry (simplified, pinyin, definitions, hsk_level) VALUES (:s, :p, :d, :hsk)"),
+            [{"s": row["s"], "p": row["p"], "d": json.dumps(row["d"]), "hsk": row["hsk"]} for row in _RELATED_SEED],
+        )
+        rows = (await conn.execute(text("SELECT id, simplified, pinyin FROM dictionary_entry"))).all()
+    return {f"{simplified}|{pinyin}": entry_id for entry_id, simplified, pinyin in rows}
+
+
+async def test_related_lists_the_shared_character_family(container: Container, client: httpx.AsyncClient) -> None:
+    ids = await _seed_related(container)
+    target_id = ids["知道|zhi1 dao4"]
+
+    response = await client.get(f"/dictionary-entries/{target_id}/related")
+
+    assert response.status_code == 200
+    page = response.json()
+    assert page["total"] == 5
+    assert page["limit"] == 20
+    assert page["offset"] == 0
+    # distinct shared hanzi DESC, then hsk_level ASC NULLS LAST, length ASC, id ASC
+    assert [row["simplified"] for row in page["items"]] == ["知道路", "知道者", "知识", "知", "道"]
+    assert all(row["study_item_id"] is None for row in page["items"])
+    assert page["items"][0]["definitions"] == ["to know the way"]
+
+
+async def test_related_pages_and_total_is_the_whole_family(container: Container, client: httpx.AsyncClient) -> None:
+    ids = await _seed_related(container)
+    target_id = ids["知道|zhi1 dao4"]
+
+    response = await client.get(f"/dictionary-entries/{target_id}/related", params={"limit": 2, "offset": 1})
+
+    page = response.json()
+    assert page["total"] == 5
+    assert page["limit"] == 2
+    assert page["offset"] == 1
+    assert [row["simplified"] for row in page["items"]] == ["知道者", "知识"]
+
+
+async def test_related_carries_the_queued_study_item_id(container: Container, client: httpx.AsyncClient) -> None:
+    ids = await _seed_related(container)
+    target_id = ids["知道|zhi1 dao4"]
+    queued_entry_id = ids["知|zhi1"]
+    created = await client.post("/study-items", json={"dictionary_entry_id": queued_entry_id})
+    assert created.status_code == 201
+    study_item_id = created.json()["id"]
+
+    page = (await client.get(f"/dictionary-entries/{target_id}/related")).json()
+
+    by_simplified = {row["simplified"]: row["study_item_id"] for row in page["items"]}
+    assert by_simplified["知"] == study_item_id
+    assert by_simplified["道"] is None
+
+
+async def test_related_unknown_target_is_404(container: Container, client: httpx.AsyncClient) -> None:
+    response = await client.get("/dictionary-entries/999999/related")
+
+    assert response.status_code == 404

@@ -5,7 +5,7 @@ from __future__ import annotations
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
-from shougong.usecase.dictionary.model import DictionaryEntry
+from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntryPage
 
 _log = get_logger(__name__)
 
@@ -24,6 +24,25 @@ class DictionaryService:
         if entry is None:
             raise ResourceNotFoundError("dictionary_entry", str(entry_id))
         return entry
+
+    async def related(self, entry_id: int, *, limit: int = 20, offset: int = 0) -> RelatedEntryPage:
+        """One page of the entry's shared-character family, plus the family's total.
+
+        Args:
+            entry_id: The target entry id.
+            limit: Page size.
+            offset: Rows to skip.
+
+        Returns:
+            One page of related rows, plus the family's total size.
+
+        Raises:
+            ResourceNotFoundError: no entry has this id.
+        """
+        target = await self.get(entry_id)
+        rows, total = await self._repository.find_related(target, limit=limit, offset=offset)
+        _log.info("dictionary.related_listed", entry_id=entry_id, count=len(rows), total=total)
+        return rows, total
 
     async def populate_if_empty(self, source: ICedictSource) -> int:
         """Download CC-CEDICT and fill the table, but only if it is empty.

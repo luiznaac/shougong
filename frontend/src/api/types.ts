@@ -12,6 +12,19 @@ export interface DictionaryEntry {
   pos_tags: string[]; // raw HSK POS tags
 }
 
+/** An entry sharing at least one hanzi with the item's word. */
+export interface RelatedEntry extends DictionaryEntry {
+  // The study item queuing this word, or null when it is not queued.
+  study_item_id: number | null;
+}
+
+export interface RelatedEntriesPage {
+  items: RelatedEntry[];
+  total: number; // the whole shared-character family, not the page length
+  limit: number;
+  offset: number;
+}
+
 export interface CharacterStrokes {
   character: string;
   strokes: string[]; // SVG path 'd' strings, in drawing order

@@ -17,6 +17,7 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | --- | --- | --- |
 | `GET` | `/dictionary-entries?q=&limit=` | Search by simplified hanzi or pinyin |
 | `GET` | `/dictionary-entries/{entry_id}` | Fetch one entry |
+| `GET` | `/dictionary-entries/{entry_id}/related?limit=&offset=` | Shared-character family, most-shared first |
 
 ### Strokes
 
@@ -67,6 +68,32 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
   "hsk_level": 1,
   "pos_tags": ["v", "n"]
 }
+```
+
+### `RelatedEntryResponse`
+
+`DictionaryEntryResponse` plus the id of the study item queuing the word (`null` when it
+is not queued):
+
+```json
+{
+  "id": 124,
+  "simplified": "知识",
+  "pinyin": "zhi1 shi5",
+  "definitions": ["knowledge"],
+  "hsk_level": 1,
+  "pos_tags": ["n"],
+  "study_item_id": null
+}
+```
+
+### `RelatedEntriesResponse`
+
+The pagination envelope shared by the redesign's list routes (`{ items, total, limit, offset }`);
+`total` is the whole filtered set, not the page length.
+
+```json
+{ "items": [], "total": 5, "limit": 20, "offset": 0 }
 ```
 
 ### `StudyItemResponse`

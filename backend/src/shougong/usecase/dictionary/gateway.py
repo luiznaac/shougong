@@ -5,7 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
+from shougong.usecase.dictionary.model import (
+    CedictRecord,
+    DictionaryEntry,
+    HskDatasetWord,
+    RelatedEntryPage,
+)
 
 
 class IDictionaryRepository(Protocol):
@@ -21,6 +26,25 @@ class IDictionaryRepository(Protocol):
         ...
 
     async def get(self, entry_id: int) -> DictionaryEntry | None: ...
+
+    async def find_related(self, target: DictionaryEntry, *, limit: int, offset: int) -> RelatedEntryPage:
+        """One page of the target's shared-character family, plus the family's total.
+
+        An entry is related when its `simplified` shares at least one hanzi with
+        `target.simplified`, excluding the target itself and every entry with the
+        same `simplified` (alternate readings of the same word are not related
+        words). Ordered by distinct shared hanzi DESC, `hsk_level` ASC NULLS
+        LAST, `char_length(simplified)` ASC, `id` ASC.
+
+        Args:
+            target: The entry whose shared-character family is listed.
+            limit: Page size.
+            offset: Rows to skip.
+
+        Returns:
+            One page of related rows, plus the family's total size.
+        """
+        ...
 
     async def count(self) -> int: ...
 

@@ -7,6 +7,7 @@ import type {
   GenerateReadingRequest,
   PriorityEdge,
   ReadingTopic,
+  RelatedEntriesPage,
   ReviewLog,
   ReviewResult,
   SavedReadingText,
@@ -61,6 +62,9 @@ export const api = {
   },
   getDictionaryEntry(id: number): Promise<DictionaryEntry> {
     return request(`/dictionary-entries/${id}`);
+  },
+  listRelatedEntries(entryId: number, limit = 8, offset = 0): Promise<RelatedEntriesPage> {
+    return request(`/dictionary-entries/${entryId}/related?limit=${limit}&offset=${offset}`);
   },
 
   // --- strokes ---
