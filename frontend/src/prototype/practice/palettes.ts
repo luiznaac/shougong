@@ -8,6 +8,8 @@ export interface GradePaletteDef {
   note: string;
   recommended?: boolean;
   tone: [string, string, string, string];
+  /** what the chosen note looks like when the palette is neutral until picked */
+  selectedTone?: string;
 }
 
 export const PALETTES: GradePaletteDef[] = [
@@ -109,6 +111,41 @@ export const PALETTES: GradePaletteDef[] = [
       "bg-accent-500/30 text-white ring-1 ring-accent-400/50 ring-inset",
       "bg-slate-200 text-slate-900",
       "bg-tone-3 text-slate-950",
+    ],
+  },
+  {
+    id: "neutro-escolha",
+    name: "Neutro até escolher",
+    note: "As quatro notas são teclas neutras; a cor só aparece na nota escolhida, no matiz do estágio de destino. Zero ruído antes da decisão.",
+    tone: [
+      "bg-slate-800 text-slate-200",
+      "bg-slate-800 text-slate-200",
+      "bg-slate-800 text-slate-200",
+      "bg-slate-800 text-slate-200",
+    ],
+    selectedTone: "bg-srs-master text-white",
+  },
+  {
+    id: "fantasma",
+    name: "Teclas fantasma",
+    note: "Sem preenchimento: só contorno e rótulo, como um teclado. A nota escolhida vira cerise sólido. O mais silencioso de todos.",
+    tone: [
+      "bg-transparent text-slate-300 ring-1 ring-white/20",
+      "bg-transparent text-slate-300 ring-1 ring-white/20",
+      "bg-transparent text-slate-300 ring-1 ring-white/20",
+      "bg-transparent text-slate-300 ring-1 ring-white/20",
+    ],
+    selectedTone: "bg-accent-500 text-white",
+  },
+  {
+    id: "barra",
+    name: "Barra de cor",
+    note: "Corpo slate com uma barra de 4px na cor do estágio: a matiz existe, mas como marca lateral em vez de bloco.",
+    tone: [
+      "bg-slate-900 text-white border-l-4 border-srs-apprentice",
+      "bg-slate-900 text-white border-l-4 border-srs-guru",
+      "bg-slate-900 text-white border-l-4 border-srs-master",
+      "bg-slate-900 text-white border-l-4 border-srs-enlightened",
     ],
   },
 ];

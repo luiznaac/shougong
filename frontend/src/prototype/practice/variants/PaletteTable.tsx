@@ -72,7 +72,7 @@ export function PaletteTable() {
               {palette.tone.map((tone, i) => (
                 <GradeSample key={`${palette.id}-${i}`} tone={tone} index={i} />
               ))}
-              <GradeSample tone={palette.tone[2]} index={2} selected />
+              <GradeSample tone={palette.selectedTone ?? palette.tone[2]} index={2} selected />
             </div>
           ))}
         </div>
