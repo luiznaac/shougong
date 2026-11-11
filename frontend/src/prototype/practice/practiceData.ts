@@ -127,6 +127,10 @@ export const GRADES: {
   bgSrs: string;
   /** shell-native alternative: cerise + slate, weight instead of hue */
   bgAccent: string;
+  /** adopted: slate body, hue only on a 4px left bar… */
+  barTone: string;
+  /** …which fills the whole key once the note is chosen */
+  fillTone: string;
 }[] = [
   {
     key: "again",
@@ -136,6 +140,8 @@ export const GRADES: {
     bg: "bg-rose-600",
     bgSrs: "bg-srs-apprentice",
     bgAccent: "bg-accent-600 text-white",
+    barTone: "border-srs-apprentice",
+    fillTone: "bg-srs-apprentice",
   },
   {
     key: "hard",
@@ -145,6 +151,8 @@ export const GRADES: {
     bg: "bg-amber-600",
     bgSrs: "bg-srs-guru",
     bgAccent: "bg-accent-500/30 text-white ring-1 ring-accent-400/50 ring-inset",
+    barTone: "border-srs-guru",
+    fillTone: "bg-srs-guru",
   },
   {
     key: "good",
@@ -154,6 +162,8 @@ export const GRADES: {
     bg: "bg-emerald-600",
     bgSrs: "bg-srs-master",
     bgAccent: "bg-slate-100 text-slate-900",
+    barTone: "border-srs-master",
+    fillTone: "bg-srs-master",
   },
   {
     key: "easy",
@@ -163,6 +173,8 @@ export const GRADES: {
     bg: "bg-sky-600",
     bgSrs: "bg-srs-enlightened",
     bgAccent: "bg-white text-slate-900 ring-1 ring-sky-400/60 ring-inset",
+    barTone: "border-srs-enlightened",
+    fillTone: "bg-srs-enlightened",
   },
 ];
 

@@ -139,13 +139,15 @@ export const PALETTES: GradePaletteDef[] = [
   },
   {
     id: "barra",
-    name: "Barra de cor",
-    note: "Corpo slate com uma barra de 4px na cor do estágio: a matiz existe, mas como marca lateral em vez de bloco.",
+    name: "Barra de cor (adotada)",
+    note: "Corpo slate com barra de 4px na cor do estágio; ao escolher, o botão inteiro preenche com essa cor. Mantém o significado sem pintar o dock inteiro.",
+    recommended: true,
     tone: [
       "bg-slate-900 text-white border-l-4 border-srs-apprentice",
       "bg-slate-900 text-white border-l-4 border-srs-guru",
       "bg-slate-900 text-white border-l-4 border-srs-master",
       "bg-slate-900 text-white border-l-4 border-srs-enlightened",
     ],
+    selectedTone: "bg-srs-master text-white",
   },
 ];

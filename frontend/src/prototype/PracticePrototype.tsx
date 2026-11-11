@@ -18,11 +18,12 @@ import { StagePractice } from "./practice/variants/StagePractice.tsx";
 import { TwoTemposPractice } from "./practice/variants/TwoTemposPractice.tsx";
 import {
   AccentPractice,
+  BarPractice,
   RefinedPractice,
   ValidatedPractice,
 } from "./practice/variants/ValidatedPractice.tsx";
 
-const VARIANTS = ["A", "B", "C", "E", "F", "G", "H", "I", "J", "P"];
+const VARIANTS = ["A", "B", "C", "E", "F", "G", "H", "I", "J", "K", "P"];
 const LABELS: Record<string, string> = {
   A: "Palco (bandas + dock)",
   B: "Bancada (painel lateral)",
@@ -33,6 +34,7 @@ const LABELS: Record<string, string> = {
   H: "Palco validado (A + controles B)",
   I: "Palco afinado (cores SRS)",
   J: "Palco afinado (cores accent)",
+  K: "Palco final (barra de cor)",
   P: "Tabela de paletas",
 };
 const MODE_KEYS: PracticeMode[] = ["lesson", "review", "practice"];
@@ -65,6 +67,7 @@ export function PracticePrototype() {
       {variant === "H" && <ValidatedPractice key={mode} mode={mode} />}
       {variant === "I" && <RefinedPractice key={mode} mode={mode} />}
       {variant === "J" && <AccentPractice key={mode} mode={mode} />}
+      {variant === "K" && <BarPractice key={mode} mode={mode} />}
       {variant === "P" && <PaletteTable />}
       <PrototypeSwitcher variants={VARIANTS} labels={LABELS} />
       <div className="fixed right-5 bottom-5 z-50 flex items-center gap-1 rounded-full border border-white/15 bg-slate-950/90 p-1.5 text-[11px] shadow-2xl backdrop-blur">

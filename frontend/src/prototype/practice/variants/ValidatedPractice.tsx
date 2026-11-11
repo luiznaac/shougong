@@ -30,13 +30,24 @@ import {
   usePracticeSession,
 } from "../session.ts";
 
-export type GradePalette = "default" | "srs" | "accent";
+export type GradePalette = "default" | "srs" | "accent" | "bar";
 
 function gradeTone(
   grade: (typeof GRADES)[number],
-  { revealed, dim, palette }: { revealed: boolean; dim: boolean; palette: GradePalette },
+  {
+    revealed,
+    dim,
+    selected,
+    palette,
+  }: { revealed: boolean; dim: boolean; selected: boolean; palette: GradePalette },
 ) {
   if (!revealed) return "bg-white/5 text-slate-500";
+  if (palette === "bar") {
+    if (selected) return `${grade.fillTone} text-white`;
+    return dim
+      ? "border-l-4 border-slate-700 bg-slate-900/60 text-slate-500"
+      : `border-l-4 bg-slate-900 text-white ${grade.barTone}`;
+  }
   if (dim) return "bg-slate-800 text-slate-500";
   if (palette === "accent") return grade.bgAccent;
   return `${palette === "srs" ? grade.bgSrs : grade.bg} text-white`;
@@ -212,7 +223,7 @@ export function ValidatedDesktop({
           {GRADES.map((grade) => {
             const on = session.selected === grade.key;
             const dim = session.selected != null && !on;
-            const tone = gradeTone(grade, { revealed, dim, palette });
+            const tone = gradeTone(grade, { revealed, dim, selected: on, palette });
             return (
               <button
                 key={grade.key}
@@ -355,7 +366,7 @@ export function ValidatedMobile({
           {GRADES.map((grade) => {
             const on = session.selected === grade.key;
             const dim = session.selected != null && !on;
-            const tone = gradeTone(grade, { revealed, dim, palette });
+            const tone = gradeTone(grade, { revealed, dim, selected: on, palette });
             return (
               <button
                 key={grade.key}
@@ -463,6 +474,17 @@ export function RefinedPractice({ mode }: { mode: PracticeMode }) {
       palette="srs"
       title="Variante I — Palco afinado (cores SRS) · desktop"
       caption="H com as notas na rampa de estágios do SRS (apprentice → guru → master → enlightened), já tokens do shell."
+    />
+  );
+}
+
+export function BarPractice({ mode }: { mode: PracticeMode }) {
+  return (
+    <ValidatedPage
+      mode={mode}
+      palette="bar"
+      title="Variante K — Palco final (barra de cor) · desktop"
+      caption="Adotado: corpo slate com barra de 4px na cor do estágio; a nota escolhida preenche o botão inteiro."
     />
   );
 }
