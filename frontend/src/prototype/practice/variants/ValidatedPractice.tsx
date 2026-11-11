@@ -30,6 +30,18 @@ import {
   usePracticeSession,
 } from "../session.ts";
 
+export type GradePalette = "default" | "srs" | "accent";
+
+function gradeTone(
+  grade: (typeof GRADES)[number],
+  { revealed, dim, palette }: { revealed: boolean; dim: boolean; palette: GradePalette },
+) {
+  if (!revealed) return "bg-white/5 text-slate-500";
+  if (dim) return "bg-slate-800 text-slate-500";
+  if (palette === "accent") return grade.bgAccent;
+  return `${palette === "srs" ? grade.bgSrs : grade.bg} text-white`;
+}
+
 function Consequence({ session }: { session: PracticeSession }) {
   const grade = GRADES.find((g) => g.key === session.selected);
   return (
@@ -98,14 +110,16 @@ function StrokeToggle({
   );
 }
 
-function ValidatedDesktop({
+export function ValidatedDesktop({
   session,
   playerOn,
   onToggle,
+  palette,
 }: {
   session: PracticeSession;
   playerOn: boolean;
   onToggle: () => void;
+  palette: GradePalette;
 }) {
   const meta = MODES[session.mode];
   const item = session.item;
@@ -198,11 +212,7 @@ function ValidatedDesktop({
           {GRADES.map((grade) => {
             const on = session.selected === grade.key;
             const dim = session.selected != null && !on;
-            const tone = !revealed
-              ? "bg-white/5 text-slate-500"
-              : dim
-                ? "bg-slate-800 text-slate-500"
-                : `${grade.bg} text-white`;
+            const tone = gradeTone(grade, { revealed, dim, palette });
             return (
               <button
                 key={grade.key}
@@ -248,14 +258,16 @@ function ValidatedDesktop({
   );
 }
 
-function ValidatedMobile({
+export function ValidatedMobile({
   session,
   playerOn,
   onToggle,
+  palette,
 }: {
   session: PracticeSession;
   playerOn: boolean;
   onToggle: () => void;
+  palette: GradePalette;
 }) {
   const meta = MODES[session.mode];
   const item = session.item;
@@ -343,11 +355,7 @@ function ValidatedMobile({
           {GRADES.map((grade) => {
             const on = session.selected === grade.key;
             const dim = session.selected != null && !on;
-            const tone = !revealed
-              ? "bg-white/5 text-slate-500"
-              : dim
-                ? "bg-slate-800 text-slate-500"
-                : `${grade.bg} text-white`;
+            const tone = gradeTone(grade, { revealed, dim, palette });
             return (
               <button
                 key={grade.key}
@@ -377,7 +385,17 @@ function ValidatedMobile({
   );
 }
 
-export function ValidatedPractice({ mode }: { mode: PracticeMode }) {
+export function ValidatedPage({
+  mode,
+  palette,
+  title,
+  caption,
+}: {
+  mode: PracticeMode;
+  palette: GradePalette;
+  title: string;
+  caption: string;
+}) {
   const session = usePracticeSession(mode);
   const [playerFor, setPlayerFor] = useState<number | null>(null);
   const itemId = session.item?.id ?? null;
@@ -386,15 +404,21 @@ export function ValidatedPractice({ mode }: { mode: PracticeMode }) {
     if (itemId == null) return;
     setPlayerFor((cur) => (cur === itemId ? null : itemId));
   };
+
   return (
     <>
       <div className="min-h-screen bg-slate-950 text-slate-200">
         <div className="mx-auto max-w-6xl px-6 pt-8">
           <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-            Variante H — Palco validado · desktop
+            {title}
           </p>
           <div className="mt-3">
-            <ValidatedDesktop session={session} playerOn={playerOn} onToggle={togglePlayer} />
+            <ValidatedDesktop
+              session={session}
+              playerOn={playerOn}
+              onToggle={togglePlayer}
+              palette={palette}
+            />
           </div>
         </div>
         <div className="mx-auto max-w-6xl px-6 pb-24">
@@ -405,13 +429,51 @@ export function ValidatedPractice({ mode }: { mode: PracticeMode }) {
             <span className="h-px flex-1 bg-white/10" />
           </div>
           <div className="mt-4 flex justify-center">
-            <PhoneFrame caption="Palco no celular com os controles da Bancada: nota em uma linha, avançar em largura total e ↩ no topo. O glifo aparece uma vez por fase.">
-              <ValidatedMobile session={session} playerOn={playerOn} onToggle={togglePlayer} />
+            <PhoneFrame caption={caption}>
+              <ValidatedMobile
+                session={session}
+                playerOn={playerOn}
+                onToggle={togglePlayer}
+                palette={palette}
+              />
             </PhoneFrame>
           </div>
         </div>
       </div>
       <Toast message={session.toast} />
     </>
+  );
+}
+
+export function ValidatedPractice({ mode }: { mode: PracticeMode }) {
+  return (
+    <ValidatedPage
+      mode={mode}
+      palette="default"
+      title="Variante H — Palco validado · desktop"
+      caption="Palco no celular com os controles da Bancada: nota em uma linha, avançar em largura total e ↩ no topo. O glifo aparece uma vez por fase."
+    />
+  );
+}
+
+export function RefinedPractice({ mode }: { mode: PracticeMode }) {
+  return (
+    <ValidatedPage
+      mode={mode}
+      palette="srs"
+      title="Variante I — Palco afinado (cores SRS) · desktop"
+      caption="H com as notas na rampa de estágios do SRS (apprentice → guru → master → enlightened), já tokens do shell."
+    />
+  );
+}
+
+export function AccentPractice({ mode }: { mode: PracticeMode }) {
+  return (
+    <ValidatedPage
+      mode={mode}
+      palette="accent"
+      title="Variante J — Palco afinado (cores accent) · desktop"
+      caption="H com as notas em cerise + slate: peso e preenchimento no lugar de quatro matizes."
+    />
   );
 }

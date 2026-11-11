@@ -123,11 +123,47 @@ export const GRADES: {
   hotkey: string;
   hint: string;
   bg: string;
+  /** shell-native alternative: the SRS stage ramp, in the card's travel direction */
+  bgSrs: string;
+  /** shell-native alternative: cerise + slate, weight instead of hue */
+  bgAccent: string;
 }[] = [
-  { key: "again", label: "Errei", hotkey: "1", hint: "reaprende agora", bg: "bg-rose-600" },
-  { key: "hard", label: "Difícil", hotkey: "2", hint: "volta em ~1 dia", bg: "bg-amber-600" },
-  { key: "good", label: "Bom", hotkey: "3", hint: "volta em ~3 dias", bg: "bg-emerald-600" },
-  { key: "easy", label: "Fácil", hotkey: "4", hint: "volta em ~7 dias", bg: "bg-sky-600" },
+  {
+    key: "again",
+    label: "Errei",
+    hotkey: "1",
+    hint: "reaprende agora",
+    bg: "bg-rose-600",
+    bgSrs: "bg-srs-apprentice",
+    bgAccent: "bg-accent-600 text-white",
+  },
+  {
+    key: "hard",
+    label: "Difícil",
+    hotkey: "2",
+    hint: "volta em ~1 dia",
+    bg: "bg-amber-600",
+    bgSrs: "bg-srs-guru",
+    bgAccent: "bg-accent-500/30 text-white ring-1 ring-accent-400/50 ring-inset",
+  },
+  {
+    key: "good",
+    label: "Bom",
+    hotkey: "3",
+    hint: "volta em ~3 dias",
+    bg: "bg-emerald-600",
+    bgSrs: "bg-srs-master",
+    bgAccent: "bg-slate-100 text-slate-900",
+  },
+  {
+    key: "easy",
+    label: "Fácil",
+    hotkey: "4",
+    hint: "volta em ~7 dias",
+    bg: "bg-sky-600",
+    bgSrs: "bg-srs-enlightened",
+    bgAccent: "bg-white text-slate-900 ring-1 ring-sky-400/60 ring-inset",
+  },
 ];
 
 export const HOTKEY_RATING: Record<string, SrsRating> = Object.fromEntries(

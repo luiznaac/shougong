@@ -26,6 +26,9 @@ export function FlipTile({
   hidden: boolean;
   sizePx: number;
 }) {
+  // Same corner *shape* at every size: a proportional radius with a cap, so a
+  // 50px tile reads as a rounded square instead of collapsing into a circle.
+  const radius = Math.min(20, Math.max(6, Math.round(sizePx * 0.16)));
   return (
     <div style={{ perspective: "1200px" }}>
       <div
@@ -34,7 +37,10 @@ export function FlipTile({
           hidden ? "[transform:rotateY(180deg)]" : "[transform:rotateY(0deg)]"
         }`}
       >
-        <div className="absolute inset-0 flex items-center justify-center rounded-3xl border border-white/25 bg-white/10 shadow-[0_20px_50px_-24px_rgba(0,0,0,0.9)] backdrop-blur-sm [backface-visibility:hidden]">
+        <div
+          style={{ borderRadius: radius }}
+          className="absolute inset-0 flex items-center justify-center border border-white/25 bg-white/10 shadow-[0_20px_50px_-24px_rgba(0,0,0,0.9)] backdrop-blur-sm [backface-visibility:hidden]"
+        >
           <span
             lang="zh-Hans"
             className="font-hanzi leading-none text-white"
@@ -43,7 +49,10 @@ export function FlipTile({
             {char}
           </span>
         </div>
-        <div className="absolute inset-0 flex items-center justify-center rounded-3xl border-2 border-dashed border-white/40 bg-slate-950/20 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <div
+          style={{ borderRadius: radius }}
+          className="absolute inset-0 flex items-center justify-center border-2 border-dashed border-white/40 bg-slate-950/20 [backface-visibility:hidden] [transform:rotateY(180deg)]"
+        >
           <span
             aria-hidden
             lang="zh-Hans"
