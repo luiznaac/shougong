@@ -15,7 +15,7 @@ curl localhost:8130/health
 
 `docker compose` lives at the **repo root** now — `docker compose up -d mysql` is the DB-only helper for this workflow, and `docker compose up --build` runs the full stack (combined backend + frontend image + MySQL). See the [root README](../README.md#docker) for the image layout and publishing.
 
-All config is via env vars (`APP_ENV`, `HTTP_PORT` default `8130`, `LOG_LEVEL`, `MYSQL__*` with `MYSQL__PORT` default `8132`, `GATEWAYS__APP__HOST`, `DICTIONARY_AUTOLOAD`, `STUDY_TIMEZONE`) — see `.env.example`. Nested keys use `__`. `GATEWAYS__APP__HOST` is optional: unset, the self-health base URL follows `HTTP_PORT`.
+All config is via env vars (`APP_ENV`, `HTTP_PORT`, `LOG_LEVEL`, `MYSQL__*`, `GATEWAYS__APP__HOST`, `DICTIONARY_AUTOLOAD`, `STUDY_TIMEZONE`) — see `.env.example`. Nested keys use `__`. In dev (the default `APP_ENV`) `HTTP_PORT` defaults to `8130` and `MYSQL__PORT` to `8132`; any other profile keeps the canonical `8080`/`3306` so a deploy reaches its local MySQL without extra config. An explicit value always wins. `GATEWAYS__APP__HOST` is optional: unset, the self-health base URL follows `HTTP_PORT`.
 
 `STUDY_TIMEZONE` (an IANA name like `America/Sao_Paulo`, default `UTC`) sets the SRS day boundary: every card's due time is rounded down to that timezone's midnight, so a whole day's cards become due at once instead of trickling in through the day.
 

@@ -2,20 +2,22 @@
 
 Values come from environment variables (and an optional `.env`). Nested groups
 use `__` as the delimiter, e.g. `MYSQL__HOST`, `GATEWAYS__APP__HOST`.
-Pick the profile with `APP_ENV=dev|prod|test`.
+Pick the profile with `APP_ENV=dev|prod|test`: dev (the default) binds the
+project's assigned host block, while any other profile keeps the canonical
+8080/3306 unless the ports are set explicitly.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class MySqlConfig(BaseModel):
     host: str = "localhost"
-    port: int = 8132
+    port: int = 3306
     user: str = "root"
     password: str = ""
     database: str = "shougong"
@@ -64,7 +66,7 @@ class Settings(BaseSettings):
     )
 
     app_env: str = "dev"
-    http_port: int = 8130
+    http_port: int = 8080
     log_level: str = "INFO"
 
     # On startup, download CC-CEDICT and fill `dictionary_entry` if it is empty.
@@ -85,6 +87,22 @@ class Settings(BaseSettings):
 
     mysql: MySqlConfig = Field(default_factory=MySqlConfig)
     gateways: GatewaysConfig = Field(default_factory=GatewaysConfig)
+
+    @model_validator(mode="after")
+    def _apply_dev_port_block(self) -> Self:
+        """Dev (the default profile) gets shougong's assigned host block.
+
+        Any other environment keeps the canonical 8080/3306, so a host or deploy
+        process that does not set the ports still reaches its local MySQL. An
+        explicit value always wins.
+        """
+        if self.app_env != "dev":
+            return self
+        if "http_port" not in self.model_fields_set:
+            self.http_port = 8130
+        if "port" not in self.mysql.model_fields_set:
+            self.mysql.port = 8132
+        return self
 
     @property
     def is_dev(self) -> bool:

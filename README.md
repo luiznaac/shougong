@@ -38,7 +38,7 @@ Local host ports are shougong's assigned block, recorded in [`.salgadinhos/ports
 | `mysql` | `8132` | `MYSQL__PORT` | `3306` |
 | `frontend-dev` (Vite) | `8133` | `FRONTEND_DEV_PORT` | — |
 
-A gitignored `.env` may override a host port locally; the committed defaults above apply to a fresh clone. The DB port recipe is `docker compose port mysql 3306`.
+A gitignored `.env` may override a host port locally; the committed defaults above apply to a fresh clone. The block is dev-only: a non-dev `APP_ENV` (and the published image) keeps the canonical `8080`/`3306` unless a port is set explicitly, so deploys reach a local MySQL on `3306`. The DB port recipe is `docker compose port mysql 3306`.
 
 ## Docker
 

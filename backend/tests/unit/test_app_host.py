@@ -16,6 +16,28 @@ def test_settings_default_to_the_assigned_dev_ports(monkeypatch) -> None:
     assert settings.mysql.port == 8132
 
 
+def test_non_dev_env_keeps_the_canonical_ports(monkeypatch) -> None:
+    monkeypatch.delenv("HTTP_PORT", raising=False)
+    monkeypatch.delenv("MYSQL__PORT", raising=False)
+    monkeypatch.delenv("GATEWAYS__APP__HOST", raising=False)
+
+    settings = settings_module.Settings(_env_file=None, app_env="prod")
+
+    assert settings.http_port == 8080
+    assert settings.mysql.port == 3306
+    assert settings.app_host == "http://localhost:8080"
+
+
+def test_explicit_ports_win_in_a_non_dev_env(monkeypatch) -> None:
+    monkeypatch.setenv("HTTP_PORT", "9200")
+    monkeypatch.setenv("MYSQL__PORT", "9201")
+
+    settings = settings_module.Settings(_env_file=None, app_env="prod")
+
+    assert settings.http_port == 9200
+    assert settings.mysql.port == 9201
+
+
 def test_app_host_derives_from_the_configured_http_port(monkeypatch) -> None:
     monkeypatch.delenv("GATEWAYS__APP__HOST", raising=False)
 
