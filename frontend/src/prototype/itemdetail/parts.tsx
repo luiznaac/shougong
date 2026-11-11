@@ -297,12 +297,19 @@ export function FxChart({ history, height = 176 }: { history: MockSnapshot[]; he
 export function FxChartAxes({
   history,
   height = 240,
+  layout = "desktop",
 }: {
   history: MockSnapshot[];
   height?: number;
+  layout?: "desktop" | "mobile";
 }) {
-  const W = 520;
-  const PAD = { top: 14, right: 46, bottom: 30, left: 46 };
+  const mobile = layout === "mobile";
+  const W = mobile ? 300 : 520;
+  const PAD = mobile
+    ? { top: 20, right: 36, bottom: 38, left: 36 }
+    : { top: 14, right: 46, bottom: 30, left: 46 };
+  const tickClass = mobile ? "text-[10px]" : "text-[9px]";
+  const titleClass = mobile ? "text-[10px]" : "text-[9px]";
   const PW = W - PAD.left - PAD.right;
   const PH = height - PAD.top - PAD.bottom;
   const rows = [...history].reverse();
@@ -320,7 +327,8 @@ export function FxChartAxes({
   const area = `${PAD.left},${PAD.top + PH} ${stab.join(" ")} ${PAD.left + PW},${PAD.top + PH}`;
 
   const yTicks = [0, 0.5, 1];
-  const dateTicks = [0, 1 / 3, 2 / 3, 1].map((f) => {
+  const dateFractions = mobile ? [0, 0.5, 1] : [0, 1 / 3, 2 / 3, 1];
+  const dateTicks = dateFractions.map((f) => {
     const t = t0 + f * span;
     return {
       x: PAD.left + f * PW,
@@ -359,12 +367,17 @@ export function FxChartAxes({
           x={PAD.left - 7}
           y={PAD.top + PH * f + 3}
           textAnchor="end"
-          className="fill-accent-500 text-[9px] tabular-nums"
+          className={`fill-accent-500 ${tickClass} tabular-nums`}
         >
           {Math.round(maxStability * (1 - f))}
         </text>
       ))}
-      <text x={PAD.left - 7} y={PAD.top - 4} textAnchor="end" className="fill-slate-500 text-[9px]">
+      <text
+        x={PAD.left - 7}
+        y={PAD.top - 6}
+        textAnchor="end"
+        className={`fill-slate-500 ${titleClass}`}
+      >
         dias
       </text>
 
@@ -382,12 +395,12 @@ export function FxChartAxes({
           key={`dy-${f}`}
           x={PAD.left + PW + 7}
           y={PAD.top + PH * f + 3}
-          className="fill-sky-500 text-[9px] tabular-nums"
+          className={`fill-sky-500 ${tickClass} tabular-nums`}
         >
           {(10 * (1 - f)).toFixed(0)}
         </text>
       ))}
-      <text x={PAD.left + PW + 7} y={PAD.top - 4} className="fill-slate-500 text-[9px]">
+      <text x={PAD.left + PW + 7} y={PAD.top - 6} className={`fill-slate-500 ${titleClass}`}>
         dif.
       </text>
 
@@ -412,9 +425,9 @@ export function FxChartAxes({
           />
           <text
             x={tick.x}
-            y={PAD.top + PH + 15}
+            y={PAD.top + PH + (mobile ? 18 : 15)}
             textAnchor="middle"
-            className="fill-slate-500 text-[9px]"
+            className={`fill-slate-500 ${tickClass}`}
           >
             {tick.label}
           </text>
