@@ -13,6 +13,10 @@ function render(overrides: Parameters<typeof studyItem>[0] = {}): string {
 }
 
 describe("StudyItemTile", () => {
+  it("links to the item's detail page under Biblioteca", () => {
+    expect(render()).toContain('href="/biblioteca/itens/1"');
+  });
+
   it("renders no badge for an ordinary item", () => {
     const html = render();
     expect(html).toContain("學");

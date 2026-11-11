@@ -160,7 +160,10 @@ export function BatchImport() {
           opcional. Cada linha é casada com uma entrada existente do dicionário e enviada
           individualmente, para você acompanhar o progresso.
         </p>
-        <Link to="/add" className="mt-2 inline-block text-sm text-accent-500 hover:underline">
+        <Link
+          to="/biblioteca/adicionar"
+          className="mt-2 inline-block text-sm text-accent-500 hover:underline"
+        >
           ← Adicionar item a item
         </Link>
       </div>

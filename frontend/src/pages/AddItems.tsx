@@ -51,7 +51,10 @@ export function AddItems() {
         <p className="mt-1 text-sm text-slate-400">
           Busque no dicionário por hanzi ou pinyin e adicione à sua fila.
         </p>
-        <Link to="/add/batch" className="mt-2 inline-block text-sm text-accent-500 hover:underline">
+        <Link
+          to="/biblioteca/importar"
+          className="mt-2 inline-block text-sm text-accent-500 hover:underline"
+        >
           Importar de CSV →
         </Link>
       </div>

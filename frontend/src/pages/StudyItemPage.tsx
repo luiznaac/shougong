@@ -32,8 +32,8 @@ export function StudyItemPage() {
 
   return (
     <div className="space-y-8">
-      <Link to="/" className="text-sm text-slate-500 hover:text-slate-300">
-        ← Painel
+      <Link to="/biblioteca" className="text-sm text-slate-500 hover:text-slate-300">
+        ← Biblioteca
       </Link>
 
       <header className="relative flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-10">

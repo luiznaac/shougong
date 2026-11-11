@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { StudyItem } from "../api/types.ts";
+import { itemPath } from "../lib/navigation.ts";
 import { levelColor, levelLabel, levelOf } from "../lib/srs.ts";
 import { tileBadges } from "../lib/tileBadges.ts";
 import { Hanzi } from "./Hanzi.tsx";
@@ -14,7 +15,7 @@ export function StudyItemTile({ item }: { item: StudyItem }) {
   const level = levelOf(item.card);
   return (
     <Link
-      to={`/items/${item.id}`}
+      to={itemPath(item.id)}
       title={levelLabel(level)}
       className="relative flex w-28 flex-col items-center rounded-sm border-b-2 bg-slate-900/60 px-1.5 py-2 text-center transition-colors hover:bg-slate-800"
       style={{ borderColor: levelColor(level) }}
