@@ -34,7 +34,9 @@ export function UpcomingReviews({ days }: { days: DailyDue[] }) {
         ))}
       </ul>
       <p className="mt-3 text-right text-[10px] text-slate-500">
-        {total} revisões nos próximos {rows.length} dias
+        {total === 0
+          ? "Nenhuma revisão nos próximos 7 dias."
+          : `${total} revisões nos próximos ${rows.length} dias`}
       </p>
     </div>
   );

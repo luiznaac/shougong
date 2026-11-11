@@ -38,4 +38,10 @@ describe("UpcomingReviews", () => {
   it("summarises the seven-day total", () => {
     expect(render()).toContain("34");
   });
+
+  it("shows its own empty sentence when nothing is due, keeping the seven rows", () => {
+    const html = render(DAYS.map((day) => ({ ...day, due: 0 })));
+    expect(html).toContain("Nenhuma revisão nos próximos 7 dias.");
+    expect(html.match(/<li/g)).toHaveLength(7);
+  });
 });
