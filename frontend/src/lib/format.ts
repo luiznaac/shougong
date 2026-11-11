@@ -23,3 +23,21 @@ export function formatDateTime(iso: string): string {
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", { dateStyle: "medium" });
 }
+
+// Local calendar days arrive as `YYYY-MM-DD` from the overview aggregate. Parsing
+// them with `new Date(day)` would read them as UTC midnight and shift a day in
+// any negative-offset timezone, so the local parts are read explicitly.
+export function parseLocalDay(day: string): Date {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(year, month - 1, date);
+}
+
+/** `12 de nov.` — for axis ticks and row titles on local-day data. */
+export function formatDayLabel(day: string): string {
+  return parseLocalDay(day).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+/** `qui.` — the compact local weekday for a forecast row. */
+export function formatWeekdayLabel(day: string): string {
+  return parseLocalDay(day).toLocaleDateString("pt-BR", { weekday: "short" });
+}

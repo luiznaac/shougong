@@ -1,11 +1,6 @@
 import { ApiError } from "../api/client.ts";
 import type { PriorityEdge, StudyItem } from "../api/types.ts";
 
-export interface LessonQueueRow {
-  item: StudyItem;
-  ordinal: number;
-}
-
 export const PRIORITY_CONFLICT_MESSAGE =
   "Este item não está mais em lições — ele avançou para revisão. A fila foi atualizada.";
 
@@ -18,16 +13,6 @@ export function isLearning(item: StudyItem): boolean {
 
 export function isPinned(item: StudyItem): boolean {
   return item.priority_position !== null;
-}
-
-export function lessonQueueRows(items: StudyItem[]): LessonQueueRow[] {
-  const pinned = items
-    .filter((item) => isLearning(item) && isPinned(item))
-    .sort((a, b) => (a.priority_position ?? 0) - (b.priority_position ?? 0) || a.id - b.id);
-  const unpinned = items
-    .filter((item) => isLearning(item) && !isPinned(item))
-    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
-  return [...pinned, ...unpinned].map((item, index) => ({ item, ordinal: index + 1 }));
 }
 
 export function priorityStatus(item: StudyItem): string {

@@ -1,6 +1,7 @@
 import {
   type QueryClient,
   type QueryKey,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -20,6 +21,8 @@ import type {
 export const keys = {
   studyItemsPrefix: ["study-items"] as const,
   studyItems: (opts: StudyItemListQuery = {}) => ["study-items", opts] as const,
+  studyItemPages: (opts: StudyItemListQuery, limit: number) =>
+    ["study-items", "page", { ...opts, limit }] as const,
   studyItem: (id: number) => ["study-items", id] as const,
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
@@ -31,6 +34,7 @@ export const keys = {
   readingText: (id: number) => ["reading-texts", "detail", id] as const,
   insightsPrefix: ["insights"] as const,
   extraStudy: (from: string, to: string) => ["insights", "extra-study", { from, to }] as const,
+  studyOverviewPrefix: ["study-overview"] as const,
   studyOverview: (tzOffsetMinutes: number) => ["study-overview", { tzOffsetMinutes }] as const,
 };
 
@@ -62,6 +66,22 @@ export function useStudyItems(opts: StudyItemListQuery = {}) {
   });
 }
 
+/**
+ * One page at a time from the study-item list, accumulating as the learner asks
+ * for more. The server owns the order; `total` comes from the last envelope.
+ */
+export function useStudyItemPages(opts: StudyItemListQuery, limit: number) {
+  return useInfiniteQuery({
+    queryKey: keys.studyItemPages(opts, limit),
+    queryFn: ({ pageParam }) => api.listStudyItems({ ...opts, limit, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) => {
+      const next = lastPageParam + lastPage.items.length;
+      return lastPage.items.length > 0 && next < lastPage.total ? next : undefined;
+    },
+  });
+}
+
 export function useStudyItem(id: number) {
   return useQuery({
     queryKey: keys.studyItem(id),
@@ -88,13 +108,6 @@ export function useItemHistory(id: number) {
   return useQuery({
     queryKey: keys.history(id),
     queryFn: () => api.listHistory(id),
-  });
-}
-
-export function useLearningToReviewHistory() {
-  return useQuery({
-    queryKey: ["study-items", "learning-to-review"],
-    queryFn: () => api.listLearningToReviewHistory(),
   });
 }
 
@@ -129,14 +142,18 @@ export function useAddStudyItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dictionaryEntryId: number) => api.addStudyItem(dictionaryEntryId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.studyItemsPrefix }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+      qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
+    },
   });
 }
 
-/** A real grade refreshes the study-item grids and both Extra Study buckets. */
+/** A real grade refreshes the study-item grids, the overview and both Extra Study buckets. */
 export function invalidateAfterReview(qc: QueryClient, id: number): void {
   qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
   qc.invalidateQueries({ queryKey: keys.insightsPrefix });
+  qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
   qc.invalidateQueries({ queryKey: keys.studyItem(id) });
   qc.invalidateQueries({ queryKey: keys.reviews(id) });
 }

@@ -73,27 +73,10 @@ export function levelOf(card: SrsCard): SrsLevel {
   return "master";
 }
 
-export function groupOf(card: SrsCard): SrsGroup {
-  return BY_LEVEL[levelOf(card)].group;
-}
-
 export function levelLabel(level: SrsLevel): string {
   return BY_LEVEL[level].label;
 }
 
 export function levelColor(level: SrsLevel): string {
   return GROUP_COLOR[BY_LEVEL[level].group];
-}
-
-/** Counts per group, in GROUP_ORDER. */
-export function tallyGroups(cards: SrsCard[]): Record<SrsGroup, number> {
-  const out: Record<SrsGroup, number> = {
-    novice: 0,
-    apprentice: 0,
-    journeyman: 0,
-    expert: 0,
-    master: 0,
-  };
-  for (const c of cards) out[groupOf(c)] += 1;
-  return out;
 }
