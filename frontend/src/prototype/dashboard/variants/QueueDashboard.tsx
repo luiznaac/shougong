@@ -1,8 +1,8 @@
-// PROTOTYPE (wayfinder ticket #107) — Variant A "Fila de hoje", revision 2.
-// Adopted direction from the first round. Main column on the left (actions,
-// extra study, learned chart, characters); a right rail with the SRS Stages
-// half-pie and Upcoming Reviews, HanziHero-style. Desktop pages the grid
-// explicitly; mobile grows it with a "Carregar mais".
+// PROTOTYPE (wayfinder ticket #107) — Variant A "Fila de hoje", revision 3.
+// Adopted direction. Main column on the left: today's queue, the character grid,
+// the learned chart, then Extra Study. A sticky right rail carries the SRS
+// Stages half-pie and Upcoming Reviews. Hanzi-only character tiles; desktop
+// pages the grid explicitly, mobile grows it with a "Carregar mais".
 
 import { useState } from "react";
 import { GROUP_COLOR, GROUP_LABEL, GROUP_ORDER, type SrsGroup } from "../../../lib/srs.ts";
@@ -14,25 +14,18 @@ import {
   DASH_LEECHES,
   DASH_TALLY,
   type DashboardState,
+  EXTRA_STUDY,
   LEARNED_SERIES,
   UPCOMING,
   UPCOMING_TOTAL,
 } from "../dashboardData.ts";
-import {
-  AppChrome,
-  CharTile,
-  MobileChrome,
-  PLACEHOLDER_KEYS,
-  Panel,
-  Skeleton,
-  Sparkline,
-} from "../parts.tsx";
+import { AppChrome, CharTile, MobileChrome, PLACEHOLDER_KEYS, Panel, Skeleton } from "../parts.tsx";
 
 type Filter = "all" | "leeches";
 type Props = { state: DashboardState };
 
-const PAGE_SIZE = 8;
-const MOBILE_STEP = 8;
+const PAGE_SIZE = 12;
+const MOBILE_STEP = 12;
 
 function FilterChips({
   filter,
@@ -151,6 +144,64 @@ function UpcomingRows({ limit }: { limit?: number }) {
   );
 }
 
+/** Cumulative learned chart with both axes drawn (date ticks + count ticks). */
+function LearnedChart({ className = "h-36 w-full" }: { className?: string }) {
+  const W = 320;
+  const H = 140;
+  const L = 30;
+  const R = 8;
+  const T = 8;
+  const B = 22;
+  const max = Math.max(...LEARNED_SERIES);
+  const px = (i: number) => L + (i / (LEARNED_SERIES.length - 1)) * (W - L - R);
+  const py = (v: number) => T + (1 - v / max) * (H - T - B);
+  const points = LEARNED_SERIES.map((v, i) => `${px(i)},${py(v)}`).join(" ");
+  const ticks = [0, Math.round(max / 2), max];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className={`mt-2 ${className}`}>
+      <title>Itens aprendidos ao longo do tempo</title>
+      {ticks.map((t) => (
+        <g key={t}>
+          <line x1={L} x2={W - R} y1={py(t)} y2={py(t)} stroke="rgba(255,255,255,0.07)" />
+          <text x={L - 5} y={py(t) + 3} textAnchor="end" fontSize="8" className="fill-slate-500">
+            {t}
+          </text>
+        </g>
+      ))}
+      <line x1={L} x2={L} y1={T} y2={H - B} stroke="rgba(255,255,255,0.18)" />
+      <line x1={L} x2={W - R} y1={H - B} y2={H - B} stroke="rgba(255,255,255,0.18)" />
+      <polygon
+        points={`${L},${H - B} ${points} ${W - R},${H - B}`}
+        fill="var(--color-accent-500)"
+        fillOpacity="0.15"
+      />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="var(--color-accent-500)"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+      <text x={L} y={H - 6} fontSize="8" className="fill-slate-500">
+        14 out
+      </text>
+      <text
+        x={(L + W - R) / 2}
+        y={H - 6}
+        textAnchor="middle"
+        fontSize="8"
+        className="fill-slate-500"
+      >
+        outubro — novembro
+      </text>
+      <text x={W - R} y={H - 6} textAnchor="end" fontSize="8" className="fill-slate-500">
+        10 nov
+      </text>
+    </svg>
+  );
+}
+
 function Pager({
   page,
   pages,
@@ -212,8 +263,8 @@ function Pager({
 }
 
 function ExtraStudyStrip({ empty }: { empty: boolean }) {
-  const mistakes = empty ? 0 : 4;
-  const learned = empty ? 0 : 5;
+  const mistakes = empty ? 0 : EXTRA_STUDY.recent_mistakes.length;
+  const learned = empty ? 0 : EXTRA_STUDY.recently_learned.length;
   return (
     <div className="space-y-3">
       <div className="flex gap-1">
@@ -224,12 +275,18 @@ function ExtraStudyStrip({ empty }: { empty: boolean }) {
           Aprendidos ({learned})
         </span>
       </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-slate-500">Últimos 7 dias · 4 erros</span>
+      <div className="flex flex-wrap items-center gap-2">
+        {empty ? (
+          <p className="text-xs text-slate-500">Nenhum erro no período.</p>
+        ) : (
+          EXTRA_STUDY.recent_mistakes.map((item) => (
+            <CharTile key={item.hanzi} item={item} compact />
+          ))
+        )}
         <button
           type="button"
           disabled={mistakes === 0}
-          className="rounded-md bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+          className="ml-auto rounded-md bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
         >
           Praticar
         </button>
@@ -317,28 +374,6 @@ function DesktopDashboard({ state }: Props) {
               )}
             </section>
 
-            <Panel title="Estudo extra">
-              {loading ? <Skeleton className="h-16 w-full" /> : <ExtraStudyStrip empty={empty} />}
-            </Panel>
-
-            <Panel title="Itens aprendidos">
-              {loading ? (
-                <Skeleton className="h-20 w-full" />
-              ) : empty ? (
-                <p className="text-sm text-slate-500">Nenhum item aprendido ainda.</p>
-              ) : (
-                <>
-                  <div className="text-sm text-slate-300">
-                    <span className="font-semibold tabular-nums text-slate-100">
-                      {DASH_COUNTS.learned}
-                    </span>{" "}
-                    itens aprendidos
-                  </div>
-                  <Sparkline series={LEARNED_SERIES} className="mt-2 h-20 w-full" />
-                </>
-              )}
-            </Panel>
-
             <Panel
               title="Caracteres"
               action={
@@ -355,8 +390,8 @@ function DesktopDashboard({ state }: Props) {
             >
               {loading ? (
                 <div className="flex flex-wrap gap-1.5">
-                  {PLACEHOLDER_KEYS.slice(0, 14).map((key) => (
-                    <Skeleton key={key} className="h-20 w-[76px]" />
+                  {PLACEHOLDER_KEYS.slice(0, 12).map((key) => (
+                    <Skeleton key={key} className="h-[54px] w-[54px]" />
                   ))}
                 </div>
               ) : empty ? (
@@ -382,6 +417,28 @@ function DesktopDashboard({ state }: Props) {
                   />
                 </>
               )}
+            </Panel>
+
+            <Panel title="Itens aprendidos">
+              {loading ? (
+                <Skeleton className="h-36 w-full" />
+              ) : empty ? (
+                <p className="text-sm text-slate-500">Nenhum item aprendido ainda.</p>
+              ) : (
+                <>
+                  <div className="text-sm text-slate-300">
+                    <span className="font-semibold tabular-nums text-slate-100">
+                      {DASH_COUNTS.learned}
+                    </span>{" "}
+                    itens aprendidos
+                  </div>
+                  <LearnedChart />
+                </>
+              )}
+            </Panel>
+
+            <Panel title="Estudo extra">
+              {loading ? <Skeleton className="h-20 w-full" /> : <ExtraStudyStrip empty={empty} />}
             </Panel>
           </div>
 
@@ -470,6 +527,89 @@ function MobileDashboard({ state }: Props) {
       )}
 
       <div className="rounded-xl bg-slate-900/60 p-3 ring-1 ring-white/5">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            Caracteres
+          </span>
+          <FilterChips
+            filter={filter}
+            onChange={(f) => {
+              setFilter(f);
+              setShown(MOBILE_STEP);
+            }}
+            allCount={items.length}
+            leechCount={leeches.length}
+          />
+        </div>
+        {loading ? (
+          <div className="grid grid-cols-5 gap-1.5">
+            {PLACEHOLDER_KEYS.slice(0, 10).map((key) => (
+              <Skeleton key={key} className="h-11 w-full" />
+            ))}
+          </div>
+        ) : empty ? (
+          <p className="text-[10px] text-slate-500">Adicione itens para vê-los aqui.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-5 gap-1.5">
+              {visible.map((item) => (
+                <CharTile key={item.hanzi} item={item} compact fluid />
+              ))}
+            </div>
+            {shown < active.length ? (
+              <button
+                type="button"
+                onClick={() => setShown((n) => n + MOBILE_STEP)}
+                className="mt-3 w-full rounded-lg border border-white/10 py-2 text-[11px] font-medium text-slate-300"
+              >
+                Carregar mais ({visible.length} de {active.length})
+              </button>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <div className="rounded-xl bg-slate-900/60 p-3 ring-1 ring-white/5">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            Itens aprendidos
+          </span>
+          <span className="text-[10px] tabular-nums text-slate-400">{DASH_COUNTS.learned}</span>
+        </div>
+        {loading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : empty ? (
+          <p className="text-[10px] text-slate-500">Nenhum item aprendido ainda.</p>
+        ) : (
+          <LearnedChart className="h-28 w-full" />
+        )}
+      </div>
+
+      <div className="rounded-xl bg-slate-900/60 p-3 ring-1 ring-white/5">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            Estudo extra
+          </span>
+          <button
+            type="button"
+            disabled={empty}
+            className="rounded bg-accent-500 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-40"
+          >
+            Praticar
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          {empty ? (
+            <span className="text-[10px] text-slate-500">Nenhum erro no período.</span>
+          ) : (
+            EXTRA_STUDY.recent_mistakes.map((item) => (
+              <CharTile key={item.hanzi} item={item} compact />
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-slate-900/60 p-3 ring-1 ring-white/5">
         <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
           SRS Stages
         </div>
@@ -489,88 +629,6 @@ function MobileDashboard({ state }: Props) {
         </div>
         {loading ? <Skeleton className="h-10 w-full" /> : <UpcomingRows limit={4} />}
       </div>
-
-      <div className="rounded-xl bg-slate-900/60 p-3 ring-1 ring-white/5">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Estudo extra
-          </span>
-          <button
-            type="button"
-            disabled={empty}
-            className="rounded bg-accent-500 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-40"
-          >
-            Praticar
-          </button>
-        </div>
-        <div className="flex gap-1">
-          <span className="rounded-full border border-accent-500 bg-accent-500/15 px-2 py-0.5 text-[10px] text-accent-300">
-            Erros ({empty ? 0 : 4})
-          </span>
-          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-400">
-            Aprendidos ({empty ? 0 : 5})
-          </span>
-        </div>
-      </div>
-
-      <div className="rounded-xl bg-slate-900/60 p-3 ring-1 ring-white/5">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Itens aprendidos
-          </span>
-          <span className="text-[10px] tabular-nums text-slate-400">{DASH_COUNTS.learned}</span>
-        </div>
-        {loading ? (
-          <Skeleton className="h-12 w-full" />
-        ) : empty ? (
-          <p className="text-[10px] text-slate-500">Nenhum item aprendido ainda.</p>
-        ) : (
-          <Sparkline series={LEARNED_SERIES} className="h-12 w-full" />
-        )}
-      </div>
-
-      <div className="rounded-xl bg-slate-900/60 p-3 ring-1 ring-white/5">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Caracteres
-          </span>
-          <FilterChips
-            filter={filter}
-            onChange={(f) => {
-              setFilter(f);
-              setShown(MOBILE_STEP);
-            }}
-            allCount={items.length}
-            leechCount={leeches.length}
-          />
-        </div>
-        {loading ? (
-          <div className="grid grid-cols-4 gap-1.5">
-            {PLACEHOLDER_KEYS.slice(0, 8).map((key) => (
-              <Skeleton key={key} className="h-16 w-full" />
-            ))}
-          </div>
-        ) : empty ? (
-          <p className="text-[10px] text-slate-500">Adicione itens para vê-los aqui.</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-4 gap-1.5">
-              {visible.map((item) => (
-                <CharTile key={item.hanzi} item={item} compact fluid />
-              ))}
-            </div>
-            {shown < active.length ? (
-              <button
-                type="button"
-                onClick={() => setShown((n) => n + MOBILE_STEP)}
-                className="mt-3 w-full rounded-lg border border-white/10 py-2 text-[11px] font-medium text-slate-300"
-              >
-                Carregar mais ({visible.length} de {active.length})
-              </button>
-            ) : null}
-          </>
-        )}
-      </div>
     </div>
   );
 }
@@ -583,9 +641,9 @@ export function QueueDashboard({ state }: Props) {
       </AppChrome>
       <div className="mx-auto max-w-6xl border-t border-white/10 px-6 py-10">
         <h2 className="mb-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Mobile — o rail vira uma pilha depois das ações
+          Mobile — coluna principal primeiro, rail por último
         </h2>
-        <PhoneFrame caption="Ações, SRS Stages, próximas revisões, estudo extra, gráfico e grid em 4 colunas sem sobreposição, com 'Carregar mais'.">
+        <PhoneFrame caption="Ações, caracteres (5 colunas sem sobreposição), gráfico com eixos, estudo extra com tiles, SRS Stages e próximas revisões.">
           <MobileChrome>
             <MobileDashboard state={state} />
           </MobileChrome>

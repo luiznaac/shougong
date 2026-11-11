@@ -5,7 +5,6 @@
 
 import type { ReactNode } from "react";
 import { Hanzi } from "../../components/Hanzi.tsx";
-import { Pinyin } from "../../components/Pinyin.tsx";
 import { GROUP_COLOR } from "../../lib/srs.ts";
 import { Icon } from "../icons.tsx";
 import type { MockItem } from "./dashboardData.ts";
@@ -89,18 +88,18 @@ export function MobileChrome({ children }: { children: ReactNode }) {
   );
 }
 
-export function Badge({ kind }: { kind: "ghost" | "bolt" }) {
+export function Badge({ kind, small = false }: { kind: "ghost" | "bolt"; small?: boolean }) {
   const leech = kind === "ghost";
   return (
     <span
       role="img"
       aria-label={leech ? "Sanguessuga" : "Prioridade"}
       title={leech ? "Sanguessuga" : "Prioridade"}
-      className={`grid h-4 w-4 place-items-center rounded-full bg-slate-950/85 ring-1 ring-white/10 ${
-        leech ? "text-rose-300" : "text-amber-300"
-      }`}
+      className={`grid place-items-center rounded-full bg-slate-950/85 ring-1 ring-white/10 ${
+        small ? "h-3 w-3" : "h-4 w-4"
+      } ${leech ? "text-rose-300" : "text-amber-300"}`}
     >
-      <Icon name={kind} className="h-3 w-3" strokeWidth={2.6} />
+      <Icon name={kind} className={small ? "h-2.5 w-2.5" : "h-3 w-3"} strokeWidth={2.6} />
     </span>
   );
 }
@@ -116,32 +115,24 @@ export function CharTile({
   /** Fill the grid cell instead of a fixed width (prevents phone-grid overlap). */
   fluid?: boolean;
 }) {
-  const width = fluid ? "w-full min-w-0" : compact ? "w-[68px]" : "w-[76px]";
   return (
     <div
-      className={`flex flex-col items-center rounded-lg border-b-2 bg-slate-900/70 text-center ring-1 ring-white/5 ${width} ${
-        compact ? "px-0.5 py-1" : "px-1 py-1.5"
+      className={`relative grid place-items-center rounded-lg border-b-2 bg-slate-900/70 ring-1 ring-white/5 ${
+        fluid ? "h-[52px] w-full min-w-0" : compact ? "h-11 w-11" : "h-[54px] w-[54px]"
       }`}
       style={{ borderColor: GROUP_COLOR[item.group] }}
-      title={`${item.group} · ${item.due}`}
+      title={`${item.hanzi} · ${item.group} · ${item.due}`}
     >
-      <div className="flex h-4 items-center gap-0.5 self-end">
-        {item.leech ? <Badge kind="ghost" /> : null}
-        {item.pinned ? <Badge kind="bolt" /> : null}
-      </div>
-      <Pinyin
-        value={item.pinyin}
-        className={`max-w-full truncate leading-tight ${compact ? "text-[8px]" : "text-[9px]"}`}
-      />
+      <span className="absolute top-0.5 right-0.5 flex gap-0.5">
+        {item.leech ? <Badge kind="ghost" small /> : null}
+        {item.pinned ? <Badge kind="bolt" small /> : null}
+      </span>
       <Hanzi
         text={item.hanzi}
-        singleCharPx={compact ? 20 : 24}
-        boxPx={compact ? 60 : 68}
-        className="my-1 text-slate-50"
+        singleCharPx={compact ? 18 : 22}
+        boxPx={compact ? 36 : 46}
+        className="text-slate-50"
       />
-      {compact ? null : (
-        <span className="line-clamp-1 max-w-full text-[9px] text-slate-400">{item.meaning}</span>
-      )}
     </div>
   );
 }
