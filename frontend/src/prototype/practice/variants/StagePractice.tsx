@@ -6,18 +6,16 @@
 
 import { Link } from "react-router-dom";
 import { Pinyin } from "../../../components/Pinyin.tsx";
-import { keyedOccurrences } from "../../../lib/occurrenceKeys.ts";
 import { PhoneFrame } from "../../PhoneFrame.tsx";
 import {
   ActionArea,
-  FlipTile,
+  FlipCards,
   KeyboardLegend,
   ProgressSegments,
   SessionCounters,
   SrsIntactChip,
   SummaryPanel,
   Toast,
-  tileSize,
 } from "../parts.tsx";
 import { GRADES, MODES, type PracticeMode } from "../practiceData.ts";
 import {
@@ -90,7 +88,7 @@ function NextButton({ session, className = "" }: { session: PracticeSession; cla
 function StageDesktop({ session }: { session: PracticeSession }) {
   const meta = MODES[session.mode];
   const item = session.item;
-  const chars = item ? keyedOccurrences([...item.simplified], (c) => c) : [];
+  const chars = item ? [...item.simplified] : [];
 
   if (session.finished || !item) {
     return (
@@ -101,8 +99,6 @@ function StageDesktop({ session }: { session: PracticeSession }) {
       </div>
     );
   }
-
-  const size = tileSize(chars.length, 460);
 
   return (
     <div className="flex h-[720px] flex-col overflow-hidden rounded-[2rem] bg-slate-950 ring-1 ring-white/10">
@@ -131,16 +127,7 @@ function StageDesktop({ session }: { session: PracticeSession }) {
           <div className="rounded-full bg-slate-950/45 px-5 py-1.5 backdrop-blur-sm">
             <Pinyin value={item.pinyin} className="text-2xl font-medium sm:text-3xl" />
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {chars.map(({ key: slotKey, item: char }) => (
-              <FlipTile
-                key={slotKey}
-                char={char}
-                hidden={session.phase === "prompt"}
-                sizePx={size}
-              />
-            ))}
-          </div>
+          <FlipCards chars={chars} hidden={session.phase === "prompt"} available={460} />
           <p className="max-w-xl text-center text-lg font-semibold text-white drop-shadow">
             {item.definitions.slice(0, 3).join(" · ")}
           </p>
@@ -177,10 +164,10 @@ function StageDesktop({ session }: { session: PracticeSession }) {
   );
 }
 
-function StageMobile({ session }: { session: PracticeSession }) {
+export function StageMobile({ session }: { session: PracticeSession }) {
   const meta = MODES[session.mode];
   const item = session.item;
-  const chars = item ? keyedOccurrences([...item.simplified], (c) => c) : [];
+  const chars = item ? [...item.simplified] : [];
   const revealed = session.phase === "revealed";
 
   if (session.finished || !item) {
@@ -190,8 +177,6 @@ function StageMobile({ session }: { session: PracticeSession }) {
       </div>
     );
   }
-
-  const size = tileSize(chars.length, 300);
 
   return (
     <div className="flex h-full flex-col bg-slate-950 text-slate-200">
@@ -211,16 +196,7 @@ function StageMobile({ session }: { session: PracticeSession }) {
           <span className="rounded-full bg-slate-950/45 px-3 py-0.5">
             <Pinyin value={item.pinyin} className="text-lg font-medium" />
           </span>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {chars.map(({ key: slotKey, item: char }) => (
-              <FlipTile
-                key={slotKey}
-                char={char}
-                hidden={session.phase === "prompt"}
-                sizePx={size}
-              />
-            ))}
-          </div>
+          <FlipCards chars={chars} hidden={session.phase === "prompt"} available={300} min={40} />
           <p className="text-center text-sm font-semibold text-white">
             {item.definitions.slice(0, 2).join(" · ")}
           </p>
@@ -233,7 +209,7 @@ function StageMobile({ session }: { session: PracticeSession }) {
           {PHASE_QUESTION[session.phase]}
         </p>
         <div className="mt-3 flex justify-center">
-          <ActionArea session={session} className="w-32" />
+          <ActionArea session={session} className={chars.length > 3 ? "w-24" : "w-32"} />
         </div>
       </div>
 

@@ -7,16 +7,14 @@
 
 import { Link } from "react-router-dom";
 import { Pinyin } from "../../../components/Pinyin.tsx";
-import { keyedOccurrences } from "../../../lib/occurrenceKeys.ts";
 import { PhoneFrame } from "../../PhoneFrame.tsx";
 import {
   ActionArea,
-  FlipTile,
+  FlipCards,
   ProgressSegments,
   SrsIntactChip,
   SummaryPanel,
   Toast,
-  tileSize,
 } from "../parts.tsx";
 import { GRADES, MODES, type PracticeMode } from "../practiceData.ts";
 import {
@@ -46,7 +44,7 @@ function Metric({
 function BenchDesktop({ session }: { session: PracticeSession }) {
   const meta = MODES[session.mode];
   const item = session.item;
-  const chars = item ? keyedOccurrences([...item.simplified], (c) => c) : [];
+  const chars = item ? [...item.simplified] : [];
   const revealed = session.phase === "revealed";
 
   if (session.finished || !item) {
@@ -56,8 +54,6 @@ function BenchDesktop({ session }: { session: PracticeSession }) {
       </div>
     );
   }
-
-  const size = tileSize(chars.length, 420);
 
   return (
     <div className="grid h-[720px] grid-cols-[1.15fr_0.85fr] overflow-hidden rounded-[2rem] bg-slate-950 ring-1 ring-white/10">
@@ -79,16 +75,7 @@ function BenchDesktop({ session }: { session: PracticeSession }) {
 
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-10 py-6">
           <Pinyin value={item.pinyin} className="text-4xl font-medium" />
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {chars.map(({ key: slotKey, item: char }) => (
-              <FlipTile
-                key={slotKey}
-                char={char}
-                hidden={session.phase === "prompt"}
-                sizePx={size}
-              />
-            ))}
-          </div>
+          <FlipCards chars={chars} hidden={session.phase === "prompt"} available={460} />
           <p className="text-center text-xl font-semibold text-slate-200">
             {item.definitions.slice(0, 3).join(" · ")}
           </p>
@@ -181,7 +168,7 @@ function BenchDesktop({ session }: { session: PracticeSession }) {
 function BenchMobile({ session }: { session: PracticeSession }) {
   const meta = MODES[session.mode];
   const item = session.item;
-  const chars = item ? keyedOccurrences([...item.simplified], (c) => c) : [];
+  const chars = item ? [...item.simplified] : [];
   const revealed = session.phase === "revealed";
 
   if (session.finished || !item) {
@@ -191,8 +178,6 @@ function BenchMobile({ session }: { session: PracticeSession }) {
       </div>
     );
   }
-
-  const size = tileSize(chars.length, 300);
 
   return (
     <div className="flex h-full flex-col bg-slate-950 text-slate-200">
@@ -225,11 +210,7 @@ function BenchMobile({ session }: { session: PracticeSession }) {
 
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-3">
         <Pinyin value={item.pinyin} className="text-2xl font-medium" />
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {chars.map(({ key: slotKey, item: char }) => (
-            <FlipTile key={slotKey} char={char} hidden={session.phase === "prompt"} sizePx={size} />
-          ))}
-        </div>
+        <FlipCards chars={chars} hidden={session.phase === "prompt"} available={300} />
         <p className="text-center text-sm font-semibold text-slate-200">
           {item.definitions.slice(0, 2).join(" · ")}
         </p>

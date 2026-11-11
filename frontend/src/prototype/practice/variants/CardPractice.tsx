@@ -7,18 +7,16 @@
 
 import { Link } from "react-router-dom";
 import { Pinyin } from "../../../components/Pinyin.tsx";
-import { keyedOccurrences } from "../../../lib/occurrenceKeys.ts";
 import { PhoneFrame } from "../../PhoneFrame.tsx";
 import { Icon } from "../../icons.tsx";
 import {
   ActionArea,
-  FlipTile,
+  FlipCards,
   KeyboardLegend,
   SessionCounters,
   SrsIntactChip,
   SummaryPanel,
   Toast,
-  tileSize,
 } from "../parts.tsx";
 import { GRADES, MODES, type PracticeMode } from "../practiceData.ts";
 import {
@@ -86,7 +84,7 @@ function CardGrades({ session }: { session: PracticeSession }) {
 function CardDesktop({ session }: { session: PracticeSession }) {
   const meta = MODES[session.mode];
   const item = session.item;
-  const chars = item ? keyedOccurrences([...item.simplified], (c) => c) : [];
+  const chars = item ? [...item.simplified] : [];
 
   if (session.finished || !item) {
     return (
@@ -97,8 +95,6 @@ function CardDesktop({ session }: { session: PracticeSession }) {
       </div>
     );
   }
-
-  const size = tileSize(chars.length, 400);
 
   return (
     <div className="relative flex h-[720px] flex-col items-center justify-center overflow-hidden rounded-[2rem] bg-slate-950 ring-1 ring-white/10">
@@ -134,16 +130,7 @@ function CardDesktop({ session }: { session: PracticeSession }) {
 
         <div className="flex flex-col items-center gap-3 px-8 pt-6">
           <Pinyin value={item.pinyin} className="text-3xl font-medium" />
-          <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {chars.map(({ key: slotKey, item: char }) => (
-              <FlipTile
-                key={slotKey}
-                char={char}
-                hidden={session.phase === "prompt"}
-                sizePx={size}
-              />
-            ))}
-          </div>
+          <FlipCards chars={chars} hidden={session.phase === "prompt"} available={450} />
           <p className="text-center text-base font-semibold text-slate-200">
             {item.definitions.slice(0, 3).join(" · ")}
           </p>
@@ -191,7 +178,7 @@ function CardDesktop({ session }: { session: PracticeSession }) {
 function CardMobile({ session }: { session: PracticeSession }) {
   const meta = MODES[session.mode];
   const item = session.item;
-  const chars = item ? keyedOccurrences([...item.simplified], (c) => c) : [];
+  const chars = item ? [...item.simplified] : [];
   const revealed = session.phase === "revealed";
 
   if (session.finished || !item) {
@@ -201,8 +188,6 @@ function CardMobile({ session }: { session: PracticeSession }) {
       </div>
     );
   }
-
-  const size = tileSize(chars.length, 290);
 
   return (
     <div className="flex h-full flex-col bg-slate-950 text-slate-200">
@@ -224,11 +209,7 @@ function CardMobile({ session }: { session: PracticeSession }) {
 
       <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4">
         <Pinyin value={item.pinyin} className="text-2xl font-medium" />
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {chars.map(({ key: slotKey, item: char }) => (
-            <FlipTile key={slotKey} char={char} hidden={session.phase === "prompt"} sizePx={size} />
-          ))}
-        </div>
+        <FlipCards chars={chars} hidden={session.phase === "prompt"} available={290} />
         <p className="text-center text-sm font-semibold text-slate-200">
           {item.definitions.slice(0, 2).join(" · ")}
         </p>

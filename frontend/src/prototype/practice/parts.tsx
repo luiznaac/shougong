@@ -7,6 +7,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useRef } from "react";
 import { Link } from "react-router-dom";
 import type { SrsRating } from "../../api/types.ts";
+import { keyedOccurrences } from "../../lib/occurrenceKeys.ts";
 import { summaryCopy } from "../../lib/quizPractice.ts";
 import { Icon } from "../icons.tsx";
 import { type MockQuizItem, RATING_TONE } from "./practiceData.ts";
@@ -57,9 +58,48 @@ export function FlipTile({
   );
 }
 
-/** Sizes a row of flip tiles to the frame it lives in. */
-export function tileSize(chars: number, available: number) {
-  return Math.min(132, Math.round((available - (chars - 1) * 12) / chars));
+/**
+ * One word's characters as flip tiles, sized to the frame it lives in. The row
+ * shrinks per character down to `min`, then wraps into balanced rows, so a
+ * five-character word stays legible instead of turning into confetti.
+ */
+export function FlipCards({
+  chars,
+  hidden,
+  available,
+  min = 56,
+  cap = 132,
+  gap = 10,
+}: {
+  chars: string[];
+  hidden: boolean;
+  available: number;
+  min?: number;
+  cap?: number;
+  gap?: number;
+}) {
+  const count = Math.max(1, chars.length);
+  let perRow = count;
+  let size = Math.min(cap, Math.floor((available - (perRow - 1) * gap) / perRow));
+  while (size < min && perRow > 1) {
+    perRow = Math.ceil(perRow / 2);
+    const widest = Math.min(perRow, count);
+    size = Math.min(cap, Math.floor((available - (widest - 1) * gap) / widest));
+  }
+  const rows: string[][] = [];
+  for (let i = 0; i < chars.length; i += perRow) rows.push(chars.slice(i, i + perRow));
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      {keyedOccurrences(rows, (row) => row.join("")).map(({ key: rowKey, item: row }) => (
+        <div key={rowKey} className="flex items-center justify-center" style={{ gap }}>
+          {keyedOccurrences(row, (char) => char).map(({ key: charKey, item: char }) => (
+            <FlipTile key={charKey} char={char} hidden={hidden} sizePx={size} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -160,7 +200,11 @@ export function StrokeMock({
             backgroundSize: "50% 50%",
           }}
         />
-        <span lang="zh-Hans" className="font-hanzi text-6xl text-slate-100">
+        <span
+          lang="zh-Hans"
+          className="font-hanzi leading-none text-slate-100"
+          style={{ fontSize: Math.min(96, Math.round(170 / Math.max(1, word.length))) }}
+        >
           {word}
         </span>
       </div>
