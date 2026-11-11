@@ -55,7 +55,7 @@ The published ports are configurable with `HTTP_PORT` / `WEB_HOST_PORT`; inside 
 
 ```bash
 docker run --rm -p 8130:8080 -p 8131:8081 \
-  -e MYSQL__HOST=host.docker.internal -e MYSQL__DATABASE=shougong \
+  -e MYSQL__HOST=host.docker.internal -e MYSQL__PORT=3306 -e MYSQL__DATABASE=shougong \
   -e MYSQL__USER=root -e MYSQL__PASSWORD= \
   luiznaac/shougong:latest
 ```

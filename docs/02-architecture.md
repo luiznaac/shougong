@@ -157,7 +157,7 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 | `APP_ENV` | `dev` | Controls JSON logging and dev reload |
 | `HTTP_PORT` | `8130` | uvicorn host port |
 | `MYSQL__HOST` / `MYSQL__USER` / `MYSQL__PASSWORD` / `MYSQL__DATABASE` | localhost / root / empty / shougong | Database connection |
-| `MYSQL__PORT` | `8132` | MySQL host port |
+| `MYSQL__PORT` | `8132` (host dev); the image pins `3306` | MySQL port; container/deploy talks to the external database on `3306` |
 | `DICTIONARY_AUTOLOAD` | `true` | Fill CEDICT on boot if empty |
 | `HSK_ENRICH_AUTOLOAD` | `true` | Stamp HSK/POS on boot if missing |
 | `STUDY_TIMEZONE` | `UTC` | IANA timezone for the SRS day boundary |
