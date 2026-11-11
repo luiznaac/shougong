@@ -293,6 +293,152 @@ export function FxChart({ history, height = 176 }: { history: MockSnapshot[]; he
   );
 }
 
+/** Trajectory chart with visible axes — no snapshot list, just the curve. */
+export function FxChartAxes({
+  history,
+  height = 240,
+}: {
+  history: MockSnapshot[];
+  height?: number;
+}) {
+  const W = 520;
+  const PAD = { top: 14, right: 46, bottom: 30, left: 46 };
+  const PW = W - PAD.left - PAD.right;
+  const PH = height - PAD.top - PAD.bottom;
+  const rows = [...history].reverse();
+  const maxStability = Math.max(1, Math.ceil(Math.max(...rows.map((r) => r.stability)) / 5) * 5);
+  const t0 = new Date(rows[0].created_at).getTime();
+  const t1 = new Date(rows[rows.length - 1].created_at).getTime();
+  const span = Math.max(1, t1 - t0);
+
+  const x = (t: number) => PAD.left + ((t - t0) / span) * PW;
+  const yStab = (v: number) => PAD.top + PH - (v / maxStability) * PH;
+  const yDiff = (v: number) => PAD.top + PH - (v / 10) * PH;
+
+  const stab = rows.map((r) => `${x(new Date(r.created_at).getTime())},${yStab(r.stability)}`);
+  const diff = rows.map((r) => `${x(new Date(r.created_at).getTime())},${yDiff(r.difficulty)}`);
+  const area = `${PAD.left},${PAD.top + PH} ${stab.join(" ")} ${PAD.left + PW},${PAD.top + PH}`;
+
+  const yTicks = [0, 0.5, 1];
+  const dateTicks = [0, 1 / 3, 2 / 3, 1].map((f) => {
+    const t = t0 + f * span;
+    return {
+      x: PAD.left + f * PW,
+      label: new Date(t).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
+    };
+  });
+
+  return (
+    <svg viewBox={`0 0 ${W} ${height}`} className="w-full" role="img" aria-label="Trajetória FSRS">
+      <title>Estabilidade e dificuldade ao longo do tempo</title>
+
+      {yTicks.map((f) => (
+        <line
+          key={f}
+          x1={PAD.left}
+          x2={PAD.left + PW}
+          y1={PAD.top + PH * f}
+          y2={PAD.top + PH * f}
+          className="text-white/5"
+          stroke="currentColor"
+        />
+      ))}
+
+      {/* left axis — stability (days) */}
+      <line
+        x1={PAD.left}
+        x2={PAD.left}
+        y1={PAD.top}
+        y2={PAD.top + PH}
+        className="text-white/15"
+        stroke="currentColor"
+      />
+      {yTicks.map((f) => (
+        <text
+          key={`sy-${f}`}
+          x={PAD.left - 7}
+          y={PAD.top + PH * f + 3}
+          textAnchor="end"
+          className="fill-accent-500 text-[9px] tabular-nums"
+        >
+          {Math.round(maxStability * (1 - f))}
+        </text>
+      ))}
+      <text x={PAD.left - 7} y={PAD.top - 4} textAnchor="end" className="fill-slate-500 text-[9px]">
+        dias
+      </text>
+
+      {/* right axis — difficulty (1–10) */}
+      <line
+        x1={PAD.left + PW}
+        x2={PAD.left + PW}
+        y1={PAD.top}
+        y2={PAD.top + PH}
+        className="text-white/15"
+        stroke="currentColor"
+      />
+      {yTicks.map((f) => (
+        <text
+          key={`dy-${f}`}
+          x={PAD.left + PW + 7}
+          y={PAD.top + PH * f + 3}
+          className="fill-sky-500 text-[9px] tabular-nums"
+        >
+          {(10 * (1 - f)).toFixed(0)}
+        </text>
+      ))}
+      <text x={PAD.left + PW + 7} y={PAD.top - 4} className="fill-slate-500 text-[9px]">
+        dif.
+      </text>
+
+      {/* bottom axis — dates */}
+      <line
+        x1={PAD.left}
+        x2={PAD.left + PW}
+        y1={PAD.top + PH}
+        y2={PAD.top + PH}
+        className="text-white/15"
+        stroke="currentColor"
+      />
+      {dateTicks.map((tick) => (
+        <g key={tick.label + tick.x}>
+          <line
+            x1={tick.x}
+            x2={tick.x}
+            y1={PAD.top + PH}
+            y2={PAD.top + PH + 4}
+            className="text-white/15"
+            stroke="currentColor"
+          />
+          <text
+            x={tick.x}
+            y={PAD.top + PH + 15}
+            textAnchor="middle"
+            className="fill-slate-500 text-[9px]"
+          >
+            {tick.label}
+          </text>
+        </g>
+      ))}
+
+      <polygon points={area} fill="var(--color-accent-500)" fillOpacity="0.12" />
+      <polyline
+        points={stab.join(" ")}
+        fill="none"
+        stroke="var(--color-accent-500)"
+        strokeWidth="2"
+      />
+      <polyline
+        points={diff.join(" ")}
+        fill="none"
+        stroke="#0ea5e9"
+        strokeWidth="2"
+        strokeDasharray="4 3"
+      />
+    </svg>
+  );
+}
+
 /** Tiny embedded trend — trajectory as a glanceable hint, not a hero chart. */
 export function Sparkline({
   history,
