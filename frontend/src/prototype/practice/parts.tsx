@@ -225,13 +225,13 @@ export function StrokeMock({
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
       {chars.length > 1 && (
-        <div className="flex flex-wrap justify-center gap-1.5">
+        <div className="flex max-w-[23rem] flex-wrap justify-center gap-2">
           {keyedOccurrences(chars, (c) => c).map(({ key: charKey, item: c }, i) => (
             <button
               key={charKey}
               type="button"
               onClick={() => pick(i)}
-              className={`font-hanzi rounded-md px-2 py-0.5 text-sm transition-colors ${
+              className={`font-hanzi grid h-11 min-w-11 place-items-center rounded-lg px-2 text-lg transition-colors ${
                 i === index
                   ? "bg-white text-slate-900"
                   : "bg-slate-950/50 text-slate-300 ring-1 ring-white/10 hover:text-white"
@@ -244,8 +244,8 @@ export function StrokeMock({
       )}
 
       <div
-        style={{ maxWidth: sizePx }}
-        className="relative grid aspect-square w-full place-items-center rounded-2xl border border-white/10 bg-slate-950/50"
+        style={{ width: sizePx, height: sizePx }}
+        className="relative grid shrink-0 place-items-center rounded-2xl border border-white/10 bg-slate-950/50"
       >
         <div
           className="pointer-events-none absolute inset-0 opacity-30"

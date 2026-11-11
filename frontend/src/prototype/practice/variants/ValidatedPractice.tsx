@@ -182,7 +182,7 @@ export function ValidatedDesktop({
             available={430}
             min={40}
             showPlayer={session.phase === "info" || (revealed && playerOn)}
-            playerSize={180}
+            playerSize={175}
           />
           <p className="max-w-xl text-center text-lg font-semibold text-white drop-shadow">
             {item.definitions.slice(0, 3).join(" · ")}
@@ -328,7 +328,7 @@ export function ValidatedMobile({
             available={300}
             min={40}
             showPlayer={session.phase === "info" || (revealed && playerOn)}
-            playerSize={190}
+            playerSize={150}
           />
           <p className="text-center text-sm font-semibold text-white">
             {item.definitions.slice(0, 2).join(" · ")}
