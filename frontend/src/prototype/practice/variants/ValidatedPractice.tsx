@@ -45,7 +45,7 @@ function gradeTone(
   if (palette === "bar") {
     if (selected) return `${grade.fillTone} text-white`;
     return dim
-      ? "border-l-4 border-slate-700 bg-slate-900/60 text-slate-500"
+      ? `border-l-4 bg-slate-900/70 text-slate-500 ${grade.barTone}`
       : `border-l-4 bg-slate-900 text-white ${grade.barTone}`;
   }
   if (dim) return "bg-slate-800 text-slate-500";
