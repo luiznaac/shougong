@@ -293,6 +293,51 @@ export function FxChart({ history, height = 176 }: { history: MockSnapshot[]; he
   );
 }
 
+/** Tiny embedded trend — trajectory as a glanceable hint, not a hero chart. */
+export function Sparkline({
+  history,
+  width = 180,
+  height = 44,
+  className = "",
+}: {
+  history: MockSnapshot[];
+  width?: number;
+  height?: number;
+  className?: string;
+}) {
+  const rows = [...history].reverse();
+  const max = Math.max(1, ...rows.map((r) => r.stability));
+  const pad = 4;
+  const pts = rows
+    .map((r, i) => {
+      const x = pad + (i / Math.max(1, rows.length - 1)) * (width - pad * 2);
+      const y = pad + (1 - r.stability / max) * (height - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const area = `${pad},${height - pad} ${pts} ${width - pad},${height - pad}`;
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className={className}
+      role="img"
+      aria-label="Tendência de estabilidade"
+    >
+      <title>Tendência de estabilidade</title>
+      <polygon points={area} fill="var(--color-accent-500)" fillOpacity="0.1" />
+      <polyline
+        points={pts}
+        fill="none"
+        stroke="var(--color-accent-500)"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function ChartLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
