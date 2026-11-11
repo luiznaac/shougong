@@ -327,7 +327,7 @@ function DesktopDashboard({ state }: Props) {
               <>
                 <div className="grid grid-cols-3 justify-items-center gap-2 sm:grid-cols-4">
                   {visible.map((item) => (
-                    <CharTile key={item.hanzi} item={item} />
+                    <CharTile key={item.hanzi} item={item} fluid />
                   ))}
                 </div>
                 {shown < active.length ? (
@@ -496,7 +496,7 @@ function MobileDashboard({ state }: Props) {
           <>
             <div className="grid grid-cols-2 justify-items-center gap-2">
               {visible.map((item) => (
-                <CharTile key={item.hanzi} item={item} />
+                <CharTile key={item.hanzi} item={item} fluid />
               ))}
             </div>
             {shown < active.length ? (

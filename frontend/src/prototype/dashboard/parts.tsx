@@ -106,11 +106,21 @@ export function Badge({ kind }: { kind: "ghost" | "bolt" }) {
 }
 
 /** Character tile — the shared visual primitive; layouts arrange it. */
-export function CharTile({ item, compact = false }: { item: MockItem; compact?: boolean }) {
+export function CharTile({
+  item,
+  compact = false,
+  fluid = false,
+}: {
+  item: MockItem;
+  compact?: boolean;
+  /** Fill the grid cell instead of a fixed width (prevents phone-grid overlap). */
+  fluid?: boolean;
+}) {
+  const width = fluid ? "w-full min-w-0" : compact ? "w-[68px]" : "w-[76px]";
   return (
     <div
-      className={`flex flex-col items-center rounded-lg border-b-2 bg-slate-900/70 text-center ring-1 ring-white/5 ${
-        compact ? "w-20 px-1 py-1.5" : "w-24 px-1.5 py-2"
+      className={`flex flex-col items-center rounded-lg border-b-2 bg-slate-900/70 text-center ring-1 ring-white/5 ${width} ${
+        compact ? "px-0.5 py-1" : "px-1 py-1.5"
       }`}
       style={{ borderColor: GROUP_COLOR[item.group] }}
       title={`${item.group} · ${item.due}`}
@@ -121,16 +131,16 @@ export function CharTile({ item, compact = false }: { item: MockItem; compact?: 
       </div>
       <Pinyin
         value={item.pinyin}
-        className={`max-w-full truncate leading-tight ${compact ? "text-[9px]" : "text-[10px]"}`}
+        className={`max-w-full truncate leading-tight ${compact ? "text-[8px]" : "text-[9px]"}`}
       />
       <Hanzi
         text={item.hanzi}
-        singleCharPx={compact ? 24 : 28}
-        boxPx={compact ? 72 : 88}
+        singleCharPx={compact ? 20 : 24}
+        boxPx={compact ? 60 : 68}
         className="my-1 text-slate-50"
       />
       {compact ? null : (
-        <span className="line-clamp-1 max-w-full text-[10px] text-slate-400">{item.meaning}</span>
+        <span className="line-clamp-1 max-w-full text-[9px] text-slate-400">{item.meaning}</span>
       )}
     </div>
   );
