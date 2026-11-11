@@ -12,6 +12,7 @@ from shougong.usecase.reading.model import (
     PartOfSpeech,
     ReadingFormat,
     ReadingRequest,
+    ReadingSummary,
     ReadingTopic,
     SavedReadingText,
 )
@@ -84,6 +85,16 @@ class IReadingHistoryRepository(Protocol):
 
     async def list(self, *, limit: int, offset: int) -> list[SavedReadingText]:
         """Most recently generated first."""
+        ...
+
+    async def get(self, reading_id: int) -> SavedReadingText | None: ...
+
+    async def list_summaries(
+        self, *, limit: int, offset: int, match_text: str | None = None
+    ) -> tuple[Sequence[ReadingSummary], int]:
+        """Summary rows, newest first, plus the exact total of the matching set.
+        With `match_text`, only readings containing that word token are counted
+        and each row carries its match snippet."""
         ...
 
 

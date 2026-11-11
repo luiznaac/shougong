@@ -14,7 +14,10 @@ from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket
 from shougong.usecase.reading.model import (
     GenerationAttempt,
     ReadingFormat,
+    ReadingMatch,
     ReadingRequest,
+    ReadingSummary,
+    ReadingSummaryPage,
     ReadingToken,
     ReadingTopic,
     ReadingWord,
@@ -435,6 +438,62 @@ class SavedReadingTextResponse(BaseModel):
             must_use=list(reading.must_use),
             speakers=[ReadingSpeakerResponse(name=s.name, pinyin=s.pinyin) for s in reading.speakers],
             created_at=saved.created_at,
+        )
+
+
+class ReadingMatchResponse(BaseModel):
+    before: str  # token slice before the hit, punctuation included, clamped to the article edge
+    hit: str
+    after: str
+
+    @classmethod
+    def from_domain(cls, match: ReadingMatch) -> Self:
+        return cls(before=match.before, hit=match.hit, after=match.after)
+
+
+class ReadingSummaryResponse(BaseModel):
+    id: int
+    format: str
+    topic: str | None
+    topic_generated: bool
+    model: str
+    extra_word_count: int  # of the chosen draft
+    token_count: int  # words + punctuation
+    attempt_count: int  # 1 for rows saved before the correction loop existed
+    created_at: datetime
+    preview: str  # first 48 characters of the concatenated token text
+    match: ReadingMatchResponse | None  # set only when the list is filtered by entry_id
+
+    @classmethod
+    def from_domain(cls, summary: ReadingSummary) -> Self:
+        return cls(
+            id=summary.id,
+            format=summary.format.value,
+            topic=summary.topic,
+            topic_generated=summary.topic_generated,
+            model=summary.model,
+            extra_word_count=summary.extra_word_count,
+            token_count=summary.token_count,
+            attempt_count=summary.attempt_count,
+            created_at=summary.created_at,
+            preview=summary.preview,
+            match=None if summary.match is None else ReadingMatchResponse.from_domain(summary.match),
+        )
+
+
+class ReadingSummaryPageResponse(BaseModel):
+    items: list[ReadingSummaryResponse]
+    total: int  # exact count of the matching set
+    limit: int
+    offset: int
+
+    @classmethod
+    def from_domain(cls, page: ReadingSummaryPage) -> Self:
+        return cls(
+            items=[ReadingSummaryResponse.from_domain(item) for item in page.items],
+            total=page.total,
+            limit=page.limit,
+            offset=page.offset,
         )
 
 

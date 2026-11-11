@@ -6,6 +6,7 @@ import type {
   ExtraStudy,
   GenerateReadingRequest,
   PriorityEdge,
+  ReadingSummaryPage,
   ReadingTopic,
   RelatedEntriesPage,
   ReviewLog,
@@ -163,8 +164,16 @@ export const api = {
   generateReading(req: GenerateReadingRequest): Promise<SavedReadingText> {
     return request("/reading-texts", { method: "POST", body: JSON.stringify(req) });
   },
-  listReadingHistory(limit = 20, offset = 0): Promise<SavedReadingText[]> {
-    return request(`/reading-texts?limit=${limit}&offset=${offset}`);
+  listReadingHistory(limit = 20, offset = 0, entryId?: number): Promise<ReadingSummaryPage> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (entryId !== undefined) params.set("entry_id", String(entryId));
+    return request(`/reading-texts?${params}`);
+  },
+  listReadingsByEntry(entryId: number, limit = 8, offset = 0): Promise<ReadingSummaryPage> {
+    return api.listReadingHistory(limit, offset, entryId);
+  },
+  getReading(id: number): Promise<SavedReadingText> {
+    return request(`/reading-texts/${id}`);
   },
   listReadingModels(): Promise<string[]> {
     return request("/reading-texts/models");

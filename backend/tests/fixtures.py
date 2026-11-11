@@ -38,10 +38,12 @@ from shougong.usecase.reading.model import (
     PartOfSpeech,
     ReadingFormat,
     ReadingRequest,
+    ReadingSummary,
     ReadingTopic,
     SavedReadingText,
 )
 from shougong.usecase.reading.proficiency import BudgetAudience
+from shougong.usecase.reading.summary import extra_word_count, match_snippet, preview
 from shougong.usecase.reading.working_set import WordUsage, WorkingSet
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
@@ -506,6 +508,36 @@ class FakeReadingHistoryRepository(IReadingHistoryRepository):
     async def list(self, *, limit: int, offset: int) -> list[SavedReadingText]:
         newest_first = sorted(self.saved, key=lambda s: s.id, reverse=True)
         return newest_first[offset : offset + limit]
+
+    async def get(self, reading_id: int) -> SavedReadingText | None:
+        return next((s for s in self.saved if s.id == reading_id), None)
+
+    async def list_summaries(
+        self, *, limit: int, offset: int, match_text: str | None = None
+    ) -> tuple[list[ReadingSummary], int]:
+        newest_first = sorted(self.saved, key=lambda s: (s.created_at, s.id), reverse=True)
+        matched = [
+            saved
+            for saved in newest_first
+            if match_text is None or match_snippet(saved.reading.tokens, match_text) is not None
+        ]
+        page = [
+            ReadingSummary(
+                id=saved.id,
+                format=saved.reading.format,
+                topic=saved.request.topic,
+                topic_generated=saved.request.topic_generated,
+                model=saved.request.model,
+                extra_word_count=extra_word_count(saved.reading.tokens, saved.reading.attempts),
+                token_count=len(saved.reading.tokens),
+                attempt_count=saved.reading.attempt_count,
+                created_at=saved.created_at,
+                preview=preview(saved.reading.tokens),
+                match=None if match_text is None else match_snippet(saved.reading.tokens, match_text),
+            )
+            for saved in matched[offset : offset + limit]
+        ]
+        return page, len(matched)
 
 
 class FakeHskDatasetSource(IHskDatasetSource):

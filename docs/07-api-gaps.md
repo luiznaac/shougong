@@ -10,7 +10,7 @@ These endpoints are suggestions to support the desktop interface proposals in [0
 | 2 | `GET /study-items` filters | High | Library, board, batch views |
 | 3 | `DELETE /study-items/{id}` | High | Queue management (remove item) |
 | 4 | `PATCH /study-items/{id}` | Medium | Pause/reschedule an item |
-| 5 | `GET /reading-texts/{id}` | Medium | Deep links and single-reading views |
+| 5 | ~~`GET /reading-texts/{id}`~~ | Done | Deep links and single-reading views — implemented with the summary list and `entry_id` filter |
 | 6 | `GET /review-logs` | Medium | Global accuracy/streak analytics |
 | 7 | `POST /characters/strokes/batch` | Medium | Preload stroke data for sessions |
 | 8 | ~~`GET /dictionary-entries/{id}/related`~~ | Done | Shared-character family with `study_item_id` (see below) |
@@ -67,9 +67,9 @@ Optional scheduling controls:
 
 `paused=true` removes the item from due queries without deleting data; a due override lets a learner defer one card explicitly. Both should record history snapshots.
 
-## 5. `GET /reading-texts/{id}`
+## 5. `GET /reading-texts/{id}` — done
 
-The list endpoint returns full objects, but deep links and per-reading views benefit from a single-resource fetch, including 404 semantics and the same hydration behavior.
+Implemented: the list route now returns summary rows, and `GET /reading-texts/{id}` returns the full reading with the same hydration behaviour and `404` for an unknown id (see [04-api.md](04-api.md) → Reading summary list).
 
 ## 6. `GET /review-logs` - global grade history
 

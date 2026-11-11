@@ -1,11 +1,14 @@
 import * as Popover from "@radix-ui/react-popover";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ApiError } from "../api/client.ts";
 import {
+  keys,
   useAddStudyItem,
   useGenerateReading,
   useReadingHistory,
   useReadingModels,
+  useReadingText,
   useStudyItems,
 } from "../api/queries.ts";
 import type {
@@ -52,12 +55,15 @@ export function Reading() {
       return null;
     }
   });
-  const [current, setCurrent] = useState<SavedReadingText | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
   const generateMutation = useGenerateReading();
-  const { data: history, isLoading: historyLoading } = useReadingHistory();
+  const { data: historyPage, isLoading: historyLoading } = useReadingHistory();
+  const { data: current } = useReadingText(selectedId);
   const { data: models, isLoading: modelsLoading, error: modelsError } = useReadingModels();
+  const history = historyPage?.items ?? [];
 
   // Fall back to the first available model until the user picks one (or if the
   // remembered choice is no longer offered by the proxy).
@@ -86,7 +92,9 @@ export function Reading() {
         model,
         topic: topic.trim() || null,
       });
-      setCurrent(saved);
+      // Seed the detail cache so the new reading renders without a refetch.
+      queryClient.setQueryData(keys.readingText(saved.id), saved);
+      setSelectedId(saved.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -242,11 +250,11 @@ export function Reading() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Histórico</h2>
         {historyLoading && <p className="mt-2 text-sm text-slate-500">Carregando…</p>}
         <ul className="mt-2 divide-y divide-white/5">
-          {(history ?? []).map((item) => (
+          {history.map((item) => (
             <li key={item.id}>
               <button
                 type="button"
-                onClick={() => setCurrent(item)}
+                onClick={() => setSelectedId(item.id)}
                 className={`w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-white/5 ${
                   current?.id === item.id ? "bg-white/5" : ""
                 }`}
@@ -275,24 +283,22 @@ export function Reading() {
                       <span>{item.attempt_count} tent.</span>
                     </>
                   )}
-                  {item.extra_words.length > 0 && (
+                  {item.extra_word_count > 0 && (
                     <>
                       <span>&middot;</span>
-                      <span className="text-amber-400">{item.extra_words.length} extra(s)</span>
+                      <span className="text-amber-400">{item.extra_word_count} extra(s)</span>
                     </>
                   )}
                   <span className="ml-auto shrink-0">
                     {new Date(item.created_at).toLocaleString()}
                   </span>
                 </div>
-                <p className="font-hanzi mt-1 truncate text-sm text-slate-200">
-                  {item.tokens.map((t) => t.text).join("")}
-                </p>
+                <p className="font-hanzi mt-1 truncate text-sm text-slate-200">{item.preview}</p>
               </button>
             </li>
           ))}
         </ul>
-        {!historyLoading && (history ?? []).length === 0 && (
+        {!historyLoading && history.length === 0 && (
           <p className="mt-2 text-sm text-slate-500">Nenhum texto gerado ainda.</p>
         )}
       </div>

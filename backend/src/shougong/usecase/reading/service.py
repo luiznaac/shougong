@@ -17,6 +17,7 @@ import random
 from collections import Counter
 from dataclasses import replace
 
+from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
@@ -40,6 +41,7 @@ from shougong.usecase.reading.model import (
     ReadingPunctuation,
     ReadingRequest,
     ReadingSpeaker,
+    ReadingSummaryPage,
     ReadingToken,
     ReadingWord,
     SavedReadingText,
@@ -226,6 +228,40 @@ class ReadingService:
     async def list_history(self, *, limit: int, offset: int) -> list[SavedReadingText]:
         items = await self._history.list(limit=limit, offset=offset)
         return await self._hydrate(items)
+
+    async def list_summaries(self, *, limit: int, offset: int, entry_id: int | None = None) -> ReadingSummaryPage:
+        """One page of history rows, optionally narrowed to readings whose
+        tokens resolve to `entry_id` under the same hydration rule as
+        `_hydrate`. An unknown id is an empty page, not an error."""
+        match_text: str | None = None
+        if entry_id is not None:
+            match_text = await self._entry_match_text(entry_id)
+            if match_text is None:
+                return ReadingSummaryPage(items=(), total=0, limit=limit, offset=offset)
+        items, total = await self._history.list_summaries(limit=limit, offset=offset, match_text=match_text)
+        return ReadingSummaryPage(items=tuple(items), total=total, limit=limit, offset=offset)
+
+    async def get(self, reading_id: int) -> SavedReadingText:
+        saved = await self._history.get(reading_id)
+        if saved is None:
+            raise ResourceNotFoundError("reading_text", str(reading_id))
+        hydrated = await self._hydrate([saved])
+        return hydrated[0]
+
+    async def _entry_match_text(self, entry_id: int) -> str | None:
+        """The word text whose tokens resolve to `entry_id`: the entry's own
+        simplified form, but only when hydration would actually pick this
+        entry (the studied reading wins, else the first candidate by id)."""
+        entry = await self._dictionary.get(entry_id)
+        if entry is None:
+            return None
+        studied = (await self._known_word_index()).get(entry.simplified)
+        if studied is not None:
+            return entry.simplified if studied.id == entry_id else None
+        candidates = await self._dictionary.find_by_simplified(entry.simplified)
+        if not candidates or candidates[0].id != entry_id:
+            return None
+        return entry.simplified
 
     async def _known_word_index(self) -> dict[str, DictionaryEntry]:
         entries = await self._study.list_known_entries()
