@@ -49,6 +49,6 @@ node <salgadinhos>/adapters/sandbox/run.mjs --stack node --workspace <repo-root>
 
 - Adding a page in the review/lesson flow → look at `Review.tsx`/`Lesson.tsx`/`Practice.tsx` first, they're intentionally outside `Layout`.
 - Changing what the UI shows for a backend enum → `i18n/`, and check `../docs/03-data-model.md` for the enum's full value set before assuming you've covered every case.
-- Adding, renaming or moving a destination → `lib/navigation.ts` and `App.tsx`, not a chrome component; an unmigrated surface renders `components/Placeholder.tsx`.
+- Adding, renaming or moving a destination → `lib/navigation.ts` and `App.tsx`, not a chrome component; a destination that has no surface yet renders `components/Placeholder.tsx`.
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.
