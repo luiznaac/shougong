@@ -342,12 +342,14 @@ export function Quiz({
 
   return (
     <div className="flex h-[100dvh] flex-col bg-slate-950 text-slate-200">
-      {band}
-      <div
-        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto py-3"
-        style={STAGE_HORIZONTAL_PADDING}
-      >
-        {middle}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {band}
+        <div
+          className="flex grow flex-col items-center justify-center gap-3 py-3"
+          style={STAGE_HORIZONTAL_PADDING}
+        >
+          {middle}
+        </div>
       </div>
       {dock}
       {toast && <Toast message={toast} />}
