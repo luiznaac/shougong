@@ -145,9 +145,11 @@ export function ItemIndex() {
             <Link to={PATHS.bibliotecaAdicionar} className="text-accent-500 hover:underline">
               Adicionar
             </Link>
-            <Link to={PATHS.bibliotecaImportar} className="text-slate-400 hover:text-slate-200">
-              Importar CSV
-            </Link>
+            {isDesktop ? (
+              <Link to={PATHS.bibliotecaImportar} className="text-slate-400 hover:text-slate-200">
+                Importar CSV
+              </Link>
+            ) : null}
           </div>
         }
       />
