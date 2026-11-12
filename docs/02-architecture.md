@@ -145,7 +145,7 @@ flowchart LR
 
 - One image (`Dockerfile`) builds the SPA, resolves backend deps, then ships both processes under supervisord.
 - `deploy/entrypoint.sh` renders the nginx config from a template, applies Alembic migrations, then starts supervisord. A failed migration aborts boot.
-- The API is exposed directly on `API_PORT` (8080) and through nginx on `WEB_PORT` (8081) at `/api`.
+- The API is exposed directly on `API_PORT` (8080) and through nginx on `WEB_PORT` (8081) at `/api`. Both are container-internal and fixed; the local compose publishes them on shougong's host block (`api` 8130, `web` 8131, `mysql` 8132 — see [README.md](../README.md#ports)).
 - CI (`backend` + `frontend` jobs) gates the Docker publish job, which only runs on `master` pushes and pushes `luiznaac/shougong:latest` + `:v<run-number>`.
 
 ## Configuration
@@ -154,13 +154,14 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `APP_ENV` | `dev` | Controls JSON logging |
-| `HTTP_PORT` | `8080` | uvicorn port |
-| `MYSQL__*` | localhost | Database connection |
+| `APP_ENV` | `dev` | Controls JSON logging and dev reload |
+| `HTTP_PORT` | `8130` in dev, `8080` otherwise | uvicorn host port |
+| `MYSQL__HOST` / `MYSQL__USER` / `MYSQL__PASSWORD` / `MYSQL__DATABASE` | localhost / root / empty / shougong | Database connection |
+| `MYSQL__PORT` | `8132` in dev, `3306` otherwise | MySQL port; deploy/test profiles reach their local MySQL on `3306` without extra config |
 | `DICTIONARY_AUTOLOAD` | `true` | Fill CEDICT on boot if empty |
 | `HSK_ENRICH_AUTOLOAD` | `true` | Stamp HSK/POS on boot if missing |
 | `STUDY_TIMEZONE` | `UTC` | IANA timezone for the SRS day boundary |
-| `GATEWAYS__APP__HOST` | `http://localhost:8080` | Self health-check base URL |
+| `GATEWAYS__APP__HOST` | unset — derived from `HTTP_PORT` | Self health-check base URL; an explicit host wins |
 | `GATEWAYS__AI__BASE_URL` | `http://localhost:4000` | LiteLLM proxy |
 | `GATEWAYS__AI__API_KEY` | `""` | LiteLLM auth |
 | `GATEWAYS__AI__REASONING_EFFORT` | `low` | Reasoning effort sent to the proxy (reasoning tokens count against the output ceiling) |

@@ -1,568 +1,177 @@
-import * as Popover from "@radix-ui/react-popover";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { ApiError } from "../api/client.ts";
-import {
-  keys,
-  useAddStudyItem,
-  useGenerateReading,
-  useReadingHistory,
-  useReadingModels,
-  useReadingText,
-  useStudyItems,
-} from "../api/queries.ts";
-import type {
-  ReadingAttempt,
-  ReadingFormat,
-  ReadingSpeaker,
-  ReadingToken,
-  SavedReadingText,
-} from "../api/types.ts";
-import { Pinyin } from "../components/Pinyin.tsx";
+import { useState } from "react";
+import { keys, useReadingHistory, useReadingHistoryPages, useReadingText } from "../api/queries.ts";
+import type { ReadingToken, SavedReadingText } from "../api/types.ts";
+import { ReadingArticle } from "../components/ReadingArticle.tsx";
+import { ReadingGenerator } from "../components/ReadingGenerator.tsx";
+import { READING_HISTORY_PAGE_SIZE, ReadingHistory } from "../components/ReadingHistory.tsx";
 import { ReadingTopicsPanel } from "../components/ReadingTopicsPanel.tsx";
 import { VocabularyPanel } from "../components/VocabularyPanel.tsx";
-import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
-import { readingFormatLabel } from "../i18n/readingFormat.ts";
-import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
+import { WordInspector, WordSheet } from "../components/WordInspector.tsx";
+import { pageOffset } from "../lib/pagination.ts";
+import { useMediaQuery } from "../lib/useMediaQuery.ts";
 
-const MODEL_STORAGE_KEY = "reading.model";
+type Segment = "leitura" | "historico" | "paineis";
 
-function totalTokens(reading: SavedReadingText): number {
-  return reading.prompt_tokens + reading.completion_tokens;
-}
+const SEGMENTS: { id: Segment; label: string }[] = [
+  { id: "leitura", label: "Leitura" },
+  { id: "historico", label: "Histórico" },
+  { id: "paineis", label: "Painéis" },
+];
 
-// A cleared number input reads back as "" → NaN; keep the request inside the
-// backend's bounds so it never 422s.
-function clamp(value: number, lo: number, hi: number, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.min(hi, Math.max(lo, Math.round(value)));
-}
-
+/**
+ * The Leitura workspace. Desktop is three panes inside the shell — a paged
+ * history rail, the bounded article with one wrapping generator bar, and the
+ * persistent word inspector over the vocabulary/topic accordions. Mobile splits
+ * the same surface into Leitura / Histórico / Painéis and turns a word lookup
+ * into a sticky bottom card. The history always reads summary rows; only a
+ * selected row fetches its full reading.
+ */
 export function Reading() {
-  const [format, setFormat] = useState<ReadingFormat>("paragraph");
-  const [maxExtraWords, setMaxExtraWords] = useState(2);
-  const [maxAttempts, setMaxAttempts] = useState(3);
-  const [topic, setTopic] = useState("");
-  const [model, setModel] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(MODEL_STORAGE_KEY);
-    } catch {
-      return null;
-    }
-  });
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
   const queryClient = useQueryClient();
-  const generateMutation = useGenerateReading();
-  const { data: historyPage, isLoading: historyLoading } = useReadingHistory();
-  const { data: current } = useReadingText(selectedId);
-  const { data: models, isLoading: modelsLoading, error: modelsError } = useReadingModels();
-  const history = historyPage?.items ?? [];
 
-  // Fall back to the first available model until the user picks one (or if the
-  // remembered choice is no longer offered by the proxy).
-  useEffect(() => {
-    if (!models || models.length === 0) return;
-    if (model === null || !models.includes(model)) setModel(models[0]);
-  }, [models, model]);
+  const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedToken, setSelectedToken] = useState<ReadingToken | null>(null);
+  const [segment, setSegment] = useState<Segment>("leitura");
 
-  const selectModel = (value: string) => {
-    setModel(value);
-    try {
-      localStorage.setItem(MODEL_STORAGE_KEY, value);
-    } catch {
-      /* private mode / storage disabled — selection still works for this session */
-    }
+  const desktopHistory = useReadingHistory(
+    READING_HISTORY_PAGE_SIZE,
+    pageOffset(page, READING_HISTORY_PAGE_SIZE),
+    { enabled: isDesktop },
+  );
+  const mobileHistory = useReadingHistoryPages(READING_HISTORY_PAGE_SIZE, {
+    enabled: !isDesktop,
+  });
+
+  const rows = isDesktop
+    ? (desktopHistory.data?.items ?? [])
+    : (mobileHistory.data?.pages.flatMap((summaryPage) => summaryPage.items) ?? []);
+  const total = isDesktop
+    ? (desktopHistory.data?.total ?? 0)
+    : (mobileHistory.data?.pages.at(-1)?.total ?? 0);
+  const historyLoading = isDesktop ? desktopHistory.isLoading : mobileHistory.isLoading;
+  const historyError = isDesktop ? desktopHistory.error : mobileHistory.error;
+
+  const detail = useReadingText(selectedId);
+  const selectedSummary = rows.find((summary) => summary.id === selectedId) ?? null;
+
+  const retryHistory = () => {
+    if (isDesktop) void desktopHistory.refetch();
+    else void mobileHistory.refetch();
   };
 
-  const generate = async () => {
-    if (!model) return;
-    setError(null);
-    try {
-      const saved = await generateMutation.mutateAsync({
-        format,
-        max_extra_words: clamp(maxExtraWords, 0, 20, 2),
-        max_attempts: clamp(maxAttempts, 1, 6, 3),
-        model,
-        topic: topic.trim() || null,
-      });
-      // Seed the detail cache so the new reading renders without a refetch.
-      queryClient.setQueryData(keys.readingText(saved.id), saved);
-      setSelectedId(saved.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const selectReading = (id: number) => {
+    setSelectedId(id);
+    setSelectedToken(null);
+    setSegment("leitura");
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">Leitura</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Gere um texto em mandarim restrito ao seu vocabulário de estudo. Clique numa palavra para
-          ver pinyin, classe gramatical e definição.
-        </p>
-      </div>
+  const onGenerated = (reading: SavedReadingText) => {
+    queryClient.setQueryData(keys.readingText(reading.id), reading);
+    setSelectedId(reading.id);
+    setSelectedToken(null);
+    setPage(1);
+    setSegment("leitura");
+  };
 
-      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-white/10 bg-slate-900 p-4">
-        <label className="flex flex-col gap-1 text-sm text-slate-400">
-          Formato
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value as ReadingFormat)}
-            className="rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100"
-          >
-            <option value="paragraph">Parágrafo</option>
-            <option value="sentences">Frases soltas</option>
-            <option value="dialogue">Diálogo</option>
-          </select>
-        </label>
+  const changeSegment = (next: Segment) => {
+    setSegment(next);
+    if (next !== "leitura") setSelectedToken(null);
+  };
 
-        <label className="flex flex-col gap-1 text-sm text-slate-400">
-          Modelo de IA
-          <select
-            value={model ?? ""}
-            onChange={(e) => selectModel(e.target.value)}
-            disabled={modelsLoading || !!modelsError || !models?.length}
-            className="rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 disabled:opacity-50"
-          >
-            {modelsLoading && <option value="">Carregando…</option>}
-            {modelsError && <option value="">Erro ao carregar modelos</option>}
-            {!modelsLoading && !modelsError && !models?.length && (
-              <option value="">Nenhum modelo disponível</option>
-            )}
-            {(models ?? []).map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </label>
+  const article = (
+    <ReadingArticle
+      summary={selectedSummary}
+      detail={detail.data}
+      isLoading={detail.isLoading}
+      error={detail.error}
+      onRetry={() => void detail.refetch()}
+      onSelectToken={setSelectedToken}
+    />
+  );
 
-        <label className="flex flex-col gap-1 text-sm text-slate-400">
-          Palavras extras (máx.)
-          <input
-            type="number"
-            min={0}
-            max={20}
-            value={maxExtraWords}
-            onChange={(e) => setMaxExtraWords(Number(e.target.value))}
-            className="w-24 rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100"
-          />
-        </label>
+  const history = (
+    <ReadingHistory
+      rows={rows}
+      total={total}
+      loading={historyLoading}
+      loadingMore={!isDesktop && mobileHistory.isFetchingNextPage}
+      error={historyError}
+      selectedId={selectedId}
+      onSelect={selectReading}
+      onRetry={retryHistory}
+      presentation={isDesktop ? "desktop" : "mobile"}
+      page={page}
+      onPageChange={setPage}
+      onLoadMore={() => void mobileHistory.fetchNextPage()}
+    />
+  );
 
-        <label className="flex flex-col gap-1 text-sm text-slate-400">
-          Tentativas (máx.)
-          <input
-            type="number"
-            min={1}
-            max={6}
-            value={maxAttempts}
-            onChange={(e) => setMaxAttempts(Number(e.target.value))}
-            className="w-24 rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100"
-          />
-        </label>
-
-        <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm text-slate-400">
-          Tópico (opcional)
-          <input
-            type="text"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="em branco = tema sorteado"
-            maxLength={200}
-            className="rounded-md border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100"
-          />
-        </label>
-
-        <button
-          type="button"
-          onClick={generate}
-          disabled={generateMutation.isPending || !model}
-          className="rounded-md bg-accent-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
+  if (!isDesktop) {
+    return (
+      <div className="space-y-4">
+        <div
+          role="tablist"
+          aria-label="Seções da leitura"
+          className="flex gap-1 rounded-xl bg-slate-900/50 p-1 ring-1 ring-white/10"
         >
-          {generateMutation.isPending ? "Gerando…" : "Gerar"}
-        </button>
-      </div>
-
-      <VocabularyPanel />
-      <ReadingTopicsPanel />
-
-      {error && <p className="text-sm text-rose-400">{error}</p>}
-
-      {current && (
-        <div className="rounded-lg border border-white/10 bg-slate-900 p-6">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span>#{current.id}</span>
-            <span>&middot;</span>
-            <span>{readingFormatLabel(current.format)}</span>
-            {current.model && (
-              <>
-                <span>&middot;</span>
-                <span className="font-mono">{current.model}</span>
-              </>
-            )}
-            {current.topic && (
-              <>
-                <span>&middot;</span>
-                <span className={current.topic_generated ? "italic" : ""}>
-                  {current.topic}
-                  {current.topic_generated && " (sorteado)"}
-                </span>
-              </>
-            )}
-            {current.attempt_count > 1 && (
-              <>
-                <span>&middot;</span>
-                <span>{current.attempt_count} tentativas</span>
-              </>
-            )}
-            {totalTokens(current) > 0 && (
-              <>
-                <span>&middot;</span>
-                <span>{totalTokens(current).toLocaleString()} tokens</span>
-              </>
-            )}
-            <span className="ml-auto">{new Date(current.created_at).toLocaleString()}</span>
-          </div>
-          <div className="mt-3">
-            <ReadingTokens tokens={current.tokens} speakers={current.speakers} />
-          </div>
-          {current.extra_words.length > 0 && (
-            <p className="mt-4 text-xs text-amber-400">
-              {current.extra_words.length} palavra(s) fora do vocabulário conhecido.
-            </p>
-          )}
-          {current.attempts.length > 1 && <AttemptTrail attempts={current.attempts} />}
-          {Object.keys(current.working_set).length > 0 && (
-            <OfferedVocabulary workingSet={current.working_set} mustUse={current.must_use} />
-          )}
-        </div>
-      )}
-
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Histórico</h2>
-        {historyLoading && <p className="mt-2 text-sm text-slate-500">Carregando…</p>}
-        <ul className="mt-2 divide-y divide-white/5">
-          {history.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => setSelectedId(item.id)}
-                className={`w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-white/5 ${
-                  current?.id === item.id ? "bg-white/5" : ""
-                }`}
-              >
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span>#{item.id}</span>
-                  <span>&middot;</span>
-                  <span>{readingFormatLabel(item.format)}</span>
-                  {item.model && (
-                    <>
-                      <span>&middot;</span>
-                      <span className="truncate font-mono">{item.model}</span>
-                    </>
-                  )}
-                  {item.topic && (
-                    <>
-                      <span>&middot;</span>
-                      <span className={`truncate ${item.topic_generated ? "italic" : ""}`}>
-                        {item.topic}
-                      </span>
-                    </>
-                  )}
-                  {item.attempt_count > 1 && (
-                    <>
-                      <span>&middot;</span>
-                      <span>{item.attempt_count} tent.</span>
-                    </>
-                  )}
-                  {item.extra_word_count > 0 && (
-                    <>
-                      <span>&middot;</span>
-                      <span className="text-amber-400">{item.extra_word_count} extra(s)</span>
-                    </>
-                  )}
-                  <span className="ml-auto shrink-0">
-                    {new Date(item.created_at).toLocaleString()}
-                  </span>
-                </div>
-                <p className="font-hanzi mt-1 truncate text-sm text-slate-200">{item.preview}</p>
-              </button>
-            </li>
-          ))}
-        </ul>
-        {!historyLoading && history.length === 0 && (
-          <p className="mt-2 text-sm text-slate-500">Nenhum texto gerado ainda.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AttemptTrail({ attempts }: { attempts: ReadingAttempt[] }) {
-  return (
-    <details className="mt-4 rounded-md border border-white/10 bg-slate-950/40">
-      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        Iterações ({attempts.length})
-      </summary>
-      <ol className="space-y-3 px-3 pb-3">
-        {attempts.map((attempt) => {
-          const flagged = new Set(attempt.extra_words);
-          return (
-            <li key={attempt.attempt} className="border-t border-white/5 pt-3">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>#{attempt.attempt}</span>
-                {attempt.chosen && (
-                  <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-emerald-300">
-                    escolhido
-                  </span>
-                )}
-                {attempt.extra_words.length > 0 && (
-                  <span className="text-amber-400">
-                    {attempt.extra_words.length} fora do vocabulário:{" "}
-                    {attempt.extra_words.join(" ")}
-                  </span>
-                )}
-                <span className="ml-auto">
-                  {(attempt.prompt_tokens + attempt.completion_tokens).toLocaleString()} tokens
-                </span>
-              </div>
-              {attempt.dialogue_problems.length > 0 && (
-                <p className="mt-1 text-xs text-amber-400">
-                  {attempt.dialogue_problems.join(" · ")}
-                </p>
-              )}
-              {/* Segmented view: each chip is exactly what the segmenter produced — lets a
-                  mis-segmentation that got flagged as "extra" be spotted at a glance. */}
-              <p
-                lang="zh-Hans"
-                className="font-hanzi mt-2 flex flex-wrap gap-x-1 gap-y-1 text-lg leading-snug"
-              >
-                {keyedOccurrences(attempt.segmentation, (segment) => segment).map(
-                  ({ key, item: seg }) => (
-                    <span
-                      key={key}
-                      className={
-                        flagged.has(seg)
-                          ? "rounded bg-amber-400/10 px-0.5 text-amber-400"
-                          : "text-slate-300"
-                      }
-                    >
-                      {seg}
-                    </span>
-                  ),
-                )}
-              </p>
-            </li>
-          );
-        })}
-      </ol>
-    </details>
-  );
-}
-
-const WORKING_SET_GROUP_LABELS: Record<string, string> = {
-  always_available: "sempre disponíveis",
-  words: "palavras",
-  verbs: "verbos",
-  nouns: "substantivos",
-  people: "pessoas",
-  places: "lugares",
-  descriptions: "qualificadores",
-  time: "tempo",
-  quantity: "quantidade",
-  connectives: "conectivos",
-  adverbs: "advérbios",
-  other: "outros",
-};
-
-function OfferedVocabulary({
-  workingSet,
-  mustUse,
-}: {
-  workingSet: Record<string, string[]>;
-  mustUse: string[];
-}) {
-  const anchors = new Set(mustUse);
-  return (
-    <details className="mt-4 rounded-md border border-white/10 bg-slate-950/40">
-      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        Vocabulário oferecido
-      </summary>
-      <div className="space-y-2 px-3 pb-3">
-        {mustUse.length > 0 && (
-          <p className="text-xs text-slate-500">
-            Âncoras: <span className="font-hanzi text-emerald-300">{mustUse.join(" ")}</span>
-          </p>
-        )}
-        {Object.entries(workingSet).map(([group, words]) => (
-          <div key={group} className="text-sm">
-            <span className="text-xs uppercase tracking-wide text-slate-500">
-              {WORKING_SET_GROUP_LABELS[group] ?? group}
-            </span>
-            <p lang="zh-Hans" className="font-hanzi mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
-              {keyedOccurrences(words, (word) => word).map(({ key, item: word }) => (
-                <span
-                  key={key}
-                  className={anchors.has(word) ? "text-emerald-300" : "text-slate-300"}
-                >
-                  {word}
-                </span>
-              ))}
-            </p>
-          </div>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-function ReadingTokens({
-  tokens,
-  speakers,
-}: { tokens: ReadingToken[]; speakers: ReadingSpeaker[] }) {
-  if (tokens.some((t) => t.speaker != null)) {
-    return <DialogueView tokens={tokens} speakers={speakers} />;
-  }
-  return (
-    <p lang="zh-Hans" className="font-hanzi whitespace-pre-wrap text-2xl leading-loose">
-      <TokenSpans tokens={tokens} />
-    </p>
-  );
-}
-
-function TokenSpans({ tokens }: { tokens: ReadingToken[] }) {
-  return (
-    <>
-      {keyedOccurrences(tokens, (token) => token.text).map(({ key, item: token }) =>
-        token.is_word ? <WordToken key={key} token={token} /> : <span key={key}>{token.text}</span>,
-      )}
-    </>
-  );
-}
-
-function DialogueView({
-  tokens,
-  speakers,
-}: { tokens: ReadingToken[]; speakers: ReadingSpeaker[] }) {
-  const pinyinByName = new Map(speakers.map((s) => [s.name, s.pinyin]));
-  const order = speakers.map((s) => s.name);
-
-  // Group consecutive same-speaker runs; the "\n" separators between turns are dropped.
-  const turns: { speaker: string; tokens: ReadingToken[] }[] = [];
-  for (const token of tokens) {
-    if (!token.is_word && token.text.trim() === "") continue;
-    const speaker = token.speaker ?? "";
-    const last = turns.at(-1);
-    if (last && last.speaker === speaker) last.tokens.push(token);
-    else turns.push({ speaker, tokens: [token] });
-  }
-
-  const seen = new Set<string>();
-  return (
-    <div className="space-y-3">
-      {keyedOccurrences(turns, (turn) => turn.speaker).map(({ key, item: turn }) => {
-        const left = order.indexOf(turn.speaker) % 2 === 0;
-        const firstTime = !seen.has(turn.speaker);
-        seen.add(turn.speaker);
-        const pinyin = pinyinByName.get(turn.speaker);
-        return (
-          <div key={key} className={`flex flex-col ${left ? "items-start" : "items-end"}`}>
-            <span className="mb-0.5 text-xs text-slate-500">
-              <span className="font-hanzi">{turn.speaker}</span>
-              {firstTime && pinyin && <span className="ml-1">{pinyin}</span>}
-            </span>
-            <p
-              lang="zh-Hans"
-              className={`font-hanzi max-w-[80%] rounded-2xl px-3 py-2 text-xl leading-loose ${
-                left ? "bg-slate-800" : "bg-accent-500/15"
+          {SEGMENTS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={segment === item.id}
+              onClick={() => changeSegment(item.id)}
+              className={`min-h-11 flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                segment === item.id
+                  ? "bg-accent-500 text-white"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
               }`}
             >
-              <TokenSpans tokens={turn.tokens} />
-            </p>
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {segment === "leitura" ? (
+          <div className="space-y-4">
+            {article}
+            <ReadingGenerator presentation="mobile" onGenerated={onGenerated} />
           </div>
-        );
-      })}
-    </div>
-  );
-}
+        ) : null}
 
-function WordToken({ token }: { token: ReadingToken }) {
-  const addMutation = useAddStudyItem();
-  const { data: studyItems } = useStudyItems();
-  const [addError, setAddError] = useState<string | null>(null);
+        {segment === "historico" ? history : null}
 
-  const alreadyQueued =
-    token.dictionary_entry_id != null &&
-    (studyItems ?? []).some((item) => item.entry.id === token.dictionary_entry_id);
+        {segment === "paineis" ? (
+          <div className="space-y-4">
+            <VocabularyPanel />
+            <ReadingTopicsPanel />
+          </div>
+        ) : null}
 
-  const addToStudy = async () => {
-    if (token.dictionary_entry_id == null) return;
-    setAddError(null);
-    try {
-      await addMutation.mutateAsync(token.dictionary_entry_id);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) return; // already queued, nothing to do
-      setAddError(e instanceof Error ? e.message : String(e));
-    }
-  };
+        {selectedToken ? (
+          <WordSheet token={selectedToken} onDismiss={() => setSelectedToken(null)} />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
-    <Popover.Root>
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          className={`rounded px-0.5 outline-none transition-colors hover:bg-white/10 ${
-            token.is_extra
-              ? "text-amber-400 underline decoration-dotted underline-offset-4"
-              : "text-slate-100"
-          }`}
-        >
-          {token.text}
-        </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          side="top"
-          sideOffset={6}
-          className="z-50 max-w-xs rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm shadow-xl"
-        >
-          {token.pinyin ? (
-            <Pinyin value={token.pinyin} />
-          ) : (
-            <p className="text-slate-500">Sem entrada no dicionário</p>
-          )}
-          {token.part_of_speech && (
-            <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-              {partOfSpeechLabel(token.part_of_speech)}
-            </p>
-          )}
-          {token.definitions.length > 0 && (
-            <p className="mt-1 text-slate-300">{token.definitions.join("; ")}</p>
-          )}
-          {token.is_extra && (
-            <p className="mt-1 text-xs text-amber-400">Fora do vocabulário conhecido</p>
-          )}
-          {token.is_extra && token.dictionary_entry_id != null && (
-            <button
-              type="button"
-              onClick={addToStudy}
-              disabled={addMutation.isPending || alreadyQueued}
-              className="mt-2 w-full rounded-md bg-accent-500 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
-            >
-              {alreadyQueued
-                ? "Já está na fila"
-                : addMutation.isPending
-                  ? "Adicionando…"
-                  : "Adicionar ao estudo"}
-            </button>
-          )}
-          {addError && <p className="mt-1 text-xs text-rose-400">{addError}</p>}
-          <Popover.Arrow className="fill-slate-800" />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    <div className="grid items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)_300px]">
+      <aside className="lg:sticky lg:top-20">{history}</aside>
+
+      <div className="min-w-0 space-y-4">
+        <ReadingGenerator presentation="desktop" onGenerated={onGenerated} />
+        {article}
+      </div>
+
+      <aside className="space-y-4 lg:sticky lg:top-20">
+        <WordInspector token={selectedToken} />
+        <VocabularyPanel />
+        <ReadingTopicsPanel />
+      </aside>
+    </div>
   );
 }

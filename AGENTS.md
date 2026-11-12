@@ -21,7 +21,7 @@ No real secret value is committed or defaulted in code: `MYSQL__PASSWORD` and `G
 
 ## Docker
 
-One image (repo-root `Dockerfile`, multi-stage) ships backend + frontend together: `supervisord` runs `uvicorn` (API, `API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the built SPA on `WEB_PORT`/8081 and reverse-proxies `/api` → uvicorn). No DB in the image. `docker-compose.yml` at the root adds MySQL for full-stack / DB-only local runs. The schema comes from `backend/alembic/versions/*.py`, applied by `python scripts/migrate.py` from `deploy/entrypoint.sh` before the app starts — see [backend/AGENTS.md](backend/AGENTS.md) §3.5. The `publish` job in `.github/workflows/ci.yml` (`needs: [backend, frontend]`, push-to-master only) pushes `luiznaac/shougong:latest` + `:v<run-number>` (a sequential build number, `github.run_number`) — only after a green CI run.
+One image (repo-root `Dockerfile`, multi-stage) ships backend + frontend together: `supervisord` runs `uvicorn` (API, `API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the built SPA on `WEB_PORT`/8081 and reverse-proxies `/api` → uvicorn). Those container-internal ports are fixed, and the image pins `MYSQL__PORT=3306` for its external database. No DB in the image. `docker-compose.yml` at the root adds MySQL for full-stack / DB-only local runs, publishing the host side on shougong's assigned block — `api` 8130, `web` 8131, `mysql` 8132 — recorded in [`.salgadinhos/ports.json`](.salgadinhos/ports.json) and listed in [README.md](README.md#ports); the Vite dev server uses `frontend-dev` 8133. The schema comes from `backend/alembic/versions/*.py`, applied by `python scripts/migrate.py` from `deploy/entrypoint.sh` before the app starts — see [backend/AGENTS.md](backend/AGENTS.md) §3.5. The `publish` job in `.github/workflows/ci.yml` (`needs: [backend, frontend]`, push-to-master only) pushes `luiznaac/shougong:latest` + `:v<run-number>` (a sequential build number, `github.run_number`) — only after a green CI run.
 
 ## Acceptance
 
@@ -29,4 +29,4 @@ Surfaces: **HTTP + Browser** — the FastAPI service and the React SPA.
 
 Run story: the local dev stack — MySQL in Docker, then the backend, then the Vite dev server.
 
-Runbook: [`docs/acceptance-runbook.md`](docs/acceptance-runbook.md) — boot commands, readiness probes, env and teardown. Browser `start_url`: `http://localhost:5273/`.
+Runbook: [`docs/acceptance-runbook.md`](docs/acceptance-runbook.md) — boot commands, readiness probes, env and teardown, and the fold-aware visual rule. Browser `start_url`: `http://localhost:8133/`.

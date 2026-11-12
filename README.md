@@ -23,9 +23,22 @@ npm run db         # start MySQL (docker) for the backend
 Then, in two shells:
 
 ```bash
-npm run be:run     # backend  -> http://localhost:8080
-npm run fe:dev     # frontend -> http://localhost:5273  (proxies /api -> :8080)
+npm run be:run     # backend  -> http://localhost:8130
+npm run fe:dev     # frontend -> http://localhost:8133  (proxies /api -> :8130)
 ```
+
+## Ports
+
+Local host ports are shougong's assigned block, recorded in [`.salgadinhos/ports.json`](.salgadinhos/ports.json). Only the published side of a compose mapping varies — container-internal ports stay fixed.
+
+| Role | Host port | Env key | Container-internal |
+| --- | --- | --- | --- |
+| `api` | `8130` | `HTTP_PORT` | `8080` (`API_PORT`) |
+| `web` (combined image: SPA + `/api` proxy) | `8131` | `WEB_HOST_PORT` | `8081` (`WEB_PORT`) |
+| `mysql` | `8132` | `MYSQL__PORT` | `3306` |
+| `frontend-dev` (Vite) | `8133` | `FRONTEND_DEV_PORT` | — |
+
+A gitignored `.env` may override a host port locally; the committed defaults above apply to a fresh clone. The block is dev-only: a non-dev `APP_ENV` (and the published image) keeps the canonical `8080`/`3306` unless a port is set explicitly, so deploys reach a local MySQL on `3306`. The DB port recipe is `docker compose port mysql 3306`.
 
 ## Docker
 
@@ -33,16 +46,16 @@ One image holds both processes — `uvicorn` (API) and `nginx` (the built SPA, w
 
 ```bash
 docker compose up --build     # app + MySQL, full stack
-#   UI   -> http://localhost:8081
-#   API  -> http://localhost:8080
-docker compose up -d mysql    # just the DB, for local `cd backend && uv run poe run`
+#   UI   -> http://localhost:8131
+#   API  -> http://localhost:8130
+docker compose up -d mysql    # just the DB (host :8132), for local `cd backend && uv run poe run`
 ```
 
-Ports are configurable with `API_PORT` / `WEB_PORT`. For a standalone run against an external database:
+The published ports are configurable with `HTTP_PORT` / `WEB_HOST_PORT`; inside the container the app still listens on `API_PORT=8080` and nginx on `WEB_PORT=8081`. For a standalone run against an external database:
 
 ```bash
-docker run --rm -p 8080:8080 -p 8081:8081 \
-  -e MYSQL__HOST=host.docker.internal -e MYSQL__DATABASE=shougong \
+docker run --rm -p 8130:8080 -p 8131:8081 \
+  -e MYSQL__HOST=host.docker.internal -e MYSQL__PORT=3306 -e MYSQL__DATABASE=shougong \
   -e MYSQL__USER=root -e MYSQL__PASSWORD= \
   luiznaac/shougong:latest
 ```

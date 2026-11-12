@@ -1,73 +1,73 @@
 # shougong-fe
 
-Frontend para o SRS de escrita à mão de chinês [`shougong`](../shougong). SPA em React + Vite + TypeScript + Tailwind v4, consumindo a API HTTP do backend.
+Frontend for the [`shougong`](../backend) Chinese handwriting SRS. A React + Vite + TypeScript + Tailwind v4 SPA consuming the backend's HTTP API.
 
-Estética inspirada no HanziHero (painel, bandas coloridas do quiz, pinyin com tom colorido, Noto Sans SC), com o ladder de níveis de SRS agrupado à la WaniKani.
+Aesthetics inspired by HanziHero (dashboard, coloured quiz bands, tone-coloured pinyin, Noto Sans SC), with the SRS level ladder grouped à la WaniKani.
 
-## Pré-requisitos
+## Prerequisites
 
-- **Node.js 22.12+** (não estava instalado na máquina quando o projeto foi criado — instale via `winget install OpenJS.NodeJS.LTS` ou <https://nodejs.org>).
-- O backend `shougong` rodando (`uv run poe run` → `http://localhost:8080`).
+- **Node.js 22.12+** (it was not installed on the machine when the project was created — install it via `winget install OpenJS.NodeJS.LTS` or <https://nodejs.org>).
+- The `shougong` backend running (`uv run poe run` → `http://localhost:8130`).
 
-## Rodar em dev
+## Run in dev
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abre em `http://localhost:5273` (ou a próxima porta livre). As chamadas para `/api/*` são _proxied_ para `http://localhost:8080` (config em `vite.config.ts`, ajustável por `VITE_API_TARGET`). Assim não precisa mexer em CORS no backend.
+It opens at `http://localhost:8133` — the port is strict (`FRONTEND_DEV_PORT`): if it is taken, the server fails instead of picking the next free one. Calls to `/api/*` are _proxied_ to `http://localhost:8130` (configured in `vite.config.ts`, adjustable via `VITE_API_TARGET`). That way the backend needs no CORS change.
 
-> No PowerShell, se `npm` for bloqueado pela _execution policy_ (`npm.ps1 cannot be loaded`), use `npm.cmd install` / `npm.cmd run dev`, ou libere com `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+> In PowerShell, if `npm` is blocked by the execution policy (`npm.ps1 cannot be loaded`), use `npm.cmd install` / `npm.cmd run dev`, or allow it with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
 ## Build
 
 ```bash
-npm run build      # gera dist/ com base path /shougong/ (para o reverse proxy)
+npm run build      # writes dist/ with base path /shougong/ (for the reverse proxy)
 npm run preview
 ```
 
-Para buildar na raiz (`/`) em vez de `/shougong/`: `VITE_BASE=/ npm run build`.
+To build at the root (`/`) instead of `/shougong/`: `VITE_BASE=/ npm run build`.
 
-## Telas
+## Screens
 
-| Rota          | O quê                                                                    |
-| ------------- | ----------------------------------------------------------------------- |
-| `/`           | Painel estilo HanziHero: 2 botões, SRS distribution, upcoming reviews, tiles |
-| `/lesson`     | Quiz de lição (tela cheia) — itens em `learning`                        |
-| `/review`     | Quiz de review (tela cheia) — itens em `review` que estão _due_         |
-| `/items/:id`  | Página do item: FSRS, gráfico de trajetória, itens relacionados          |
-| `/add`        | Busca no dicionário e adiciona itens à fila                             |
+| Route         | What                                                                       |
+| ------------- | -------------------------------------------------------------------------- |
+| `/`           | HanziHero-style dashboard: 2 buttons, SRS distribution, upcoming reviews, tiles |
+| `/lesson`     | Lesson quiz (full screen) — items in `learning`                            |
+| `/review`     | Review quiz (full screen) — items in `review` that are _due_               |
+| `/items/:id`  | Item page: FSRS, trajectory chart, related items                           |
+| `/add`        | Dictionary search and add items to the queue                               |
 
-Os dois botões do painel: **esquerdo (azul)** = nº de itens em `learning` → `/lesson`; **direito (vermelho)** = nº de itens em `review` e _due_ (ignora `learning`) → `/review`.
+The dashboard's two buttons: **left (blue)** = number of items in `learning` → `/lesson`; **right (red)** = number of items in `review` and _due_ (ignores `learning`) → `/review`.
 
-### Quiz (review e lição)
+### Quiz (review and lesson)
 
-Tela cheia, estilo HanziHero: banda colorida com o assunto (pinyin com tom colorido numa pílula + os cards + significado), banda escura com a pergunta, e uma toolbar embaixo com **Rollback** e **Próximo**.
+Full screen, HanziHero style: a coloured band with the subject (tone-coloured pinyin in a pill + the cards + meaning), a dark band with the question, and a toolbar at the bottom with **Rollback** and **Next**.
 
-O caractere aparece num **card por caractere** (palavras com N caracteres → N cards). Os cards **viram** (flip 3D) para esconder/revelar — todos juntos.
+The character appears in one **card per character** (N-character words → N cards). The cards **flip** (3D) to hide/reveal — all together.
 
-**Review** (invertido — treino de escrita):
+**Review** (inverted — writing practice):
 
-1. Banda mostra **pinyin + significado**; os cards estão virados no `?`.
-2. Você escreve o caractere à mão no papel.
-3. **Próximo** (`Espaço`/`Enter`) → os cards viram e revelam o hanzi.
-4. Escolha `1` Errei · `2` Difícil · `3` Bom · `4` Fácil — isso só **seleciona**.
-5. **Próximo** confirma e envia (`POST /study-items/{id}/reviews`); só habilita depois de uma nota escolhida. `again` conta como erro na precisão.
-6. **Rollback** (`Backspace`/`z`) desfaz a nota selecionada; sem seleção, volta uma etapa (re-esconde o card). `Esc` sai.
+1. The band shows **pinyin + meaning**; the cards are flipped to `?`.
+2. You write the character by hand on paper.
+3. **Next** (`Space`/`Enter`) → the cards flip and reveal the hanzi.
+4. Choose `1` Missed · `2` Hard · `3` Good · `4` Easy — this only **selects**.
+5. **Next** confirms and submits (`POST /study-items/{id}/reviews`); it only enables after a grade is selected. `again` counts as a miss in accuracy.
+6. **Rollback** (`Backspace`/`z`) undoes the selected grade; with no selection, it goes back one step (re-hides the card). `Esc` exits.
 
-**Lição**: cada item começa numa etapa de **apresentação** com os cards já mostrando o hanzi; **Próximo** vira os cards para esconder e segue igual ao review. Depois do quiz o item vira `review` normal via FSRS.
+**Lesson**: each item starts in a **presentation** step with the cards already showing the hanzi; **Next** flips the cards to hide them and continues exactly like review. After the quiz the item becomes a normal `review` via FSRS.
 
-Se um item não estiver disponível quando enviado (backend responde `409`), ele é pulado com um aviso.
+If an item is no longer available when submitted (the backend answers `409`), it is skipped with a warning.
 
-## Notas de arquitetura
+## Architecture notes
 
-- `src/api/` — cliente HTTP tipado + hooks TanStack Query. Os tipos em `types.ts` espelham `httpapi/schema.py` do backend.
-- `src/components/Quiz.tsx` — motor de tela cheia compartilhado por `/review` e `/lesson` (fases, flip, seleção de nota, Próximo/Rollback, atalhos).
-- `src/components/Hanzi.tsx` — renderiza hanzi numa linha só, encolhendo a fonte para palavras com vários caracteres (usado fora do quiz — tiles, header, busca).
-- `src/components/RelatedEntries.tsx` — "Itens relacionados" na página do item: `GET /dictionary-entries?q=<hanzi>` (palavras que contêm o caractere), menos o próprio; os que já estão em estudo linkam para a página, o resto tem "Adicionar".
-- `src/lib/pinyin.ts` — converte pinyin numerado (`zhi1 dao4`) para acentuado e expõe o tom de cada sílaba; `<Pinyin>` colore por tom (paleta em `index.css`, `--color-tone-*`), ou `coloured={false}` para texto liso.
-- `src/lib/srs.ts` — o backend só guarda FSRS cru (state + stability). O ladder de níveis estilo HanziHero é derivado **no cliente** a partir do `stability` (dias): Novice I/II (1d, 4d), Apprentice I/II (1sem, 2sem), Journeyman I/II (1mês, 2meses), Expert I/II/III (4mo, 8mo, 1ano), Master (>1 ano). O gráfico do painel agrupa em Novice/Apprentice/Journeyman/Expert/Master.
-- `GET /study-items/{id}/history` — snapshots do item por mudança de estado; a página do item plota estabilidade + dificuldade ao longo do tempo.
-- `GET /study-items/history/learning-to-review` — a transição learning→review de cada item (paginado, `limit`/`offset`); o painel agrega por `created_at` num gráfico cumulativo de "Itens aprendidos". `src/api/client.ts` pagina isso em `listLearningToReviewHistory()`.
-- Mnemônicos, decomposição em componentes e níveis **não existem** no backend ainda — ficam para uma fase futura (nova tabela + campos).
+- `src/api/` — typed HTTP client + TanStack Query hooks. The types in `types.ts` mirror the backend's `httpapi/schema.py`.
+- `src/components/Quiz.tsx` — the full-screen engine shared by `/review` and `/lesson` (phases, flip, grade selection, Next/Rollback, shortcuts).
+- `src/components/Hanzi.tsx` — renders hanzi on a single line, shrinking the font for multi-character words (used outside the quiz — tiles, header, search).
+- `src/components/RelatedEntries.tsx` — "Related items" on the item page: `GET /dictionary-entries?q=<hanzi>` (words containing the character), minus the item itself; the ones already in study link to the page, the rest get "Add".
+- `src/lib/pinyin.ts` — converts numbered pinyin (`zhi1 dao4`) to accented and exposes each syllable's tone; `<Pinyin>` colours by tone (palette in `index.css`, `--color-tone-*`), or `coloured={false}` for plain text.
+- `src/lib/srs.ts` — the backend stores raw FSRS only (state + stability). The HanziHero-style level ladder is derived **on the client** from `stability` (days): Novice I/II (1d, 4d), Apprentice I/II (1w, 2w), Journeyman I/II (1mo, 2mo), Expert I/II/III (4mo, 8mo, 1y), Master (>1 year). The dashboard chart groups into Novice/Apprentice/Journeyman/Expert/Master.
+- `GET /study-items/{id}/history` — item snapshots per state change; the item page plots stability + difficulty over time.
+- `GET /study-items/history/learning-to-review` — each item's learning→review transition (paginated, `limit`/`offset`); the dashboard aggregates by `created_at` into a cumulative "Items learned" chart. `src/api/client.ts` paginates this in `listLearningToReviewHistory()`.
+- Mnemonics, component decomposition and levels **do not exist** in the backend yet — they belong to a future phase (a new table + fields).

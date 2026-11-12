@@ -1,11 +1,11 @@
 {
   "info": {
     "name": "shougong",
-    "description": "Chinese handwriting SRS trainer. Covers every implemented endpoint.\n\nSet the `baseUrl` collection variable (default http://localhost:8080).\n\nEndpoints: dictionary lookup, the study queue, and the review loop (grade a due item, FSRS reschedules it, history is kept). The dictionary auto-populates from CC-CEDICT on first startup (once), so search results appear a few seconds after the app boots.",
+    "description": "Chinese handwriting SRS trainer. Covers every implemented endpoint.\n\nSet the `baseUrl` collection variable (default http://localhost:8130).\n\nEndpoints: dictionary lookup, the study queue, and the review loop (grade a due item, FSRS reschedules it, history is kept). The dictionary auto-populates from CC-CEDICT on first startup (once), so search results appear a few seconds after the app boots.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "baseUrl", "value": "http://localhost:8130", "type": "string" },
     { "key": "dictionaryEntryId", "value": "1", "type": "string" },
     { "key": "studyItemId", "value": "1", "type": "string" }
   ],

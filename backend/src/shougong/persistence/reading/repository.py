@@ -154,6 +154,37 @@ def _summary(row: ReadingTextEntity, tokens: tuple[ReadingToken, ...], *, match_
     )
 
 
+def to_entity(request: ReadingRequest, reading: GeneratedReading, created_at: datetime) -> ReadingTextEntity:
+    """Build the `reading_text` row a saved reading serialises to.
+
+    Kept public so the dev-only acceptance fixture persists a reading through
+    the same mapping instead of re-spelling the entity's fields.
+
+    Args:
+        request: The generation request that produced the reading.
+        reading: The resolved tokens and attempt trail to store.
+        created_at: The generation instant, stored as naive UTC.
+
+    Returns:
+        The unsaved `ReadingTextEntity`.
+    """
+    return ReadingTextEntity(
+        format=request.format.value,
+        max_extra_words=request.max_extra_words,
+        max_attempts=request.max_attempts,
+        topic=request.topic,
+        topic_generated=request.topic_generated,
+        model=request.model,
+        known_word_count=reading.known_word_count,
+        tokens=[_token_to_json(t) for t in reading.tokens],
+        attempts=[_attempt_to_json(i, a) for i, a in enumerate(reading.attempts)],
+        working_set={group: list(words) for group, words in reading.working_set.items()},
+        must_use=list(reading.must_use),
+        speakers=[{"name": s.name, "pinyin": s.pinyin} for s in reading.speakers],
+        created_at=_naive_utc(created_at),
+    )
+
+
 class ReadingHistoryRepository(IReadingHistoryRepository):
     def __init__(self, transaction_template: SqlAlchemyTransactionTemplate) -> None:
         self._tx = transaction_template
@@ -161,21 +192,7 @@ class ReadingHistoryRepository(IReadingHistoryRepository):
     async def save(self, request: ReadingRequest, reading: GeneratedReading, created_at: datetime) -> SavedReadingText:
         async def _run() -> SavedReadingText:
             session = current_session()
-            row = ReadingTextEntity(
-                format=request.format.value,
-                max_extra_words=request.max_extra_words,
-                max_attempts=request.max_attempts,
-                topic=request.topic,
-                topic_generated=request.topic_generated,
-                model=request.model,
-                known_word_count=reading.known_word_count,
-                tokens=[_token_to_json(t) for t in reading.tokens],
-                attempts=[_attempt_to_json(i, a) for i, a in enumerate(reading.attempts)],
-                working_set={group: list(words) for group, words in reading.working_set.items()},
-                must_use=list(reading.must_use),
-                speakers=[{"name": s.name, "pinyin": s.pinyin} for s in reading.speakers],
-                created_at=_naive_utc(created_at),
-            )
+            row = to_entity(request, reading, created_at)
             session.add(row)
             await session.flush()
             return SavedReadingText(id=row.id, request=request, reading=reading, created_at=created_at)
