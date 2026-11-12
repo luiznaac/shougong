@@ -1,10 +1,12 @@
-"""The committed acceptance fixture for the list surfaces (issue #140).
+"""The committed acceptance fixture for the list and item-detail surfaces.
 
-`docs/acceptance-runbook.md` boots MySQL empty, so the list walkthroughs need a
-seed the runbook itself can apply. `build_fixture` is the deterministic data
-plan — dictionary entries and study items covering more than one 24-row page,
-every SRS state, every HSK bucket (1..9 and none), a leech and a pinned item —
-and `apply_acceptance_fixture` writes it in one transaction, only when the
+`docs/acceptance-runbook.md` boots MySQL empty, so the walkthroughs need a seed
+the runbook itself can apply. `build_fixture` is the deterministic data plan —
+dictionary entries and study items covering more than one 24-row page, every SRS
+state, every HSK bucket (1..9 and none), a leech and a pinned item — plus the
+item-detail rows: the 知道 detail word, its shared-character family, three
+readings that contain it and cached strokes for both of its characters.
+`apply_acceptance_fixture` writes it in one transaction, only when the
 dictionary is empty, so re-running the runbook is a no-op.
 
 Times are relative to the invocation instant: the fixture stays meaningful on
@@ -14,25 +16,53 @@ any acceptance day instead of ageing out with hard-coded dates.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from shougong.acceptance.stroke_cache import CACHED_STROKES, StrokeMedians
 from shougong.application.settings import Settings
 from shougong.persistence.configuration.database import build_session_factory
 from shougong.persistence.configuration.time import naive_utc
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity
+from shougong.persistence.reading.entity import ReadingTextEntity
+from shougong.persistence.reading.repository import to_entity
+from shougong.persistence.strokes.entity import CharacterStrokesEntity
 from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity, StudyItemPriorityEntity
 from shougong.persistence.study_item_history.entity import StudyItemHistoryEntity
 from shougong.usecase.commons.logging import get_logger
+from shougong.usecase.reading.model import (
+    GeneratedReading,
+    GenerationAttempt,
+    PartOfSpeech,
+    ReadingFormat,
+    ReadingPunctuation,
+    ReadingRequest,
+    ReadingSpeaker,
+    ReadingToken,
+    ReadingWord,
+)
 from shougong.usecase.srs.model import SrsRating, SrsState
 
 _log = get_logger(__name__)
 
 _LEARNING_ITEMS = 10
 _REVIEW_ITEMS = 11
+# The learner's known-vocabulary size recorded on each saved reading.
+_KNOWN_WORD_COUNT = 120
+# Pinned to the top of the plan so a clean database gives it study item id 1,
+# the route the item-detail walkthrough opens.
+DETAIL_WORD = "知道"
+# The detail family's queued neighbour; it is the fixture's review-state row.
+_DETAIL_NEIGHBOUR = "知"
+# The detail card is seeded a few reviews in, so the facts line and the
+# trajectory chart have real FSRS values; the last snapshot reuses these.
+_DETAIL_STABILITY = 2.0
+_DETAIL_DIFFICULTY = 5.5
+_DETAIL_LAST_REVIEW_AGO = timedelta(days=1)
+_DETAIL_DUE_IN = timedelta(hours=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,11 +113,39 @@ class StudyItemRow:
 
 
 @dataclass(frozen=True, slots=True)
+class ReadingRow:
+    """One saved reading containing the detail word.
+
+    The chosen attempt's extra words are derived from the tokens' `is_extra`
+    flags, the way the summary and the reading response fall back to them. A
+    dialogue row carries its cast and tags every token with its speaker.
+    """
+
+    format: ReadingFormat
+    topic: str
+    model: str
+    tokens: tuple[ReadingToken, ...]
+    created_at: datetime
+    speakers: tuple[ReadingSpeaker, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class StrokesRow:
+    """One cached `character_strokes` row, so the player never fetches upstream."""
+
+    character: str
+    strokes: tuple[str, ...]
+    medians: StrokeMedians
+
+
+@dataclass(frozen=True, slots=True)
 class AcceptanceFixture:
-    """The whole plan: queued items plus entries that only the dictionary sees."""
+    """The whole plan: queued items, dictionary-only entries, readings and strokes."""
 
     study_items: tuple[StudyItemRow, ...]
     dictionary_only: tuple[DictionaryRow, ...]
+    readings: tuple[ReadingRow, ...]
+    strokes: tuple[StrokesRow, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,11 +155,17 @@ class SeedOutcome:
     seeded: bool
     dictionary_entries: int
     study_items: int
+    readings: int
+    strokes: int
 
 
-# Three words per HSK bucket, so every filter chip the item index renders has a
-# match. A word in the `none` bucket is deliberately outside HSK 1..9.
+# At least three words per HSK bucket, so every filter chip the item index
+# renders has a match; a word in the `none` bucket is deliberately outside HSK
+# 1..9. The first two are the item-detail pair: 知道 is the pinned learning
+# detail word, 知 is its queued shared-character neighbour in review.
 _WORDS: tuple[DictionaryRow, ...] = (
+    DictionaryRow(DETAIL_WORD, "zhi1 dao4", ("to know", "to be aware of"), 1, ("v",)),
+    DictionaryRow(_DETAIL_NEIGHBOUR, "zhi1", ("to know", "knowledge"), 1, ("v", "n")),
     DictionaryRow("学", "xue2", ("to learn", "to study"), 1, ("v", "n")),
     DictionaryRow("学生", "xue2 sheng1", ("student", "pupil"), 1, ("n",)),
     DictionaryRow("老师", "lao3 shi1", ("teacher",), 1, ("n",)),
@@ -134,9 +198,8 @@ _WORDS: tuple[DictionaryRow, ...] = (
     DictionaryRow("巷子", "xiang4 zi", ("alley", "lane"), None, ("n",)),
 )
 
-# Not queued: the shared-character family around 学 gives the detail detour's
-# related-entries list and the dictionary search something to find, including
-# rows the learner can still add.
+# Not queued: the 学 family gives dictionary search extra rows to find,
+# including words the learner can still add.
 _DICTIONARY_ONLY: tuple[DictionaryRow, ...] = (
     DictionaryRow("大学", "da4 xue2", ("university",), 3, ("n",)),
     DictionaryRow("小学", "xiao3 xue2", ("primary school",), 1, ("n",)),
@@ -146,6 +209,21 @@ _DICTIONARY_ONLY: tuple[DictionaryRow, ...] = (
     DictionaryRow("学术", "xue2 shu4", ("academic learning",), 6, ("n",)),
     DictionaryRow("花", "hua1", ("flower", "to spend"), 1, ("n", "v")),
     DictionaryRow("咖啡", "ka1 fei1", ("coffee",), None, ("n",)),
+    # The 知道 detail word's shared-character family: twelve dictionary-only
+    # rows plus the queued 知 make two 8-row related pages (8 + 5), and page
+    # one includes the queued word so the panel renders its `na fila` link.
+    DictionaryRow("道", "dao4", ("way", "path", "principle"), 1, ("n",)),
+    DictionaryRow("知识", "zhi1 shi2", ("knowledge",), 2, ("n",)),
+    DictionaryRow("味道", "wei4 dao4", ("flavor", "taste"), 3, ("n",)),
+    DictionaryRow("道理", "dao4 li3", ("reason", "argument"), 3, ("n",)),
+    DictionaryRow("通知", "tong1 zhi1", ("to notify", "notice"), 4, ("v", "n")),
+    DictionaryRow("街道", "jie1 dao4", ("street", "avenue"), 4, ("n",)),
+    DictionaryRow("通道", "tong1 dao4", ("passage", "channel"), 5, ("n",)),
+    DictionaryRow("知音", "zhi1 yin1", ("close friend", "soulmate"), None, ("n",)),
+    DictionaryRow("知名度", "zhi1 ming2 du4", ("fame", "visibility"), None, ("n",)),
+    DictionaryRow("车道", "che1 dao4", ("traffic lane",), None, ("n",)),
+    DictionaryRow("地道", "di4 dao4", ("authentic", "genuine"), None, ("a",)),
+    DictionaryRow("河道", "he2 dao4", ("river channel",), None, ("n",)),
 )
 
 # Two leech windows: four and three `again` grades among the ten most recent,
@@ -246,6 +324,159 @@ def _build_item(word: DictionaryRow, index: int, now: datetime) -> StudyItemRow:
     )
 
 
+def _word(text: str, part_of_speech: PartOfSpeech, *, extra: bool = False, speaker: str | None = None) -> ReadingWord:
+    # Pinyin, definitions and the entry id are hydrated on read from the live
+    # dictionary; only the stored token shape is planned here.
+    return ReadingWord(
+        text=text,
+        pinyin=None,
+        definitions=(),
+        part_of_speech=part_of_speech,
+        is_extra=extra,
+        dictionary_entry_id=None,
+        speaker=speaker,
+    )
+
+
+def _build_readings(now: datetime) -> tuple[ReadingRow, ...]:
+    """Three readings that all contain 知道, one carrying an out-of-vocabulary word.
+
+    The item-detail readings panel filters `/reading-texts` by the detail entry,
+    so every row here must carry a 知道 word token; the match snippet, the extra
+    word and the format/topic variety then all render from real rows.
+    """
+    return (
+        ReadingRow(
+            format=ReadingFormat.PARAGRAPH,
+            topic="No restaurante",
+            model="gpt-4o-mini",
+            tokens=(
+                _word("我", PartOfSpeech.PRONOUN),
+                _word("昨天", PartOfSpeech.NOUN),
+                _word("在", PartOfSpeech.PREPOSITION),
+                _word("餐厅", PartOfSpeech.NOUN, extra=True),
+                _word(DETAIL_WORD, PartOfSpeech.VERB),
+                _word("了", PartOfSpeech.PARTICLE),
+                _word("一个", PartOfSpeech.NUMERAL),
+                _word("消息", PartOfSpeech.NOUN),
+                ReadingPunctuation(text="。"),
+            ),
+            created_at=now - timedelta(days=1),
+        ),
+        ReadingRow(
+            format=ReadingFormat.SENTENCES,
+            topic="Na escola",
+            model="gpt-4o-mini",
+            tokens=(
+                _word("学生", PartOfSpeech.NOUN),
+                _word(DETAIL_WORD, PartOfSpeech.VERB),
+                _word("老师", PartOfSpeech.NOUN),
+                _word("的", PartOfSpeech.PARTICLE),
+                _word("工作", PartOfSpeech.NOUN),
+                ReadingPunctuation(text="。"),
+            ),
+            created_at=now - timedelta(days=2),
+        ),
+        ReadingRow(
+            format=ReadingFormat.DIALOGUE,
+            topic="No bairro",
+            model="acceptance-dialogue",
+            tokens=(
+                _word("朋友", PartOfSpeech.NOUN, speaker="小李"),
+                _word(DETAIL_WORD, PartOfSpeech.VERB, speaker="小李"),
+                _word("这", PartOfSpeech.PRONOUN, speaker="小李"),
+                _word("个", PartOfSpeech.NUMERAL, speaker="小李"),
+                _word("城市", PartOfSpeech.NOUN, speaker="小李"),
+                _word("的", PartOfSpeech.PARTICLE, speaker="小李"),
+                _word("变化", PartOfSpeech.NOUN, speaker="小李"),
+                ReadingPunctuation(text="。", speaker="小李"),
+                _word("我", PartOfSpeech.PRONOUN, speaker="小王"),
+                _word(DETAIL_WORD, PartOfSpeech.VERB, speaker="小王"),
+                _word("变化", PartOfSpeech.NOUN, speaker="小王"),
+                _word("很", PartOfSpeech.ADVERB, speaker="小王"),
+                _word("大", PartOfSpeech.ADJECTIVE, speaker="小王"),
+                ReadingPunctuation(text="。", speaker="小王"),
+            ),
+            created_at=now - timedelta(days=3),
+            speakers=(
+                ReadingSpeaker(name="小李", pinyin="xiao3 li3"),
+                ReadingSpeaker(name="小王", pinyin="xiao3 wang2"),
+            ),
+        ),
+    )
+
+
+def _build_strokes() -> tuple[StrokesRow, ...]:
+    return tuple(
+        StrokesRow(character=character, strokes=strokes, medians=medians)
+        for character, (strokes, medians) in CACHED_STROKES.items()
+    )
+
+
+def _detail_history(now: datetime, created_at: datetime) -> tuple[HistoryRow, ...]:
+    """Four learning snapshots, so the Trajetória chart has a real multi-point trail.
+
+    A just-created card has no FSRS parameters; the detail walkthrough asserts
+    the chart and the plain-language facts line, so the walkthrough item is
+    seeded a few reviews in while still in the learning state.
+    """
+    return (
+        HistoryRow(SrsState.LEARNING, None, None, created_at, None, created_at),
+        HistoryRow(
+            SrsState.LEARNING,
+            0.8,
+            4.2,
+            now - timedelta(days=5),
+            now - timedelta(days=6),
+            now - timedelta(days=6),
+        ),
+        HistoryRow(
+            SrsState.LEARNING,
+            1.4,
+            5.0,
+            now - timedelta(days=2),
+            now - timedelta(days=3),
+            now - timedelta(days=3),
+        ),
+        HistoryRow(
+            SrsState.LEARNING,
+            _DETAIL_STABILITY,
+            _DETAIL_DIFFICULTY,
+            now + _DETAIL_DUE_IN,
+            now - _DETAIL_LAST_REVIEW_AGO,
+            now - _DETAIL_LAST_REVIEW_AGO,
+        ),
+    )
+
+
+def _with_detail_trajectory(item: StudyItemRow, now: datetime) -> StudyItemRow:
+    return replace(
+        item,
+        stability=_DETAIL_STABILITY,
+        difficulty=_DETAIL_DIFFICULTY,
+        due=now + _DETAIL_DUE_IN,
+        last_review=now - _DETAIL_LAST_REVIEW_AGO,
+        history=_detail_history(now, item.created_at),
+    )
+
+
+def _with_detail_neighbour(item: StudyItemRow, now: datetime) -> StudyItemRow:
+    """Turn 知 into the fixture's review row, the detail family's queued neighbour."""
+    index = next(index for index, word in enumerate(_WORDS) if word.simplified == _DETAIL_NEIGHBOUR)
+    stability, difficulty = _card_metrics(SrsState.REVIEW, index)
+    last_review = now - timedelta(days=2)
+    return replace(
+        item,
+        state=SrsState.REVIEW,
+        stability=stability,
+        difficulty=difficulty,
+        last_review=last_review,
+        priority_position=None,
+        reviews=_reviews_for(index, SrsState.REVIEW, now),
+        history=_history_for(index, SrsState.REVIEW, item.due, last_review, item.created_at, stability, difficulty),
+    )
+
+
 def build_fixture(now: datetime) -> AcceptanceFixture:
     """Build the acceptance data plan relative to `now`.
 
@@ -254,12 +485,27 @@ def build_fixture(now: datetime) -> AcceptanceFixture:
             derived from it, so the plan stays relevant on any run day.
 
     Returns:
-        The dictionary entries and study items to write.
+        The dictionary entries, study items, readings and stroke cache to write.
     """
     return AcceptanceFixture(
-        study_items=tuple(_build_item(word, index, now) for index, word in enumerate(_WORDS)),
+        study_items=_with_detail_rows(now),
         dictionary_only=_DICTIONARY_ONLY,
+        readings=_build_readings(now),
+        strokes=_build_strokes(),
     )
+
+
+def _with_detail_rows(now: datetime) -> tuple[StudyItemRow, ...]:
+    rows = []
+    for index, word in enumerate(_WORDS):
+        row = _build_item(word, index, now)
+        if word.simplified == DETAIL_WORD:
+            rows.append(_with_detail_trajectory(row, now))
+        elif word.simplified == _DETAIL_NEIGHBOUR:
+            rows.append(_with_detail_neighbour(row, now))
+        else:
+            rows.append(row)
+    return tuple(rows)
 
 
 def _entry_entity(row: DictionaryRow) -> DictionaryEntryEntity:
@@ -311,6 +557,35 @@ def _history_entities(row: StudyItemRow, study_item_id: int, entry_id: int) -> l
     ]
 
 
+def _reading_entity(row: ReadingRow) -> ReadingTextEntity:
+    chosen = GenerationAttempt(
+        text="".join(token.text for token in row.tokens),
+        segmentation=tuple(token.text for token in row.tokens if isinstance(token, ReadingWord)),
+        extra_words=tuple(token.text for token in row.tokens if isinstance(token, ReadingWord) and token.is_extra),
+        prompt_tokens=0,
+        completion_tokens=0,
+        chosen=True,
+    )
+    request = ReadingRequest(format=row.format, max_extra_words=2, model=row.model, topic=row.topic)
+    reading = GeneratedReading(
+        format=row.format,
+        tokens=row.tokens,
+        known_word_count=_KNOWN_WORD_COUNT,
+        attempts=(chosen,),
+        speakers=row.speakers,
+    )
+    return to_entity(request, reading, row.created_at)
+
+
+def _stroke_entity(row: StrokesRow) -> CharacterStrokesEntity:
+    return CharacterStrokesEntity(
+        character=row.character,
+        has_data=True,
+        strokes=list(row.strokes),
+        medians=[[list(point) for point in stroke] for stroke in row.medians],
+    )
+
+
 async def apply_acceptance_fixture(settings: Settings, *, now: datetime | None = None) -> SeedOutcome:
     """Write the fixture unless the dictionary already has rows.
 
@@ -330,7 +605,7 @@ async def apply_acceptance_fixture(settings: Settings, *, now: datetime | None =
             existing = await session.scalar(select(func.count()).select_from(DictionaryEntryEntity))
             if existing:
                 _log.info("acceptance.seed.skipped", existing=int(existing))
-                return SeedOutcome(seeded=False, dictionary_entries=0, study_items=0)
+                return SeedOutcome(seeded=False, dictionary_entries=0, study_items=0, readings=0, strokes=0)
 
             entry_rows = tuple(item.entry for item in fixture.study_items) + fixture.dictionary_only
             entries = {id(row): _entry_entity(row) for row in entry_rows}
@@ -348,11 +623,22 @@ async def apply_acceptance_fixture(settings: Settings, *, now: datetime | None =
                 if row.priority_position is not None:
                     session.add(StudyItemPriorityEntity(study_item_id=item.id, position=row.priority_position))
 
-            outcome = SeedOutcome(seeded=True, dictionary_entries=len(entries), study_items=len(items))
+            session.add_all(_reading_entity(row) for row in fixture.readings)
+            session.add_all(_stroke_entity(row) for row in fixture.strokes)
+
+            outcome = SeedOutcome(
+                seeded=True,
+                dictionary_entries=len(entries),
+                study_items=len(items),
+                readings=len(fixture.readings),
+                strokes=len(fixture.strokes),
+            )
             _log.info(
                 "acceptance.seed.finished",
                 dictionary_entries=outcome.dictionary_entries,
                 study_items=outcome.study_items,
+                readings=outcome.readings,
+                strokes=outcome.strokes,
             )
             return outcome
     finally:
@@ -367,6 +653,8 @@ def main() -> None:
         seeded=outcome.seeded,
         dictionary_entries=outcome.dictionary_entries,
         study_items=outcome.study_items,
+        readings=outcome.readings,
+        strokes=outcome.strokes,
     )
 
 

@@ -29,4 +29,4 @@ Surfaces: **HTTP + Browser** — the FastAPI service and the React SPA.
 
 Run story: the local dev stack — MySQL in Docker, then the backend, then the Vite dev server.
 
-Runbook: [`docs/acceptance-runbook.md`](docs/acceptance-runbook.md) — boot commands, readiness probes, env and teardown. Browser `start_url`: `http://localhost:5273/`.
+Runbook: [`docs/acceptance-runbook.md`](docs/acceptance-runbook.md) — boot commands, readiness probes, env and teardown, and the fold-aware visual rule. Browser `start_url`: `http://localhost:5273/`.
