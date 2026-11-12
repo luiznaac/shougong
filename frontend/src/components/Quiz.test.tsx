@@ -25,13 +25,13 @@ describe("Quiz", () => {
   it("keeps the review chrome when recording", () => {
     const html = render();
     expect(html).toContain(">Review<");
-    expect(html).not.toContain("SRS intact");
+    expect(html).not.toContain("SRS intacto");
   });
 
-  it("labels a recording-off run as practice and shows the SRS-intact chip", () => {
+  it("labels a recording-off run as practice and shows the SRS-intacto chip", () => {
     const html = render(false);
     expect(html).toContain(">Prática<");
-    expect(html).toContain("SRS intact");
+    expect(html).toContain("SRS intacto");
     expect(html).not.toContain(">Review<");
   });
 });
