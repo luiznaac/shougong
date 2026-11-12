@@ -16,6 +16,7 @@ import {
   summaryCopy,
   topBarTitle,
 } from "../lib/quizPractice.ts";
+import { STAGE_HORIZONTAL_PADDING } from "../lib/safeArea.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
 import { HandwritingQuiz } from "./HandwritingQuiz.tsx";
 import { PracticeBand } from "./PracticeBand.tsx";
@@ -342,7 +343,10 @@ export function Quiz({
   return (
     <div className="flex h-[100dvh] flex-col bg-slate-950 text-slate-200">
       {band}
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-4 py-3">
+      <div
+        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto py-3"
+        style={STAGE_HORIZONTAL_PADDING}
+      >
         {middle}
       </div>
       {dock}

@@ -2,7 +2,7 @@ import type { SrsRating, StudyItem } from "../api/types.ts";
 import { TOLERANCE_PRESETS } from "../lib/localSettings.ts";
 import { gradeOf } from "../lib/practiceGrades.ts";
 import type { QuizPhase } from "../lib/quizPractice.ts";
-import { STAGE_TOP } from "../lib/safeArea.ts";
+import { STAGE_HORIZONTAL_PADDING, STAGE_TOP } from "../lib/safeArea.ts";
 import type { Presentation } from "../lib/useMediaQuery.ts";
 import { FlipCards } from "./FlipCards.tsx";
 import { Pinyin } from "./Pinyin.tsx";
@@ -119,8 +119,8 @@ export function PracticeBand({
 
   return (
     <section
-      className={`relative bg-gradient-to-b ${band} ${mobile ? "px-4 pb-6" : "px-7 pt-5 pb-7"}`}
-      style={mobile ? { paddingTop: STAGE_TOP } : undefined}
+      className={`relative bg-gradient-to-b ${band} ${mobile ? "pb-6" : "px-7 pt-5 pb-7"}`}
+      style={mobile ? { paddingTop: STAGE_TOP, ...STAGE_HORIZONTAL_PADDING } : undefined}
     >
       <div className={`flex items-center gap-3 ${mobile ? "text-xs" : "text-sm"}`}>
         <button

@@ -98,7 +98,7 @@ Module → key files → seam index for the `frontend/` lane, plus the app entry
 **Files**: `frontend/src/index.css`, `frontend/vite.config.ts`, `frontend/index.html`, `frontend/package.json`, `frontend/tsconfig*.json`
 **Seam(s)**:
 - **Theme seam** (`src/index.css`) — the `@theme` block owns the hanzi font, the accent, the pinyin tone colours (`--color-tone-*`), the SRS stage colours (`--color-srs-*`) and the `.tone-*` classes; components consume those names.
-- **Safe-area seam** (`index.html`, `lib/safeArea.ts`) — the viewport meta opts into `viewport-fit=cover`, so the shared `env(safe-area-inset-*)` constants (header top, tab bar and floating toast bottom) are non-zero under a notch or home indicator.
+- **Safe-area seam** (`index.html`, `lib/safeArea.ts`) — the viewport meta opts into `viewport-fit=cover`, so the shared `env(safe-area-inset-*)` constants (header top, tab bar and floating toast bottom, plus the practice stage's top/bottom/left/right edges) are non-zero under a notch or home indicator.
 - **Base-path seam** (`vite.config.ts`) — `base` is `/shougong/` in production and `/` in dev; `main.tsx` derives the router `basename` from `import.meta.env.BASE_URL`.
 - **Dev server** (`vite.config.ts`) — reads `.env` via `loadEnv`; port `FRONTEND_DEV_PORT ?? 8133` (strict), `/api` proxy to `VITE_API_TARGET ?? http://localhost:8130`.
 - **Quality gate** (`package.json`) — `check` runs `typecheck` + `lint` (Biome) + `test` (Vitest, two projects: the node lane — pure helpers in `src/lib` and markup-only renders through `react-dom/server` — and the jsdom lane — `*.dom.test.tsx` interaction contracts through React Testing Library; see `src/test` above).
