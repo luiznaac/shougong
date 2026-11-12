@@ -5,9 +5,11 @@ import { routes } from "./App.tsx";
 import { AppShell } from "./components/AppShell.tsx";
 import { Placeholder } from "./components/Placeholder.tsx";
 import { AddImport } from "./pages/AddImport.tsx";
+import { Ajustes } from "./pages/Ajustes.tsx";
 import { ItemIndex } from "./pages/ItemIndex.tsx";
 import { Lesson } from "./pages/Lesson.tsx";
 import { Practice } from "./pages/Practice.tsx";
+import { Progresso } from "./pages/Progresso.tsx";
 import { Reading } from "./pages/Reading.tsx";
 import { Review } from "./pages/Review.tsx";
 import { StudyItemPage } from "./pages/StudyItemPage.tsx";
@@ -44,12 +46,15 @@ describe("route table", () => {
     expect(elementType(child("biblioteca/importar")?.element)).toBe(AddImport);
     expect(elementType(child("biblioteca/itens/:id")?.element)).toBe(StudyItemPage);
     expect(elementType(child("leitura")?.element)).toBe(Reading);
+    expect(elementType(child("progresso")?.element)).toBe(Progresso);
+    expect(elementType(child("ajustes")?.element)).toBe(Ajustes);
   });
 
-  it("renders the one shared placeholder on surfaces that have not migrated", () => {
-    for (const path of ["progresso", "ajustes"]) {
-      expect(elementType(child(path)?.element)).toBe(Placeholder);
-    }
+  it("no longer renders the shared placeholder for a shell destination", () => {
+    const placeholders = shellChildren
+      .filter((route) => elementType(route.element) === Placeholder)
+      .map((route) => route.path ?? "index");
+    expect(placeholders).toEqual([]);
   });
 
   it("keeps Lesson, Review and Practice full-screen outside the shell", () => {

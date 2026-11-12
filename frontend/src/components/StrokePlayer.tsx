@@ -47,10 +47,10 @@ export function StrokePlayer({
               onClick={() => pick(index)}
               aria-pressed={index === activeIdx}
               aria-label={`Ver traços de ${char}`}
-              className={`font-hanzi h-11 w-11 rounded-lg text-lg transition-colors ${
+              className={`font-hanzi h-11 w-11 rounded-lg text-lg transition-colors motion-reduce:transition-none ${
                 index === activeIdx
-                  ? "bg-accent-500 text-white"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  ? "bg-white text-slate-900"
+                  : "bg-slate-950/50 text-slate-300 ring-1 ring-white/10 hover:text-white"
               }`}
             >
               {char}
@@ -60,7 +60,7 @@ export function StrokePlayer({
       ) : null}
 
       <div
-        className="grid place-items-center rounded-xl bg-slate-800/40 ring-1 ring-white/5"
+        className="grid shrink-0 place-items-center rounded-xl bg-slate-950/40 ring-1 ring-white/10"
         style={{ width: sizePx, height: sizePx }}
       >
         {isLoading ? (
@@ -72,13 +72,13 @@ export function StrokePlayer({
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+      <div className="flex items-center gap-1.5 rounded-full bg-slate-950/50 px-1.5 py-1 text-[11px] text-slate-300 ring-1 ring-white/10">
         <button
           type="button"
           onClick={() => setRevealed((current) => Math.max(0, Math.min(current, total) - 1))}
           disabled={shown === 0}
           aria-label="Traço anterior"
-          className="grid h-11 w-11 place-items-center rounded-lg bg-slate-800 text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-30"
+          className="grid h-11 w-11 place-items-center rounded-lg text-slate-300 transition-colors hover:bg-white/10 motion-reduce:transition-none disabled:opacity-30"
         >
           ◀
         </button>
@@ -88,7 +88,7 @@ export function StrokePlayer({
           onClick={() => setRevealed((current) => Math.min(total, Math.min(current, total) + 1))}
           disabled={shown === total}
           aria-label="Próximo traço"
-          className="grid h-11 w-11 place-items-center rounded-lg bg-slate-800 text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-30"
+          className="grid h-11 w-11 place-items-center rounded-lg text-slate-300 transition-colors hover:bg-white/10 motion-reduce:transition-none disabled:opacity-30"
         >
           ▶
         </button>
