@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DataList, type DataListColumn } from "./DataList.tsx";
 
 interface Row {
@@ -82,5 +83,38 @@ describe("DataList", () => {
     expect(within(table).getByText("Prioridade")).toBeTruthy();
     expect(within(cards).getByText("Sanguessuga")).toBeTruthy();
     expect(within(cards).getByText("Prioridade")).toBeTruthy();
+  });
+
+  it("renders plain rows without links when no destination is given, keeping row actions usable", async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn();
+    const actionColumns: DataListColumn<Row>[] = [
+      ...columns,
+      {
+        key: "action",
+        label: "Fila",
+        render: (row) => (
+          <button type="button" onClick={() => onAdd(row.id)}>
+            Adicionar {row.word}
+          </button>
+        ),
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <DataList rows={rows} columns={actionColumns} rowKey={(row) => row.id} label="Resultados" />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(within(screen.getByRole("table")).getByText("Adicionar 甲")).toBeTruthy();
+    expect(within(screen.getByRole("list")).getByText("Adicionar 甲")).toBeTruthy();
+
+    await user.click(
+      within(screen.getByRole("table")).getByRole("button", { name: "Adicionar 甲" }),
+    );
+
+    expect(onAdd).toHaveBeenCalledWith(1);
   });
 });

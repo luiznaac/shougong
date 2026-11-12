@@ -13,6 +13,7 @@ import { nextPageOffset } from "../lib/pagination.ts";
 import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
 import { api } from "./client.ts";
 import type {
+  BatchImportRowRequest,
   GenerateReadingRequest,
   PriorityEdge,
   SessionKind,
@@ -31,7 +32,8 @@ export const keys = {
   studyItem: (id: number) => ["study-items", id] as const,
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
-  dictionary: (q: string) => ["dictionary", q] as const,
+  dictionaryPage: (q: string, limit: number, offset: number) =>
+    ["dictionary", q, { limit, offset }] as const,
   relatedEntriesPrefix: ["dictionary", "related"] as const,
   relatedEntries: (id: number, limit: number, offset: number) =>
     ["dictionary", "related", id, { limit, offset }] as const,
@@ -134,12 +136,18 @@ export function useItemHistory(id: number) {
   });
 }
 
-export function useDictionarySearch(q: string, limit = 20) {
-  return useQuery({
-    queryKey: ["dictionary", q, limit],
-    // The envelope's total is available for the redesign; today's pages consume rows only.
-    queryFn: async () => (await api.searchDictionary(q, limit)).items,
-    enabled: q.trim().length > 0,
+/**
+ * The dictionary search's server pages. Desktop asks for its one numbered page;
+ * mobile asks for every five-row page it has shown so far behind "Carregar
+ * mais". The server's shortest-first order and exact total stay authoritative.
+ */
+export function useDictionaryPageQueries(term: string, requests: ItemPageRequest[]) {
+  return useQueries({
+    queries: requests.map((request) => ({
+      queryKey: keys.dictionaryPage(term, request.limit, request.offset),
+      queryFn: () => api.searchDictionary(term, request.limit, request.offset),
+      enabled: term.trim().length > 0,
+    })),
   });
 }
 
@@ -201,6 +209,26 @@ export function useAddStudyItem() {
       qc.invalidateQueries({ queryKey: keys.relatedEntriesPrefix });
     },
   });
+}
+
+/**
+ * One bounded batch-import request. The Add/Import pane sends a row at a time,
+ * so invalidation is deferred to the run's end through `useAddImportRefresh`
+ * rather than refetching the queue after every row.
+ */
+export function useBatchImportStudyItems() {
+  return useMutation({
+    mutationFn: (rows: BatchImportRowRequest[]) => api.batchImportStudyItems(rows),
+  });
+}
+
+/** The one refresh after an Add/Import write: the queue list and its counter. */
+export function useAddImportRefresh() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+    qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
+  };
 }
 
 /** A real grade refreshes the study-item grids, the overview and both Extra Study buckets. */

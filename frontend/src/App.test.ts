@@ -4,8 +4,7 @@ import { describe, expect, it } from "vitest";
 import { routes } from "./App.tsx";
 import { AppShell } from "./components/AppShell.tsx";
 import { Placeholder } from "./components/Placeholder.tsx";
-import { AddItems } from "./pages/AddItems.tsx";
-import { BatchImport } from "./pages/BatchImport.tsx";
+import { AddImport } from "./pages/AddImport.tsx";
 import { ItemIndex } from "./pages/ItemIndex.tsx";
 import { Lesson } from "./pages/Lesson.tsx";
 import { Practice } from "./pages/Practice.tsx";
@@ -41,8 +40,8 @@ describe("route table", () => {
 
   it("moves the migrated surfaces onto their new IA paths", () => {
     expect(elementType(child("biblioteca")?.element)).toBe(ItemIndex);
-    expect(elementType(child("biblioteca/adicionar")?.element)).toBe(AddItems);
-    expect(elementType(child("biblioteca/importar")?.element)).toBe(BatchImport);
+    expect(elementType(child("biblioteca/adicionar")?.element)).toBe(AddImport);
+    expect(elementType(child("biblioteca/importar")?.element)).toBe(AddImport);
     expect(elementType(child("biblioteca/itens/:id")?.element)).toBe(StudyItemPage);
     expect(elementType(child("leitura")?.element)).toBe(Reading);
   });
