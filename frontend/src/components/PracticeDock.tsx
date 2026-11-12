@@ -98,7 +98,7 @@ export function PracticeDock({
   if (presentation === "mobile") {
     return (
       <footer
-        className="border-t border-white/10 bg-slate-900/95 pt-2.5"
+        className="shrink-0 border-t border-white/10 bg-slate-900/95 pt-2.5"
         style={{ paddingBottom: STAGE_BOTTOM, ...STAGE_HORIZONTAL_PADDING }}
       >
         <div className="flex gap-1.5">{keys("h-12", false)}</div>

@@ -68,6 +68,16 @@ function stubStrokes() {
   );
 }
 
+/** The nearest element that contains both nodes — the region they share. */
+function sharedAncestor(a: Element, b: Element): Element {
+  const chain = new Set<Element>();
+  for (let node: Element | null = a; node; node = node.parentElement) chain.add(node);
+  for (let node: Element | null = b; node; node = node.parentElement) {
+    if (chain.has(node)) return node;
+  }
+  throw new Error("the two elements share no ancestor");
+}
+
 beforeEach(stubStrokes);
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -163,6 +173,17 @@ describe("Quiz interaction", () => {
     renderQuiz();
 
     expect(screen.getByRole("button", { name: "Rollback" })).toBeTruthy();
+  });
+
+  it("renders the mobile dock outside the band and middle region", () => {
+    renderQuiz();
+
+    const band = screen.getByText("Prática");
+    const middle = screen.getByText("Escreva o caractere à mão");
+    const region = sharedAncestor(band, middle);
+    const dock = screen.getByRole("contentinfo");
+
+    expect(region.contains(dock)).toBe(false);
   });
 
   it("docks rollback and the keyboard legend on desktop", () => {
