@@ -43,6 +43,7 @@ A learning item can be pinned to an edge of the lesson queue with `POST /study-i
 | `check`            | everything CI runs                                      |
 | `migrate`          | apply pending Alembic migrations, baselining if needed  |
 | `migrate:generate` | autogenerate a migration from entity changes            |
+| `seed:acceptance`  | dev-only acceptance fixture (see `../docs/acceptance-runbook.md`) |
 
 ## The dictionary
 
