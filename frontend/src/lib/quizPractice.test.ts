@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client.ts";
-import { submitRevealedGrade, summaryCopy, topBarTitle } from "./quizPractice.ts";
+import { stageBandClass, submitRevealedGrade, summaryCopy, topBarTitle } from "./quizPractice.ts";
 
 describe("quiz practice copy", () => {
   it("keeps the ordinary top-bar labels when recording", () => {
@@ -31,6 +31,14 @@ describe("quiz practice copy", () => {
       note: null,
       doneLabel: "Aprendidos",
     });
+  });
+});
+
+describe("stage band identity", () => {
+  it("gives each mode its own coloured band, with practice on cyan", () => {
+    expect(stageBandClass("lesson", true)).toBe("from-violet-600 to-violet-800");
+    expect(stageBandClass("review", true)).toBe("from-rose-500 to-accent-600");
+    expect(stageBandClass("review", false)).toBe("from-cyan-600 to-sky-800");
   });
 });
 

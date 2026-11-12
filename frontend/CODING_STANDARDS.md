@@ -249,7 +249,7 @@ Source: the responsive-redesign spec's *Information architecture* ("Lesson, Revi
 
 Only the shell reads `env(safe-area-inset-top)` / `env(safe-area-inset-bottom)`, plus a primitive that genuinely docks to the viewport edge (the `Toast`). A page composes `AppShell` and never re-adds the chrome's insets; doing so double-pads on a notched phone and does nothing on a browser without insets. `index.html`'s `viewport-fit=cover` is what makes the insets real.
 
-Source: the responsive-redesign spec's *Mobile interaction rules* → Safe area.
+Source: the responsive-redesign spec's *Mobile interaction rules* → Safe area. The three full-screen practice routes sit outside the shell, so their stage reads `STAGE_TOP`/`STAGE_BOTTOM` from `lib/safeArea.ts` — the same one place the insets are written, never a component-local `env()`.
 
 ### Compose the shared primitives; use `Placeholder` for an unmigrated surface
 
