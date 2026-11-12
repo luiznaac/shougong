@@ -1,6 +1,6 @@
 import type { SrsRating } from "../api/types.ts";
 import { PRACTICE_GRADES } from "../lib/practiceGrades.ts";
-import { STAGE_BOTTOM } from "../lib/safeArea.ts";
+import { STAGE_BOTTOM, STAGE_HORIZONTAL_PADDING } from "../lib/safeArea.ts";
 import type { Presentation } from "../lib/useMediaQuery.ts";
 
 function gradeTone(
@@ -98,8 +98,8 @@ export function PracticeDock({
   if (presentation === "mobile") {
     return (
       <footer
-        className="border-t border-white/10 bg-slate-900/95 px-3 pt-2.5"
-        style={{ paddingBottom: STAGE_BOTTOM }}
+        className="border-t border-white/10 bg-slate-900/95 pt-2.5"
+        style={{ paddingBottom: STAGE_BOTTOM, ...STAGE_HORIZONTAL_PADDING }}
       >
         <div className="flex gap-1.5">{keys("h-12", false)}</div>
         {advance("mt-1.5 h-11 w-full text-sm")}
