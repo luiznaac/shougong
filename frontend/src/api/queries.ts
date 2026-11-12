@@ -39,6 +39,7 @@ export const keys = {
     ["dictionary", "related", id, { limit }] as const,
   readingHistoryPrefix: ["reading-texts"] as const,
   readingHistory: (limit = 20, offset = 0) => ["reading-texts", "list", { limit, offset }] as const,
+  readingHistoryPages: (limit: number) => ["reading-texts", "list", "pages", { limit }] as const,
   itemReadings: (entryId: number, limit: number) =>
     ["reading-texts", "entry", entryId, { limit }] as const,
   readingText: (id: number) => ["reading-texts", "detail", id] as const,
@@ -285,10 +286,34 @@ export function usePriorityActions() {
   };
 }
 
-export function useReadingHistory(limit = 20, offset = 0) {
+export interface ReadingHistoryQueryOptions {
+  enabled?: boolean;
+}
+
+/**
+ * One summary page of the reading history — the desktop rail's explicit
+ * `Pager`. Rows are token-free summaries; a full reading is fetched separately
+ * by `useReadingText` only when a row is selected.
+ */
+export function useReadingHistory(limit = 20, offset = 0, opts: ReadingHistoryQueryOptions = {}) {
   return useQuery({
     queryKey: keys.readingHistory(limit, offset),
     queryFn: () => api.listReadingHistory(limit, offset),
+    enabled: opts.enabled ?? true,
+  });
+}
+
+/**
+ * The mobile reading history: eight-row summary pages accumulated behind an
+ * explicit "Carregar mais". The server owns the order and the exact total.
+ */
+export function useReadingHistoryPages(limit = 8, opts: ReadingHistoryQueryOptions = {}) {
+  return useInfiniteQuery({
+    queryKey: keys.readingHistoryPages(limit),
+    queryFn: ({ pageParam }) => api.listReadingHistory(limit, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextPageOffset(lastPage, lastPageParam),
+    enabled: opts.enabled ?? true,
   });
 }
 
