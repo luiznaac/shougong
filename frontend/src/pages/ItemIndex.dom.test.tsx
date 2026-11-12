@@ -236,6 +236,16 @@ describe("mobile item index", () => {
     );
     expect(await screen.findByText("Mostrando 48 de 137")).toBeTruthy();
   });
+
+  it("keeps CSV import out of mobile navigation", async () => {
+    stubViewport(false);
+    renderIndex();
+
+    await screen.findByRole("list", { name: "Itens de estudo" });
+
+    expect(screen.queryByRole("link", { name: "Importar CSV" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Adicionar" })).toBeTruthy();
+  });
 });
 
 describe("item index panel states", () => {

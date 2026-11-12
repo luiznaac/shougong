@@ -1,8 +1,7 @@
 import type { RouteObject } from "react-router-dom";
 import { AppShell } from "./components/AppShell.tsx";
-import { AddItems } from "./pages/AddItems.tsx";
+import { AddImport } from "./pages/AddImport.tsx";
 import { Ajustes } from "./pages/Ajustes.tsx";
-import { BatchImport } from "./pages/BatchImport.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
 import { ItemIndex } from "./pages/ItemIndex.tsx";
 import { Lesson } from "./pages/Lesson.tsx";
@@ -25,8 +24,8 @@ export const routes: RouteObject[] = [
         element: <ItemIndex />,
       },
       { path: "biblioteca/itens/:id", element: <StudyItemPage /> },
-      { path: "biblioteca/adicionar", element: <AddItems /> },
-      { path: "biblioteca/importar", element: <BatchImport /> },
+      { path: "biblioteca/adicionar", element: <AddImport /> },
+      { path: "biblioteca/importar", element: <AddImport /> },
       { path: "leitura", element: <Reading /> },
       { path: "progresso", element: <Progresso /> },
       { path: "ajustes", element: <Ajustes /> },
