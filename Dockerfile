@@ -4,7 +4,11 @@
 # One image, two services:
 #   - uvicorn  (the FastAPI backend)          -> ${API_PORT}, default 8080
 #   - nginx    (the built SPA + /api proxy)   -> ${WEB_PORT}, default 8081
-# supervised together by supervisord.
+# supervised together by supervisord. These container-internal ports are fixed;
+# the host publish side lives in docker-compose.yml. HTTP_PORT pins the app's
+# configured port to the same 8080 so the self-health URL is derived correctly,
+# and MYSQL__PORT pins the external database to 3306. An explicit env value still
+# overrides either.
 #
 # The database is NOT part of this image. Point MYSQL__* at an external MySQL
 # (docker-compose.yml has one for local/full-stack runs).
@@ -61,7 +65,9 @@ RUN apt-get update \
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     API_PORT=8080 \
-    WEB_PORT=8081
+    WEB_PORT=8081 \
+    HTTP_PORT=8080 \
+    MYSQL__PORT=3306
 
 COPY --from=backend --chown=app:app /app /app
 COPY --from=frontend /fe/dist /var/www/shougong

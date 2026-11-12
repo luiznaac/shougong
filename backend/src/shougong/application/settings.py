@@ -2,14 +2,16 @@
 
 Values come from environment variables (and an optional `.env`). Nested groups
 use `__` as the delimiter, e.g. `MYSQL__HOST`, `GATEWAYS__APP__HOST`.
-Pick the profile with `APP_ENV=dev|prod|test`.
+Pick the profile with `APP_ENV=dev|prod|test`: dev (the default) binds the
+project's assigned host block, while any other profile keeps the canonical
+8080/3306 unless the ports are set explicitly.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,7 +29,8 @@ class MySqlConfig(BaseModel):
 
 class AppGatewayConfig(BaseModel):
     # Base URL the service uses to call its own /health/internal (see AppHealthGateway).
-    host: str = "http://localhost:8080"
+    # Unset derives from `HTTP_PORT`; an explicit host wins for container/deploy.
+    host: str | None = None
 
 
 class AiGatewayConfig(BaseModel):
@@ -85,6 +88,30 @@ class Settings(BaseSettings):
     mysql: MySqlConfig = Field(default_factory=MySqlConfig)
     gateways: GatewaysConfig = Field(default_factory=GatewaysConfig)
 
+    @model_validator(mode="after")
+    def _apply_dev_port_block(self) -> Self:
+        """Dev (the default profile) gets shougong's assigned host block.
+
+        Any other environment keeps the canonical 8080/3306, so a host or deploy
+        process that does not set the ports still reaches its local MySQL. An
+        explicit value always wins.
+        """
+        if self.app_env != "dev":
+            return self
+        if "http_port" not in self.model_fields_set:
+            self.http_port = 8130
+        if "port" not in self.mysql.model_fields_set:
+            self.mysql.port = 8132
+        return self
+
+    @property
+    def is_dev(self) -> bool:
+        return self.app_env == "dev"
+
     @property
     def log_as_json(self) -> bool:
-        return self.app_env != "dev"
+        return not self.is_dev
+
+    @property
+    def app_host(self) -> str:
+        return self.gateways.app.host or f"http://localhost:{self.http_port}"

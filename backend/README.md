@@ -8,14 +8,14 @@ Three things it does: look up characters in a dictionary, enqueue entries as stu
 
 ```bash
 uv sync                       # create .venv + install everything
-docker compose up -d mysql    # local MySQL on :3306 (from the repo-root compose)
-uv run poe run                # start the service on http://localhost:8080
-curl localhost:8080/health
+docker compose up -d mysql    # local MySQL on :8132 (from the repo-root compose)
+uv run poe run                # start the service on http://localhost:8130
+curl localhost:8130/health
 ```
 
 `docker compose` lives at the **repo root** now — `docker compose up -d mysql` is the DB-only helper for this workflow, and `docker compose up --build` runs the full stack (combined backend + frontend image + MySQL). See the [root README](../README.md#docker) for the image layout and publishing.
 
-All config is via env vars (`APP_ENV`, `HTTP_PORT`, `LOG_LEVEL`, `MYSQL__*`, `GATEWAYS__APP__HOST`, `DICTIONARY_AUTOLOAD`, `STUDY_TIMEZONE`) — see `.env.example`. Nested keys use `__`.
+All config is via env vars (`APP_ENV`, `HTTP_PORT`, `LOG_LEVEL`, `MYSQL__*`, `GATEWAYS__APP__HOST`, `DICTIONARY_AUTOLOAD`, `STUDY_TIMEZONE`) — see `.env.example`. Nested keys use `__`. In dev (the default `APP_ENV`) `HTTP_PORT` defaults to `8130` and `MYSQL__PORT` to `8132`; any other profile keeps the canonical `8080`/`3306` so a deploy reaches its local MySQL without extra config. An explicit value always wins. `GATEWAYS__APP__HOST` is optional: unset, the self-health base URL follows `HTTP_PORT`.
 
 `STUDY_TIMEZONE` (an IANA name like `America/Sao_Paulo`, default `UTC`) sets the SRS day boundary: every card's due time is rounded down to that timezone's midnight, so a whole day's cards become due at once instead of trickling in through the day.
 
@@ -33,7 +33,7 @@ A learning item can be pinned to an edge of the lesson queue with `POST /study-i
 
 | task               | what it does                                            |
 |--------------------|--------------------------------------------------------|
-| `run`              | uvicorn with reload                                     |
+| `run`              | module entrypoint on `HTTP_PORT` (reload in `dev`)      |
 | `lint` / `format`  | Ruff                                                    |
 | `typecheck`        | mypy `--strict`                                         |
 | `contracts`        | import-linter (layer rules)                             |
