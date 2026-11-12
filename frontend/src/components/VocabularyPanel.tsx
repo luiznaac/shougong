@@ -1,6 +1,8 @@
 import { useVocabularyProfile } from "../api/queries.ts";
-import type { VocabularyCategory, VocabularyProfile } from "../api/types.ts";
+import type { VocabularyProfile } from "../api/types.ts";
 import { vocabularyCategoryLabel } from "../i18n/vocabularyCategory.ts";
+import { categoryRows, estimatedLevelLabel } from "../lib/progress.ts";
+import { EmptyState } from "./EmptyState.tsx";
 
 /**
  * "Meu vocabulário" — the HSK level and grammatical classes the app derives for
@@ -30,14 +32,11 @@ export function VocabularyPanel() {
         {summary && (
           <>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
-              {Object.entries(summary.by_category)
-                .sort((a, b) => b[1] - a[1])
-                .map(([cat, n]) => (
-                  <span key={cat}>
-                    {vocabularyCategoryLabel(cat as VocabularyCategory)}:{" "}
-                    <span className="text-slate-200">{n}</span>
-                  </span>
-                ))}
+              {categoryRows(summary.by_category).map((row) => (
+                <span key={row.category}>
+                  {row.label}: <span className="text-slate-200">{row.count}</span>
+                </span>
+              ))}
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
               {Object.entries(summary.by_hsk_level)
@@ -60,9 +59,7 @@ export function VocabularyPanel() {
             <div className="text-xs text-slate-400">
               Nível estimado:{" "}
               <span className="text-slate-200">
-                {summary.proficiency.estimated_level > 0
-                  ? `HSK ${summary.proficiency.estimated_level}`
-                  : "iniciante"}
+                {estimatedLevelLabel(summary.proficiency.estimated_level)}
               </span>
             </div>
 
@@ -73,22 +70,30 @@ export function VocabularyPanel() {
               </p>
             )}
 
-            <div className="max-h-96 overflow-y-auto rounded-md border border-white/5">
-              <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 bg-slate-900 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-3 py-2">Palavra</th>
-                    <th className="px-3 py-2">HSK</th>
-                    <th className="px-3 py-2">Classe</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {(data?.profiles ?? []).map((profile) => (
-                    <VocabularyRow key={profile.simplified} profile={profile} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {(data?.profiles ?? []).length === 0 ? (
+              <EmptyState
+                icon="book"
+                title="Nenhuma palavra no vocabulário"
+                description="Adicione palavras ao estudo para o gerador trabalhar com o seu vocabulário."
+              />
+            ) : (
+              <div className="max-h-96 overflow-y-auto rounded-md border border-white/5">
+                <table className="w-full text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-900 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Palavra</th>
+                      <th className="px-3 py-2">HSK</th>
+                      <th className="px-3 py-2">Classe</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {(data?.profiles ?? []).map((profile) => (
+                      <VocabularyRow key={profile.simplified} profile={profile} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </>
         )}
       </div>

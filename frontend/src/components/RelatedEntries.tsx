@@ -1,64 +1,158 @@
-import { useMemo } from "react";
+import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAddStudyItem, useDictionarySearch, useStudyItems } from "../api/queries.ts";
-import type { DictionaryEntry } from "../api/types.ts";
+import { useAddStudyItem, useRelatedEntries, useRelatedEntryPages } from "../api/queries.ts";
+import type { RelatedEntry } from "../api/types.ts";
+import { itemPath } from "../lib/navigation.ts";
+import { pageOffset } from "../lib/pagination.ts";
+import type { Presentation } from "../lib/useMediaQuery.ts";
+import { EmptyState } from "./EmptyState.tsx";
 import { Hanzi } from "./Hanzi.tsx";
+import { HskChip } from "./HskChip.tsx";
+import { LoadMore } from "./LoadMore.tsx";
+import { Pager } from "./Pager.tsx";
 import { Pinyin } from "./Pinyin.tsx";
+import { PanelState } from "./QueryState.tsx";
+
+const RELATED_PAGE_SIZE = 8;
 
 /**
- * Dictionary entries that come up when searching for this item's hanzi —
- * i.e. words/characters that contain it. Ones already being studied link to
- * their page; the rest can be added to the queue inline.
+ * Related words from the shared-character route. The server's order is rendered
+ * as received — two-up paged grid on desktop at eight per page, one growing
+ * list with "Carregar mais" on mobile. A queued word links to its study item;
+ * an unqueued one can be added inline.
  */
 export function RelatedEntries({
-  query,
-  excludeEntryId,
+  entryId,
+  layout,
 }: {
-  query: string;
-  excludeEntryId: number;
+  entryId: number;
+  layout: Presentation;
 }) {
-  const { data: results, isLoading, error } = useDictionarySearch(query, 25);
-  const { data: studyItems } = useStudyItems();
-  const addMutation = useAddStudyItem();
-
-  const studyItemByEntry = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const it of studyItems ?? []) m.set(it.entry.id, it.id);
-    return m;
-  }, [studyItems]);
-
-  // Drop the item itself and any other entry for the exact same hanzi
-  // (alternate readings/notes) — "related" means other words.
-  const related = (results ?? []).filter((e) => e.id !== excludeEntryId && e.simplified !== query);
-
-  if (isLoading) return <p className="text-sm text-slate-500">Carregando…</p>;
-  if (error) return <p className="text-sm text-rose-400">Falha ao buscar relacionados.</p>;
-  if (related.length === 0)
-    return <p className="text-sm text-slate-500">Nenhum item relacionado.</p>;
-
-  return (
-    <ul className="divide-y divide-white/5">
-      {related.map((entry) => (
-        <Row
-          key={entry.id}
-          entry={entry}
-          studyItemId={studyItemByEntry.get(entry.id)}
-          onAdd={() => addMutation.mutate(entry.id)}
-          adding={addMutation.isPending}
-        />
-      ))}
-    </ul>
+  return layout === "desktop" ? (
+    <DesktopRelated entryId={entryId} />
+  ) : (
+    <MobileRelated entryId={entryId} />
   );
 }
 
-function Row({
+function DesktopRelated({ entryId }: { entryId: number }) {
+  const [page, setPage] = useState(1);
+  const related = useRelatedEntries(
+    entryId,
+    RELATED_PAGE_SIZE,
+    pageOffset(page, RELATED_PAGE_SIZE),
+  );
+  const add = useAddStudyItem();
+  const items = related.data?.items ?? [];
+  const total = related.data?.total ?? 0;
+
+  return (
+    <RelatedBody
+      layout="desktop"
+      items={items}
+      isLoading={related.isLoading}
+      error={related.error}
+      onRetry={() => void related.refetch()}
+      onAdd={(entry) => add.mutate(entry.id)}
+      adding={add.isPending}
+      footer={
+        <Pager
+          page={page}
+          total={total}
+          shown={Math.min(total, pageOffset(page, RELATED_PAGE_SIZE) + items.length)}
+          pageSize={RELATED_PAGE_SIZE}
+          onPageChange={setPage}
+        />
+      }
+    />
+  );
+}
+
+function MobileRelated({ entryId }: { entryId: number }) {
+  const related = useRelatedEntryPages(entryId, RELATED_PAGE_SIZE);
+  const add = useAddStudyItem();
+  const items = related.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = related.data?.pages.at(-1)?.total ?? 0;
+
+  return (
+    <RelatedBody
+      layout="mobile"
+      items={items}
+      isLoading={related.isLoading}
+      error={related.error}
+      onRetry={() => void related.refetch()}
+      onAdd={(entry) => add.mutate(entry.id)}
+      adding={add.isPending}
+      footer={
+        <LoadMore
+          shown={items.length}
+          total={total}
+          loading={related.isFetchingNextPage}
+          onLoadMore={() => void related.fetchNextPage()}
+        />
+      }
+    />
+  );
+}
+
+function RelatedBody({
+  layout,
+  items,
+  isLoading,
+  error,
+  onRetry,
+  onAdd,
+  adding,
+  footer,
+}: {
+  layout: Presentation;
+  items: RelatedEntry[];
+  isLoading: boolean;
+  error: unknown;
+  onRetry: () => void;
+  onAdd: (entry: RelatedEntry) => void;
+  adding: boolean;
+  footer: ReactNode;
+}) {
+  return (
+    <PanelState
+      isLoading={isLoading}
+      loadingLabel="Carregando palavras relacionadas…"
+      error={error}
+      errorTitle="Não foi possível carregar as palavras relacionadas."
+      onRetry={onRetry}
+    >
+      {items.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title="Nenhuma palavra relacionada"
+          description="Nenhuma outra palavra do dicionário compartilha um caractere com esta."
+        />
+      ) : (
+        <div className="space-y-3">
+          <ul
+            aria-label="Palavras relacionadas"
+            className={`grid gap-x-6 ${layout === "desktop" ? "sm:grid-cols-2" : "grid-cols-1"}`}
+          >
+            {items.map((entry) => (
+              <li key={entry.id} className="border-b border-white/5">
+                <RelatedRow entry={entry} onAdd={() => onAdd(entry)} adding={adding} />
+              </li>
+            ))}
+          </ul>
+          {footer}
+        </div>
+      )}
+    </PanelState>
+  );
+}
+
+function RelatedRow({
   entry,
-  studyItemId,
   onAdd,
   adding,
 }: {
-  entry: DictionaryEntry;
-  studyItemId?: number;
+  entry: RelatedEntry;
   onAdd: () => void;
   adding: boolean;
 }) {
@@ -66,50 +160,46 @@ function Row({
     <>
       <Hanzi
         text={entry.simplified}
-        singleCharPx={28}
-        boxPx={150}
+        singleCharPx={24}
+        boxPx={72}
         className="shrink-0 text-slate-100"
       />
       <div className="min-w-0 flex-1">
-        <Pinyin value={entry.pinyin} className="text-sm" />
-        <p className="truncate text-sm text-slate-400">{entry.definitions.join("; ")}</p>
+        <div className="flex items-center gap-1.5">
+          <Pinyin value={entry.pinyin} className="text-xs text-slate-400" />
+          <HskChip level={entry.hsk_level} />
+        </div>
+        <p className="truncate text-[11px] text-slate-400">{entry.definitions.join("; ")}</p>
       </div>
     </>
   );
 
-  if (studyItemId != null) {
+  if (entry.study_item_id != null) {
     return (
-      <li>
-        <Link
-          to={`/items/${studyItemId}`}
-          className="flex items-center gap-4 py-3 transition-colors hover:bg-white/5"
-        >
-          {body}
-          <span className="ml-auto shrink-0 rounded-md bg-slate-800 px-3 py-1.5 text-xs text-slate-400">
-            na fila
-          </span>
-        </Link>
-      </li>
+      <Link
+        to={itemPath(entry.study_item_id)}
+        className="flex items-center gap-3 py-2.5 transition-colors hover:bg-white/5"
+      >
+        {body}
+        <span className="shrink-0 rounded-md bg-slate-800 px-2 py-1 text-[10px] text-slate-400">
+          na fila
+        </span>
+      </Link>
     );
   }
 
   return (
-    <li className="flex items-center gap-4 py-3">
+    <div className="flex items-center gap-3 py-2.5">
       {body}
-      <AddButton onAdd={onAdd} adding={adding} />
-    </li>
-  );
-}
-
-function AddButton({ onAdd, adding }: { onAdd: () => void; adding: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onAdd}
-      disabled={adding}
-      className="ml-auto shrink-0 rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
-    >
-      Adicionar
-    </button>
+      <button
+        type="button"
+        aria-label={`Adicionar ${entry.simplified}`}
+        onClick={onAdd}
+        disabled={adding}
+        className="shrink-0 rounded-md bg-accent-500 px-2 py-1 text-[10px] font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
+      >
+        Adicionar
+      </button>
+    </div>
   );
 }

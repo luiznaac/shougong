@@ -22,15 +22,11 @@ function item(id: number, simplified: string) {
 
 function render(overrides: Partial<Parameters<typeof ExtraStudyView>[0]> = {}): string {
   const props: Parameters<typeof ExtraStudyView>[0] = {
-    range: { from: "2026-10-28", to: "2026-10-30" },
-    bounds: { min: "2026-10-01", max: "2026-10-30" },
     activeBucket: "recent_mistakes",
     data: data(),
     isLoading: false,
     error: null,
-    practiceDisabled: false,
-    onFromChange: () => {},
-    onToChange: () => {},
+    practiceDisabled: true,
     onBucketChange: () => {},
     onPractice: () => {},
     ...overrides,
@@ -44,7 +40,7 @@ function render(overrides: Partial<Parameters<typeof ExtraStudyView>[0]> = {}): 
 }
 
 describe("ExtraStudyView", () => {
-  it("renders both tab counts before switching", () => {
+  it("renders both bucket counts before switching", () => {
     const html = render();
     expect(html).toContain("Erros recentes (2)");
     expect(html).toContain("Aprendidos recentemente (1)");
@@ -56,13 +52,15 @@ describe("ExtraStudyView", () => {
     expect(html.match(/role="tab"/g)).toHaveLength(2);
     expect(html).toContain('role="tabpanel"');
     expect(html.match(/aria-selected="true"/g)).toHaveLength(1);
-    expect(html).toContain('aria-selected="true"');
   });
 
-  it("renders the active bucket's tiles in the received order", () => {
-    const items = [item(9, "甲"), item(3, "乙")];
-    const html = render({ data: data({ recent_mistakes: { total: 2, items } }) });
+  it("renders the active bucket's tiles in the received order, capped at four", () => {
+    const items = [item(1, "甲"), item(2, "乙"), item(3, "丙"), item(4, "丁"), item(5, "戊")];
+    const html = render({ data: data({ recent_mistakes: { total: 5, items } }) });
+
     expect(html.indexOf("甲")).toBeLessThan(html.indexOf("乙"));
+    expect(html).toContain("丁");
+    expect(html).not.toContain("戊");
   });
 
   it("disables Praticar at zero and enables it otherwise", () => {
@@ -72,6 +70,10 @@ describe("ExtraStudyView", () => {
     });
     expect(empty).toMatch(/<button[^>]*disabled=""[^>]*>Praticar<\/button>/);
     expect(enabled).not.toMatch(/<button[^>]*disabled=""[^>]*>Praticar<\/button>/);
+  });
+
+  it("has no date-range inputs — the panel uses the fixed recent window", () => {
+    expect(render()).not.toContain("<input");
   });
 
   it("distinguishes loading from nothing-to-show", () => {

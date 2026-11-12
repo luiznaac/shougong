@@ -1,14 +1,19 @@
 import {
   type QueryClient,
   type QueryKey,
+  useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { applyCachedPriority, predictPriorityPosition } from "../lib/lessonQueue.ts";
+import type { ItemPageRequest } from "../lib/pagination.ts";
+import { nextPageOffset } from "../lib/pagination.ts";
 import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
 import { api } from "./client.ts";
 import type {
+  BatchImportRowRequest,
   GenerateReadingRequest,
   PriorityEdge,
   SessionKind,
@@ -20,17 +25,29 @@ import type {
 export const keys = {
   studyItemsPrefix: ["study-items"] as const,
   studyItems: (opts: StudyItemListQuery = {}) => ["study-items", opts] as const,
+  studyItemPages: (opts: StudyItemListQuery, limit: number) =>
+    ["study-items", "page", { ...opts, limit }] as const,
+  studyItemPageQuery: (opts: StudyItemListQuery, limit: number, offset: number) =>
+    ["study-items", "page", { ...opts, limit, offset }] as const,
   studyItem: (id: number) => ["study-items", id] as const,
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
-  dictionary: (q: string) => ["dictionary", q] as const,
+  dictionaryPage: (q: string, limit: number, offset: number) =>
+    ["dictionary", q, { limit, offset }] as const,
+  relatedEntriesPrefix: ["dictionary", "related"] as const,
   relatedEntries: (id: number, limit: number, offset: number) =>
     ["dictionary", "related", id, { limit, offset }] as const,
+  relatedEntryPages: (id: number, limit: number) =>
+    ["dictionary", "related", id, { limit }] as const,
   readingHistoryPrefix: ["reading-texts"] as const,
   readingHistory: (limit = 20, offset = 0) => ["reading-texts", "list", { limit, offset }] as const,
+  readingHistoryPages: (limit: number) => ["reading-texts", "list", "pages", { limit }] as const,
+  itemReadings: (entryId: number, limit: number) =>
+    ["reading-texts", "entry", entryId, { limit }] as const,
   readingText: (id: number) => ["reading-texts", "detail", id] as const,
   insightsPrefix: ["insights"] as const,
   extraStudy: (from: string, to: string) => ["insights", "extra-study", { from, to }] as const,
+  studyOverviewPrefix: ["study-overview"] as const,
   studyOverview: (tzOffsetMinutes: number) => ["study-overview", { tzOffsetMinutes }] as const,
 };
 
@@ -62,10 +79,39 @@ export function useStudyItems(opts: StudyItemListQuery = {}) {
   });
 }
 
+/**
+ * One page at a time from the study-item list, accumulating as the learner asks
+ * for more. The server owns the order; `total` comes from the last envelope.
+ */
+export function useStudyItemPages(opts: StudyItemListQuery, limit: number) {
+  return useInfiniteQuery({
+    queryKey: keys.studyItemPages(opts, limit),
+    queryFn: ({ pageParam }) => api.listStudyItems({ ...opts, limit, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextPageOffset(lastPage, lastPageParam),
+  });
+}
+
 export function useStudyItem(id: number) {
   return useQuery({
     queryKey: keys.studyItem(id),
     queryFn: () => api.getStudyItem(id),
+  });
+}
+
+/**
+ * The item index's server pages. Desktop asks for its one page; mobile asks for
+ * every 24-row page it has shown so far, so "Carregar mais" never exceeds the
+ * server's 100-row cap and the page order stays authoritative. A page or filter
+ * change has no placeholder rows, so the panel shows its own loading state
+ * instead of a caption that overstates what is rendered.
+ */
+export function useStudyItemPageQueries(opts: StudyItemListQuery, requests: ItemPageRequest[]) {
+  return useQueries({
+    queries: requests.map((request) => ({
+      queryKey: keys.studyItemPageQuery(opts, request.limit, request.offset),
+      queryFn: () => api.listStudyItems({ ...opts, ...request }),
+    })),
   });
 }
 
@@ -91,19 +137,18 @@ export function useItemHistory(id: number) {
   });
 }
 
-export function useLearningToReviewHistory() {
-  return useQuery({
-    queryKey: ["study-items", "learning-to-review"],
-    queryFn: () => api.listLearningToReviewHistory(),
-  });
-}
-
-export function useDictionarySearch(q: string, limit = 20) {
-  return useQuery({
-    queryKey: ["dictionary", q, limit],
-    // The envelope's total is available for the redesign; today's pages consume rows only.
-    queryFn: async () => (await api.searchDictionary(q, limit)).items,
-    enabled: q.trim().length > 0,
+/**
+ * The dictionary search's server pages. Desktop asks for its one numbered page;
+ * mobile asks for every five-row page it has shown so far behind "Carregar
+ * mais". The server's shortest-first order and exact total stay authoritative.
+ */
+export function useDictionaryPageQueries(term: string, requests: ItemPageRequest[]) {
+  return useQueries({
+    queries: requests.map((request) => ({
+      queryKey: keys.dictionaryPage(term, request.limit, request.offset),
+      queryFn: () => api.searchDictionary(term, request.limit, request.offset),
+      enabled: term.trim().length > 0,
+    })),
   });
 }
 
@@ -111,6 +156,35 @@ export function useRelatedEntries(entryId: number, limit = 8, offset = 0) {
   return useQuery({
     queryKey: keys.relatedEntries(entryId, limit, offset),
     queryFn: () => api.listRelatedEntries(entryId, limit, offset),
+    enabled: entryId > 0,
+  });
+}
+
+/**
+ * The mobile related-words list: eight-row server pages accumulated behind an
+ * explicit "Carregar mais". The server owns the order and the exact total.
+ */
+export function useRelatedEntryPages(entryId: number, limit = 8) {
+  return useInfiniteQuery({
+    queryKey: keys.relatedEntryPages(entryId, limit),
+    queryFn: ({ pageParam }) => api.listRelatedEntries(entryId, limit, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextPageOffset(lastPage, lastPageParam),
+    enabled: entryId > 0,
+  });
+}
+
+/**
+ * Readings containing one dictionary entry. The list is token-free summary rows
+ * (with the entry match snippet); the full reading is fetched only when a row is
+ * selected, through `useReadingText`.
+ */
+export function useItemReadings(entryId: number, limit = 20) {
+  return useInfiniteQuery({
+    queryKey: keys.itemReadings(entryId, limit),
+    queryFn: ({ pageParam }) => api.listReadingsByEntry(entryId, limit, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextPageOffset(lastPage, lastPageParam),
     enabled: entryId > 0,
   });
 }
@@ -129,14 +203,40 @@ export function useAddStudyItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dictionaryEntryId: number) => api.addStudyItem(dictionaryEntryId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.studyItemsPrefix }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+      qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
+      // A queued related word flips to "na fila" on the item page too.
+      qc.invalidateQueries({ queryKey: keys.relatedEntriesPrefix });
+    },
   });
 }
 
-/** A real grade refreshes the study-item grids and both Extra Study buckets. */
+/**
+ * One bounded batch-import request. The Add/Import pane sends a row at a time,
+ * so invalidation is deferred to the run's end through `useAddImportRefresh`
+ * rather than refetching the queue after every row.
+ */
+export function useBatchImportStudyItems() {
+  return useMutation({
+    mutationFn: (rows: BatchImportRowRequest[]) => api.batchImportStudyItems(rows),
+  });
+}
+
+/** The one refresh after an Add/Import write: the queue list and its counter. */
+export function useAddImportRefresh() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+    qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
+  };
+}
+
+/** A real grade refreshes the study-item grids, the overview and both Extra Study buckets. */
 export function invalidateAfterReview(qc: QueryClient, id: number): void {
   qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
   qc.invalidateQueries({ queryKey: keys.insightsPrefix });
+  qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
   qc.invalidateQueries({ queryKey: keys.studyItem(id) });
   qc.invalidateQueries({ queryKey: keys.reviews(id) });
 }
@@ -214,10 +314,34 @@ export function usePriorityActions() {
   };
 }
 
-export function useReadingHistory(limit = 20, offset = 0) {
+export interface ReadingHistoryQueryOptions {
+  enabled?: boolean;
+}
+
+/**
+ * One summary page of the reading history — the desktop rail's explicit
+ * `Pager`. Rows are token-free summaries; a full reading is fetched separately
+ * by `useReadingText` only when a row is selected.
+ */
+export function useReadingHistory(limit = 20, offset = 0, opts: ReadingHistoryQueryOptions = {}) {
   return useQuery({
     queryKey: keys.readingHistory(limit, offset),
     queryFn: () => api.listReadingHistory(limit, offset),
+    enabled: opts.enabled ?? true,
+  });
+}
+
+/**
+ * The mobile reading history: eight-row summary pages accumulated behind an
+ * explicit "Carregar mais". The server owns the order and the exact total.
+ */
+export function useReadingHistoryPages(limit = 8, opts: ReadingHistoryQueryOptions = {}) {
+  return useInfiniteQuery({
+    queryKey: keys.readingHistoryPages(limit),
+    queryFn: ({ pageParam }) => api.listReadingHistory(limit, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextPageOffset(lastPage, lastPageParam),
+    enabled: opts.enabled ?? true,
   });
 }
 

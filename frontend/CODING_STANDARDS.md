@@ -221,7 +221,7 @@ Source: *You Might Not Need an Effect* → Caching expensive calculations.
 
 Every call goes typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component; `fetch` is never called from a component. The query layer owns caching, deduping, retries and race handling that a hand-rolled effect would have to reimplement (see this lane's `AGENTS.md`).
 
-Source: this lane's `AGENTS.md` → Layout; *You Might Not Need an Effect* → Fetching data.
+Source: this lane's `AGENTS.md` → Shougong-specific pieces; *You Might Not Need an Effect* → Fetching data.
 
 ## Tests
 
@@ -230,3 +230,29 @@ Source: this lane's `AGENTS.md` → Layout; *You Might Not Need an Effect* → F
 A behaviour that depends on an event or on state after render belongs in a `*.dom.test.tsx` file — jsdom plus React Testing Library. Drive it the way a learner would (`userEvent.click`/`keyboard`) and assert through accessible roles or the visible outcome, not class names. Pure helpers stay in `*.test.ts` and a single-render markup contract stays in `*.test.tsx` through `react-dom/server`; do not recreate a DOM-dependent contract as substring matching over static markup.
 
 Source: this lane's `AGENTS.md` → Tests; the responsive-redesign spec's *Testing Decisions* (React Testing Library).
+
+## Shell and information architecture
+
+### Render navigation from the one model, never from a hard-coded path
+
+`lib/navigation.ts` owns the global sections, the mobile tabs and the Mais sheet entries. The desktop bar, the mobile tab bar and the Mais sheet consume it; no chrome component writes a section label, path or icon of its own. Adding a destination is one model entry, so the two chromes cannot drift and a route cannot be reachable on one width only. Next to the model, `App.tsx` is the single place a path becomes a page — a navigation target without a route is a bug the pair makes visible.
+
+Source: this lane's `AGENTS.md` → Shougong-specific pieces; the responsive-redesign spec's *Implementation Decisions* → Navigation and shell.
+
+### Keep full-screen flows outside the shell
+
+Lesson, Review and Practice are top-level routes, not children of `AppShell`. That is deliberate — they are bounded, distraction-free stages — so never wrap one in the chrome to make it look consistent, and never copy the chrome's bar into a practice screen. A new route joins the shell only when it is an ordinary paged surface.
+
+Source: the responsive-redesign spec's *Information architecture* ("Lesson, Review and Practice are full-screen routes outside the app chrome").
+
+### Let the chrome own the safe-area padding
+
+Only the shell reads `env(safe-area-inset-top)` / `env(safe-area-inset-bottom)`, plus a primitive that genuinely docks to the viewport edge (the `Toast`). A page composes `AppShell` and never re-adds the chrome's insets; doing so double-pads on a notched phone and does nothing on a browser without insets. `index.html`'s `viewport-fit=cover` is what makes the insets real.
+
+Source: the responsive-redesign spec's *Mobile interaction rules* → Safe area. The three full-screen practice routes sit outside the shell, so their stage reads `STAGE_TOP`/`STAGE_BOTTOM` from `lib/safeArea.ts` — the same one place the insets are written, never a component-local `env()`.
+
+### Compose the shared primitives; use `Placeholder` for an unmigrated surface
+
+Build a surface from `PageHeader`, `Panel`, `Skeleton`, `EmptyState` and `Toast` instead of re-creating their markup — that is the point of the shared vocabulary. A route whose surface has not been redesigned yet renders the one `Placeholder`, parameterized by title and copy; never create a per-route stub page, and never hide the route from the navigation until it is ready.
+
+Source: the responsive-redesign spec's *Rollout* and *Shared component inventory*.

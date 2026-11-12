@@ -1,143 +1,236 @@
 import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
-import { useLearningToReviewHistory, useStudyItems } from "../api/queries.ts";
-import type { StudyItem } from "../api/types.ts";
+import { useStudyItemPages, useStudyOverview } from "../api/queries.ts";
+import type { StudyItem, StudyOverview } from "../api/types.ts";
+import { CHARACTER_GRID_CLASS, CharacterTileGrid } from "../components/CharacterTileGrid.tsx";
+import { EmptyState } from "../components/EmptyState.tsx";
 import { ExtraStudyPanel } from "../components/ExtraStudyPanel.tsx";
 import { ItemsLearnedChart } from "../components/ItemsLearnedChart.tsx";
-import { LessonQueuePanel } from "../components/LessonQueuePanel.tsx";
-import { ProgressTiles } from "../components/ProgressTiles.tsx";
-import { SrsDistribution } from "../components/SrsDistribution.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
+import { Panel } from "../components/Panel.tsx";
+import { Skeleton } from "../components/Skeleton.tsx";
+import { SrsHalfPie } from "../components/SrsHalfPie.tsx";
 import { UpcomingReviews } from "../components/UpcomingReviews.tsx";
-import { type CharacterFilter, orderCharacterTiles } from "../lib/characterPanel.ts";
-import { lessonQueueRows } from "../lib/lessonQueue.ts";
-import { tallyGroups } from "../lib/srs.ts";
+import { Icon } from "../components/icons.tsx";
 
+type CharacterFilter = "all" | "leeches";
+
+const PAGE_SIZE = 12;
+const GRID_SKELETON_KEYS = Array.from({ length: PAGE_SIZE }, (_, i) => `grid-skeleton-${i}`);
+
+/**
+ * Hoje: today's queue leads the main column, then the character grid, the learned
+ * chart and Extra Study; a sticky rail carries the SRS half-pie and the seven-day
+ * forecast. Every aggregate comes from the one overview request, and the grid
+ * reads one page of twelve at a time — the page never pages through the queue.
+ */
 export function Dashboard() {
   const [filter, setFilter] = useState<CharacterFilter>("all");
-  const { data: items, isLoading, error } = useStudyItems();
-  const { data: dueItems } = useStudyItems({ due: true });
-  // Fetched eagerly so the leech chip count is accurate on dashboard load.
-  const {
-    data: leechItems,
-    isLoading: leechesLoading,
-    error: leechesError,
-  } = useStudyItems({ leech: true });
-  const { data: learnedHistory } = useLearningToReviewHistory();
+  const [today] = useState(() => new Date());
+  const overview = useStudyOverview();
+  const grid = useStudyItemPages(
+    filter === "leeches" ? { leech: true } : { sort: "stability_asc" },
+    PAGE_SIZE,
+  );
 
-  if (isLoading) return <p className="text-slate-400">Carregando…</p>;
-  if (error) return <p className="text-rose-400">Falha ao carregar: {String(error)}</p>;
-  if (!items) return null;
-
-  // Left button → lesson flow: everything still in `learning`.
-  const queueRows = lessonQueueRows(items);
-  const lessonCount = queueRows.length;
-  // Right button → review flow: `due=true` comes straight from the backend
-  // (it owns the day-boundary logic); keep only the `review`-state ones —
-  // learning items are handled by the lesson flow.
-  const reviewCount = (dueItems ?? []).filter((i) => i.card.state === "review").length;
-  const tally = tallyGroups(items.map((i) => i.card));
-  const tiles = orderCharacterTiles(filter, { all: items, leeches: leechItems ?? [] });
+  const items = grid.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = grid.data?.pages.at(-1)?.total ?? 0;
+  const moreAvailable = items.length < total;
+  const data = overview.data;
+  const forecastTotal = data?.next_seven_days.reduce((n, day) => n + day.due, 0) ?? 0;
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 sm:grid-cols-2">
-        <BigButton
-          to="/lesson"
-          count={lessonCount}
-          label="Lições"
-          className="from-cyan-400 to-blue-600"
-          disabled={lessonCount === 0}
-        />
-        <BigButton
-          to="/review"
-          count={reviewCount}
-          label="Reviews"
-          className="from-rose-400 to-accent-600"
-          disabled={reviewCount === 0}
-        />
-      </section>
+      <PageHeader
+        eyebrow={today.toLocaleDateString("pt-BR", {
+          weekday: "long",
+          day: "2-digit",
+          month: "long",
+        })}
+        title="Hoje"
+      />
 
-      <Panel title="Estudo extra">
-        <ExtraStudyPanel />
-      </Panel>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] lg:items-start">
+        <div className="space-y-4">
+          <TodayQueue data={data} isLoading={overview.isLoading} error={overview.error} />
 
-      {lessonCount > 0 ? (
-        <Panel title="Próximas lições">
-          <LessonQueuePanel rows={queueRows} />
-        </Panel>
-      ) : null}
+          <Panel
+            title="Caracteres"
+            action={
+              <CharacterFilterChips
+                filter={filter}
+                onChange={setFilter}
+                allCount={data?.item_count ?? 0}
+                leechCount={data?.leech_count ?? 0}
+              />
+            }
+          >
+            <CharacterGridBody
+              filter={filter}
+              items={items}
+              total={total}
+              isLoading={grid.isLoading}
+              error={grid.error}
+              onLoadMore={moreAvailable ? () => grid.fetchNextPage() : undefined}
+            />
+          </Panel>
 
-      <Panel title="SRS Stage Distribution">
-        <SrsDistribution tally={tally} />
-      </Panel>
+          <Panel title="Itens aprendidos">
+            <OverviewBody
+              isLoading={overview.isLoading}
+              error={overview.error}
+              data={data}
+              what="os itens aprendidos"
+              skeleton="h-44 w-full"
+            >
+              {(learned) => <ItemsLearnedChart learned={learned.learned} />}
+            </OverviewBody>
+          </Panel>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Panel title="Upcoming Reviews">
-          <UpcomingReviews items={items} />
-        </Panel>
-        <Panel title="Itens aprendidos">
-          <ItemsLearnedChart history={learnedHistory ?? []} />
-        </Panel>
+          <Panel title="Estudo extra">
+            <ExtraStudyPanel />
+          </Panel>
+        </div>
+
+        <aside className="space-y-4 lg:sticky lg:top-20">
+          <Panel
+            title="SRS Stages"
+            action={<Icon name="layers" size={16} className="text-slate-600" />}
+          >
+            <OverviewBody
+              isLoading={overview.isLoading}
+              error={overview.error}
+              data={data}
+              what="a distribuição SRS"
+              skeleton="h-32 w-full"
+            >
+              {(stats) => <SrsHalfPie tally={stats.srs_distribution} />}
+            </OverviewBody>
+          </Panel>
+
+          <Panel
+            title="Próximas revisões"
+            action={
+              data ? (
+                <span className="text-[10px] text-slate-500">{forecastTotal} em 7 dias</span>
+              ) : null
+            }
+          >
+            <OverviewBody
+              isLoading={overview.isLoading}
+              error={overview.error}
+              data={data}
+              what="as próximas revisões"
+              skeleton="h-24 w-full"
+            >
+              {(stats) => <UpcomingReviews days={stats.next_seven_days} />}
+            </OverviewBody>
+          </Panel>
+        </aside>
       </div>
-
-      <Panel
-        title="Caracteres"
-        action={
-          <CharacterFilterChips
-            filter={filter}
-            onChange={setFilter}
-            allCount={items.length}
-            leechCount={leechItems?.length ?? 0}
-          />
-        }
-      >
-        <CharacterPanelBody
-          filter={filter}
-          tiles={tiles}
-          allCount={items.length}
-          leechesLoading={leechesLoading}
-          leechesError={leechesError}
-        />
-      </Panel>
     </div>
   );
 }
 
-function CharacterPanelBody({
-  filter,
-  tiles,
-  allCount,
-  leechesLoading,
-  leechesError,
+function OverviewBody({
+  isLoading,
+  error,
+  data,
+  what,
+  skeleton,
+  children,
 }: {
-  filter: CharacterFilter;
-  tiles: StudyItem[];
-  allCount: number;
-  leechesLoading: boolean;
-  leechesError: Error | null;
+  isLoading: boolean;
+  error: Error | null;
+  data: StudyOverview | undefined;
+  what: string;
+  skeleton: string;
+  children: (data: StudyOverview) => ReactNode;
 }) {
-  if (filter === "leeches") {
-    if (leechesLoading) return <p className="text-sm text-slate-400">Carregando sanguessugas…</p>;
-    if (leechesError) {
-      return <p className="text-sm text-rose-400">Falha ao carregar: {String(leechesError)}</p>;
-    }
-    if (tiles.length === 0) {
-      return <p className="text-sm text-slate-500">Nenhum sanguessuga no momento.</p>;
-    }
-    return <ProgressTiles items={tiles} />;
-  }
-  if (allCount === 0) {
-    return (
-      <p className="text-sm text-slate-500">
-        Nada ainda.{" "}
-        <Link to="/add" className="text-accent-500 hover:underline">
-          Adicione itens
-        </Link>
-        .
-      </p>
-    );
-  }
-  return <ProgressTiles items={tiles} />;
+  if (isLoading) return <Skeleton className={skeleton} />;
+  if (error) return <PanelError what={what} error={error} />;
+  if (!data) return null;
+  return <>{children(data)}</>;
+}
+
+function TodayQueue({
+  data,
+  isLoading,
+  error,
+}: {
+  data: StudyOverview | undefined;
+  isLoading: boolean;
+  error: Error | null;
+}) {
+  const due = data?.due_review_count ?? 0;
+  const lessons = data?.new_count ?? 0;
+
+  return (
+    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/40 p-6 ring-1 ring-white/10">
+      <div className="absolute -top-20 -right-16 h-56 w-56 rounded-full bg-accent-500/10 blur-3xl" />
+      <p className="text-sm text-slate-400">Sua fila de hoje</p>
+      {isLoading ? (
+        <div className="mt-4 space-y-4">
+          <Skeleton className="h-12 w-2/3" />
+          <Skeleton className="h-11 w-72" />
+        </div>
+      ) : error ? (
+        <PanelError what="a fila de hoje" error={error} />
+      ) : (
+        <>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <span className="text-5xl font-semibold tabular-nums text-white">{due}</span>
+            <span className="text-sm text-slate-400">reviews</span>
+            <span className="text-3xl font-semibold tabular-nums text-slate-300">{lessons}</span>
+            <span className="text-sm text-slate-400">lições novas</span>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <HeroAction to="/review" disabled={due === 0} primary>
+              Começar reviews <Icon name="arrow-right" size={16} />
+            </HeroAction>
+            <HeroAction to="/lesson" disabled={lessons === 0}>
+              Aprender {lessons} novas
+            </HeroAction>
+          </div>
+          {data && data.item_count === 0 ? (
+            <p className="mt-4 text-xs text-slate-500">
+              Nada ainda — adicione seus primeiros itens na Biblioteca.
+            </p>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+function HeroAction({
+  to,
+  disabled,
+  primary = false,
+  children,
+}: {
+  to: string;
+  disabled: boolean;
+  primary?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : undefined}
+      onClick={(event) => {
+        if (disabled) event.preventDefault();
+      }}
+      className={`flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold ${
+        primary
+          ? "bg-gradient-to-r from-rose-500 to-accent-600 text-white shadow-lg"
+          : "bg-slate-800 text-slate-100 ring-1 ring-white/10"
+      } ${disabled ? "pointer-events-none opacity-40" : ""}`}
+    >
+      {children}
+    </Link>
+  );
 }
 
 function CharacterFilterChips({
@@ -189,48 +282,66 @@ function FilterChip({
   );
 }
 
-function BigButton({
-  to,
-  count,
-  label,
-  className,
-  disabled,
+function CharacterGridBody({
+  filter,
+  items,
+  total,
+  isLoading,
+  error,
+  onLoadMore,
 }: {
-  to: string;
-  count: number;
-  label: string;
-  className: string;
-  disabled?: boolean;
+  filter: CharacterFilter;
+  items: StudyItem[];
+  total: number;
+  isLoading: boolean;
+  error: Error | null;
+  onLoadMore: (() => void) | undefined;
 }) {
+  if (isLoading) {
+    return (
+      <div className={CHARACTER_GRID_CLASS}>
+        {GRID_SKELETON_KEYS.map((key) => (
+          <Skeleton key={key} className="aspect-square w-full" />
+        ))}
+      </div>
+    );
+  }
+  if (error) return <PanelError what="os caracteres" error={error} />;
+  if (filter === "leeches" && total === 0) {
+    return <p className="text-sm text-slate-500">Nenhum sanguessuga no momento.</p>;
+  }
+  if (total === 0) {
+    return (
+      <EmptyState
+        icon="book"
+        title="Nenhum caractere ainda"
+        description="Adicione seus primeiros itens para vê-los aqui."
+        action={
+          <Link
+            to="/biblioteca/adicionar"
+            className="mt-1 rounded-md bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            Adicionar itens
+          </Link>
+        }
+      />
+    );
+  }
+
   return (
-    <Link
-      to={to}
-      className={`relative flex h-28 flex-col items-center justify-center rounded-lg bg-gradient-to-b text-white shadow transition-transform hover:-translate-y-0.5 ${className} ${
-        disabled ? "pointer-events-none opacity-40" : ""
-      }`}
-    >
-      <span className="text-5xl font-semibold tabular-nums">{count}</span>
-      <span className="mt-1 text-lg font-medium">{label}</span>
-    </Link>
+    <>
+      <CharacterTileGrid items={items} onLoadMore={onLoadMore} />
+      <p className="mt-3 text-xs text-slate-500">
+        Mostrando {items.length} de {total}
+      </p>
+    </>
   );
 }
 
-function Panel({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
+function PanelError({ what, error }: { what: string; error: Error }) {
   return (
-    <section className="rounded-xl border border-white/10 bg-slate-900/50 p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
+    <p className="text-sm text-rose-400">
+      Falha ao carregar {what}: {error.message}
+    </p>
   );
 }

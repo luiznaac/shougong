@@ -1,55 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client.ts";
 import { useReviewMutation } from "../api/queries.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
+import { useHandwritingEnabled, useHandwritingTolerance } from "../lib/localSettings.ts";
+import { PATHS, itemPath } from "../lib/navigation.ts";
+import { gradeByHotkey, gradeConsequence } from "../lib/practiceGrades.ts";
 import {
-  TOLERANCE_PRESETS,
-  useHandwritingEnabled,
-  useHandwritingTolerance,
-} from "../lib/localSettings.ts";
-import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
-import {
+  NEXT_LABEL,
+  QUESTION_LABEL,
   type QuizMode,
+  type QuizPhase,
+  stageBandClass,
   submitRevealedGrade,
   summaryCopy,
   topBarTitle,
 } from "../lib/quizPractice.ts";
+import { useMediaQuery } from "../lib/useMediaQuery.ts";
 import { HandwritingQuiz } from "./HandwritingQuiz.tsx";
-import { Pinyin } from "./Pinyin.tsx";
-import { StrokeOrderPanel } from "./StrokeOrderPanel.tsx";
-
-export const RATINGS: {
-  key: SrsRating;
-  label: string;
-  hotkey: string;
-  className: string;
-}[] = [
-  { key: "again", label: "Errei", hotkey: "1", className: "bg-rose-600" },
-  { key: "hard", label: "Difícil", hotkey: "2", className: "bg-amber-600" },
-  { key: "good", label: "Bom", hotkey: "3", className: "bg-emerald-600" },
-  { key: "easy", label: "Fácil", hotkey: "4", className: "bg-sky-600" },
-];
-
-type Phase = "info" | "prompt" | "revealed";
-
-const QUESTION_LABEL: Record<Phase, string> = {
-  info: "Estude o item",
-  prompt: "Escreva o caractere à mão",
-  revealed: "Você acertou a escrita?",
-};
-
-const NEXT_LABEL: Record<Phase, string> = {
-  info: "Continuar",
-  prompt: "Revelar",
-  revealed: "Próximo",
-};
+import { PracticeBand } from "./PracticeBand.tsx";
+import { PracticeDock } from "./PracticeDock.tsx";
+import { Toast } from "./Toast.tsx";
 
 /**
- * Full-screen quiz runner shared by Review, Lesson and practice, HanziHero-
- * styled: a coloured subject band (pinyin + flip cards + meaning), a question
- * band, then a bottom toolbar. Nothing is submitted until "Próximo" confirms;
- * the selected grade can be undone with "Rollback".
+ * The practice stage shared by Lesson, Review and Practice: one bounded stage
+ * on desktop and a full-height flow on mobile. The coloured band carries the
+ * header, progress and one glyph per phase; the middle is phase-specific; the
+ * dock carries the four grade keys, rollback and advance. Nothing is submitted
+ * until "Próximo" confirms a note; rollback clears the note then steps back.
  *
  * `record` defaults to true. Practice passes false, which keeps the whole
  * runner but never issues a write request — there is no grade call at all, so
@@ -68,15 +46,19 @@ export function Quiz({
 }) {
   const navigate = useNavigate();
   const { mutateAsync: review } = useReviewMutation();
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  const presentation = desktop ? "desktop" : "mobile";
 
   const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState<Phase>(mode === "lesson" ? "info" : "prompt");
+  const [phase, setPhase] = useState<QuizPhase>(mode === "lesson" ? "info" : "prompt");
   const [selected, setSelected] = useState<SrsRating | null>(null);
+  const [grades, setGrades] = useState<(SrsRating | null)[]>([]);
   const [done, setDone] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [skipped, setSkipped] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [playerOn, setPlayerOn] = useState(false);
   const [handwritingEnabled, setHandwritingEnabled] = useHandwritingEnabled();
   const [tolerancePercent, setTolerancePercent] = useHandwritingTolerance();
   const [drawIdx, setDrawIdx] = useState(0);
@@ -84,17 +66,16 @@ export function Quiz({
 
   const current = items[idx];
   const chars = current ? [...current.entry.simplified] : [];
-  const charSlots = keyedOccurrences(chars, (char) => char);
   const remaining = items.length - idx;
   const accuracy = done > 0 ? Math.round((correct / done) * 100) : 100;
   const finished = idx >= items.length;
 
   const practice = !record;
-  const bandClass =
-    mode === "lesson" ? "from-violet-600 to-violet-800" : "from-rose-500 to-accent-600";
+  const bandClass = stageBandClass(mode, record);
 
   const advance = useCallback(() => {
     setSelected(null);
+    setPlayerOn(false);
     setPhase(mode === "lesson" ? "info" : "prompt");
     setIdx((i) => i + 1);
   }, [mode]);
@@ -117,11 +98,13 @@ export function Quiz({
       });
       setDone((n) => n + 1);
       if (selected !== "again") setCorrect((n) => n + 1);
+      setGrades((history) => [...history, selected]);
       advance();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setToast("Item não estava disponível — pulado.");
         setSkipped((n) => n + 1);
+        setGrades((history) => [...history, null]);
         advance();
       } else {
         setToast(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
@@ -166,7 +149,7 @@ export function Quiz({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      if (e.key === "Escape") return navigate("/");
+      if (e.key === "Escape") return navigate(PATHS.hoje);
 
       const { phase: p, canRollback: cr } = stateRef.current;
       if ((e.key === "Backspace" || e.key === "z") && cr) {
@@ -174,7 +157,7 @@ export function Quiz({
         return rollback();
       }
       if (p === "revealed") {
-        const hit = RATINGS.find((r) => r.hotkey === e.key);
+        const hit = gradeByHotkey(e.key);
         if (hit) {
           e.preventDefault();
           return setSelected(hit.key);
@@ -204,123 +187,56 @@ export function Quiz({
     return () => clearTimeout(t);
   }, [toast]);
 
-  const topBar = (
-    <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-4 py-2.5 text-sm text-white/90">
-      <button
-        type="button"
-        onClick={() => navigate("/")}
-        className="hover:text-white"
-        title="Sair (Esc)"
-      >
-        ← Sair
-      </button>
-      <span className="text-xs uppercase tracking-widest text-white/60">
-        {topBarTitle(mode, record)}
-      </span>
-      {practice && (
-        <span
-          className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90"
-          title="Prática não registrada — seu SRS não muda"
-        >
-          SRS intact
-        </span>
-      )}
-      <label className="flex items-center gap-1.5 text-xs text-white/80">
-        <input
-          type="checkbox"
-          checked={handwritingEnabled}
-          onChange={(e) => setHandwritingEnabled(e.target.checked)}
-          className="h-3.5 w-3.5 accent-accent-500"
+  const dismissal = (
+    <div className="flex flex-1 items-center justify-center px-4">
+      {items.length === 0 ? (
+        <Empty message={emptyMessage} />
+      ) : (
+        <Summary
+          mode={mode}
+          record={record}
+          done={done}
+          correct={correct}
+          skipped={skipped}
+          accuracy={accuracy}
         />
-        Escrever à mão
-      </label>
-      {handwritingEnabled && (
-        <select
-          value={tolerancePercent}
-          onChange={(e) => setTolerancePercent(Number(e.target.value))}
-          title="Tolerância de erros"
-          className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/90"
-        >
-          {TOLERANCE_PRESETS.map((p) => (
-            <option key={p} value={p} className="text-slate-900">
-              {p}%
-            </option>
-          ))}
-        </select>
       )}
-      <div className="ml-auto flex items-center gap-4 tabular-nums">
-        <span title="Concluídos">✓ {done}</span>
-        <span title="Restantes">☰ {Math.max(0, remaining)}</span>
-        {mode === "review" && <span title="Acertos">👍 {accuracy}%</span>}
-      </div>
     </div>
   );
 
   if (items.length === 0 || finished || !current) {
+    if (desktop) {
+      return (
+        <DesktopStage>
+          <div className="flex flex-1 items-center justify-center px-4">{dismissal}</div>
+        </DesktopStage>
+      );
+    }
     return (
-      <div className={`relative flex min-h-screen flex-col bg-gradient-to-b ${bandClass}`}>
-        {topBar}
-        <div className="flex flex-1 items-center justify-center px-4">
-          {items.length === 0 ? (
-            <Empty message={emptyMessage} />
-          ) : (
-            <Summary
-              mode={mode}
-              record={record}
-              done={done}
-              correct={correct}
-              skipped={skipped}
-              accuracy={accuracy}
-            />
-          )}
-        </div>
+      <div className={`flex min-h-[100dvh] flex-col bg-gradient-to-b ${bandClass}`}>
+        {dismissal}
       </div>
     );
   }
 
-  const sizePx = Math.min(180, Math.round((520 - (chars.length - 1) * 12) / chars.length));
+  const questionStrip = (
+    <p className="flex items-center justify-center gap-1.5 rounded-full bg-slate-800 px-4 py-1.5 text-xs font-medium text-slate-100 ring-1 ring-white/10">
+      <span aria-hidden>{phase === "revealed" ? "✅" : "✍️"}</span>
+      {QUESTION_LABEL[phase]}
+    </p>
+  );
 
-  return (
-    <div className="flex min-h-screen flex-col bg-slate-950">
-      {/* subject band */}
-      <section
-        className={`relative flex flex-col items-center justify-center gap-5 bg-gradient-to-b ${bandClass} px-4 pb-8 pt-14`}
-      >
-        {topBar}
-
-        <div className="rounded-full bg-slate-950/40 px-5 py-1.5 backdrop-blur-sm">
-          <Pinyin value={current.entry.pinyin} className="text-2xl font-medium sm:text-3xl" />
-        </div>
-
-        <div key={current.id} className="flex flex-wrap items-center justify-center gap-3">
-          {charSlots.map(({ key, item: ch }) => (
-            <FlipCard key={key} char={ch} hidden={phase === "prompt"} sizePx={sizePx} />
-          ))}
-        </div>
-
-        <p className="max-w-lg text-lg font-semibold text-white drop-shadow sm:text-xl">
-          {current.entry.definitions.slice(0, 3).join(" · ")}
+  const middle = (
+    <>
+      {!desktop && questionStrip}
+      {phase === "info" && (
+        <p className="px-4 text-center text-[11px] text-slate-400 lg:text-xs">
+          Memorize os traços acima — a seguir você escreve de memória.
         </p>
-      </section>
-
-      {/* question band */}
-      <section className="flex items-center justify-center gap-2 bg-slate-800 px-4 py-4 text-center text-lg font-medium text-slate-100 sm:text-2xl">
-        <span aria-hidden>{phase === "revealed" ? "✅" : "✍️"}</span>
-        <span>{QUESTION_LABEL[phase]}</span>
-      </section>
-
-      {/* grade selection */}
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-8">
-        {phase === "info" && (
-          <>
-            <p className="text-center text-sm text-slate-400">
-              Memorize o traçado — a seguir você escreve de memória.
-            </p>
-            <StrokeOrderPanel key={current.id} word={current.entry.simplified} sizePx={120} />
-          </>
-        )}
-        {phase === "prompt" && handwritingEnabled && (
-          <>
+      )}
+      {phase === "prompt" &&
+        (handwritingEnabled ? (
+          <div className="flex flex-col items-center gap-2">
             {chars.length > 1 && (
               <p className="text-xs text-slate-400">
                 caractere {drawIdx + 1}/{chars.length}
@@ -330,113 +246,116 @@ export function Quiz({
               key={`${current.id}-${drawIdx}`}
               character={chars[drawIdx]}
               tolerancePercent={tolerancePercent}
+              sizePx={desktop ? 170 : 150}
               onResult={handleCharResult}
             />
-          </>
-        )}
-        {phase === "revealed" && (
-          <StrokeOrderPanel key={current.id} word={current.entry.simplified} sizePx={120} />
-        )}
-        {phase === "revealed" && (
-          <div className="grid w-full max-w-lg grid-cols-2 gap-3 sm:grid-cols-4">
-            {RATINGS.map((r) => {
-              const isOn = selected === r.key;
-              const dim = selected != null && !isOn;
-              return (
-                <button
-                  type="button"
-                  key={r.key}
-                  onClick={() => setSelected(r.key)}
-                  className={`rounded-lg px-4 py-3 font-semibold transition ${
-                    dim ? "bg-slate-800 text-slate-500" : `${r.className} text-white`
-                  } ${isOn ? "ring-2 ring-white ring-offset-2 ring-offset-slate-950" : ""}`}
-                >
-                  {r.label}
-                  <kbd className="ml-2 rounded bg-black/25 px-1.5 text-xs">{r.hotkey}</kbd>
-                </button>
-              );
-            })}
           </div>
-        )}
-      </div>
-
-      {/* toolbar */}
-      <div className="flex items-center gap-3 border-t border-white/10 bg-slate-900/70 px-4 py-3">
-        <button
-          type="button"
-          onClick={rollback}
-          disabled={!canRollback || submitting}
-          className="rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-30"
-          title="Desfazer (Backspace)"
-        >
-          ↩ Rollback
-        </button>
-
-        {phase === "revealed" && (
-          <Link to={`/items/${current.id}`} className="text-xs text-slate-500 hover:text-slate-300">
+        ) : (
+          <p className="text-center text-xs text-slate-400">
+            Escrita à mão desligada — use “Revelar” para avaliar.
+          </p>
+        ))}
+      {phase === "revealed" && (
+        <div className="text-center">
+          {selected ? (
+            <>
+              <p className="text-sm font-semibold text-slate-100">{gradeConsequence(selected)}</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                “Próximo” confirma a nota e avança. “Rollback” limpa a nota.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-slate-500">
+              Escolha uma nota — o cartão já está revelado, nada foi gravado ainda.
+            </p>
+          )}
+          <Link
+            to={itemPath(current.id)}
+            className="mt-3 inline-block text-xs text-slate-500 hover:text-slate-300"
+          >
             ver página do item
           </Link>
-        )}
-
-        <button
-          type="button"
-          onClick={() => void goNext()}
-          disabled={!canGoNext || submitting}
-          className="ml-auto rounded-md bg-accent-500 px-6 py-2 font-semibold text-white transition hover:bg-accent-600 disabled:opacity-40"
-          title="Confirmar (Enter)"
-        >
-          {NEXT_LABEL[phase]} →
-        </button>
-      </div>
-
-      {toast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 rounded-md bg-slate-800 px-4 py-2 text-sm text-slate-100 shadow-lg">
-          {toast}
         </div>
       )}
+    </>
+  );
+
+  const band = (
+    <PracticeBand
+      presentation={presentation}
+      item={current}
+      title={topBarTitle(mode, record)}
+      band={bandClass}
+      practice={practice}
+      phase={phase}
+      progress={{
+        itemCount: items.length,
+        grades,
+        done,
+        remaining,
+        accuracy,
+        showAccuracy: mode === "review",
+      }}
+      playerOn={playerOn}
+      onTogglePlayer={() => setPlayerOn((on) => !on)}
+      canRollback={canRollback}
+      onRollback={rollback}
+      onExit={() => navigate(PATHS.hoje)}
+      handwritingEnabled={handwritingEnabled}
+      onHandwritingEnabledChange={setHandwritingEnabled}
+      tolerancePercent={tolerancePercent}
+      onToleranceChange={setTolerancePercent}
+    />
+  );
+
+  const dock = (
+    <PracticeDock
+      presentation={presentation}
+      revealed={phase === "revealed"}
+      selected={selected}
+      canRollback={canRollback}
+      canNext={canGoNext}
+      submitting={submitting}
+      nextLabel={NEXT_LABEL[phase]}
+      onSelect={setSelected}
+      onRollback={rollback}
+      onNext={() => void goNext()}
+    />
+  );
+
+  if (desktop) {
+    return (
+      <>
+        <DesktopStage>
+          {band}
+          <div className="relative z-10 -mt-5 flex justify-center">{questionStrip}</div>
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 py-4">
+            {middle}
+          </div>
+          {dock}
+        </DesktopStage>
+        {toast && <Toast message={toast} />}
+      </>
+    );
+  }
+
+  return (
+    <div className="flex h-[100dvh] flex-col bg-slate-950 text-slate-200">
+      {band}
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-4 py-3">
+        {middle}
+      </div>
+      {dock}
+      {toast && <Toast message={toast} />}
     </div>
   );
 }
 
-/**
- * One flip card holding a single character. The whole set flips together (same
- * `hidden`); each shows its character on the front and a dashed "?" on the back.
- */
-function FlipCard({
-  char,
-  hidden,
-  sizePx,
-}: {
-  char: string;
-  hidden: boolean;
-  sizePx: number;
-}) {
+function DesktopStage({ children }: { children: ReactNode }) {
   return (
-    <div style={{ perspective: "1200px" }}>
-      <div
-        style={{ width: sizePx, height: sizePx }}
-        className={`relative transition-transform duration-500 [transform-style:preserve-3d] [will-change:transform] motion-reduce:transition-none ${
-          hidden ? "[transform:rotateY(180deg)]" : "[transform:rotateY(0deg)]"
-        }`}
-      >
-        <div className="absolute inset-0 flex items-center justify-center rounded-2xl border border-white/25 bg-white/10 backdrop-blur-sm [backface-visibility:hidden]">
-          <span
-            lang="zh-Hans"
-            className="font-hanzi leading-none text-white"
-            style={{ fontSize: sizePx * 0.62 }}
-          >
-            {char}
-          </span>
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-dashed border-white/40 [backface-visibility:hidden] [transform:rotateY(180deg)]">
-          <span
-            aria-hidden
-            className="font-hanzi leading-none text-white/50 select-none"
-            style={{ fontSize: sizePx * 0.55 }}
-          >
-            ?
-          </span>
-        </div>
+    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-950 p-6">
+      <div className="flex h-[calc(100dvh-3rem)] max-h-[720px] w-full max-w-[720px] flex-col overflow-hidden rounded-[2rem] bg-slate-950 text-slate-200 ring-1 ring-white/10">
+        {children}
       </div>
     </div>
   );

@@ -5,22 +5,19 @@ export type TileBadgeKind = "leech" | "priority";
 
 export interface TileBadge {
   kind: TileBadgeKind;
-  emoji: string;
-  /** pt-BR accessible name — the meaning survives without the emoji or colour. */
+  /** pt-BR accessible name — the meaning survives without the drawn icon. */
   label: string;
   title: string;
 }
 
 const LEECH: TileBadge = {
   kind: "leech",
-  emoji: "👻",
   label: "Sanguessuga",
   title: "Sanguessuga — falhas recorrentes",
 };
 
 const PRIORITY: TileBadge = {
   kind: "priority",
-  emoji: "⚡",
   label: "Prioridade",
   title: "Prioridade — fixado na fila de lições",
 };

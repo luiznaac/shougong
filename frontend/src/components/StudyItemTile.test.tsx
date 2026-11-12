@@ -13,24 +13,36 @@ function render(overrides: Parameters<typeof studyItem>[0] = {}): string {
 }
 
 describe("StudyItemTile", () => {
-  it("renders no badge for an ordinary item", () => {
-    const html = render();
-    expect(html).toContain("學");
-    expect(html).not.toContain('role="img"');
+  it("links to the item's detail page under Biblioteca", () => {
+    expect(render()).toContain('href="/biblioteca/itens/1"');
   });
 
-  it("renders the ghost badge, with its pt-BR name and title, for a leech", () => {
+  it("shows only the hanzi — no pinyin and no meaning", () => {
+    const html = render();
+    expect(html).toContain("學");
+    expect(html).not.toContain("xue2");
+    expect(html).not.toContain("estudar");
+  });
+
+  it("renders no badge for an ordinary item", () => {
+    expect(render()).not.toContain('role="img"');
+  });
+
+  it("draws the ghost badge as an inline icon, with its pt-BR name and title", () => {
     const html = render({ is_leech: true });
-    expect(html).toContain('role="img"');
+    expect(html).toContain("<svg");
     expect(html).toContain('aria-label="Sanguessuga"');
     expect(html).toContain('title="Sanguessuga — falhas recorrentes"');
+    expect(html).not.toContain("👻");
     expect(html).not.toContain('aria-label="Prioridade"');
   });
 
-  it("renders the bolt badge for a prioritised item", () => {
+  it("draws the bolt badge as an inline icon for a prioritised item", () => {
     const html = render({ priority_position: 0 });
+    expect(html).toContain("<svg");
     expect(html).toContain('aria-label="Prioridade"');
     expect(html).toContain('title="Prioridade — fixado na fila de lições"');
+    expect(html).not.toContain("⚡");
     expect(html).not.toContain('aria-label="Sanguessuga"');
   });
 
