@@ -3,6 +3,7 @@ import { POS_TAG_OPTIONS } from "./posTag.ts";
 import { readingFormatLabel } from "./readingFormat.ts";
 import { SORT_ORDER, sortOrderLabel } from "./sortOrder.ts";
 import { srsStateLabel } from "./srsState.ts";
+import { workingSetGroupLabel } from "./workingSet.ts";
 
 describe("readingFormatLabel", () => {
   it("names the three reading formats in Portuguese", () => {
@@ -26,6 +27,18 @@ describe("sortOrderLabel", () => {
     expect(sortOrderLabel("created_desc")).toContain("Adicionados");
     expect(sortOrderLabel("stability_asc")).toContain("Estabilidade");
     expect(SORT_ORDER).toEqual(["due_asc", "created_desc", "stability_asc"]);
+  });
+});
+
+describe("workingSetGroupLabel", () => {
+  it("names the generator's working-set groups in Portuguese", () => {
+    expect(workingSetGroupLabel("always_available")).toBe("sempre disponíveis");
+    expect(workingSetGroupLabel("verbs")).toBe("verbos");
+    expect(workingSetGroupLabel("descriptions")).toBe("qualificadores");
+  });
+
+  it("passes an unknown group through unchanged", () => {
+    expect(workingSetGroupLabel("martian")).toBe("martian");
   });
 });
 

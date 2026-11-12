@@ -8,16 +8,21 @@ import type { ReactNode } from "react";
 export function Panel({
   title,
   action,
+  ariaLabel,
   children,
   className = "",
 }: {
   title?: ReactNode;
   action?: ReactNode;
+  ariaLabel?: string;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={`rounded-2xl bg-slate-900/50 p-5 ring-1 ring-white/10 ${className}`}>
+    <section
+      aria-label={ariaLabel}
+      className={`rounded-2xl bg-slate-900/50 p-5 ring-1 ring-white/10 ${className}`}
+    >
       {title || action ? (
         <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
           {title ? (

@@ -17,6 +17,7 @@ export function ReadingTopicsPanel() {
   const remove = useDeleteReadingTopic();
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
 
   const submit = async () => {
     const scenario = draft.trim();
@@ -52,6 +53,7 @@ export function ReadingTopicsPanel() {
         <div className="flex gap-2">
           <input
             type="text"
+            aria-label="Novo tema"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
@@ -61,6 +63,7 @@ export function ReadingTopicsPanel() {
           />
           <button
             type="button"
+            aria-label="Adicionar tema"
             onClick={submit}
             disabled={add.isPending || !draft.trim()}
             className="rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-600 disabled:opacity-50"
@@ -71,6 +74,9 @@ export function ReadingTopicsPanel() {
         {error && <p className="text-xs text-rose-400">{error}</p>}
 
         {isLoading && <p className="text-sm text-slate-500">Carregando…</p>}
+        {!isLoading && (topics ?? []).length === 0 ? (
+          <p className="text-sm text-slate-500">Nenhum tema ainda. Adicione um cenário acima.</p>
+        ) : null}
         <ul className="divide-y divide-white/5">
           {(topics ?? []).map((topic) => (
             <li key={topic.id} className="flex items-center gap-3 py-2 text-sm">
@@ -88,13 +94,36 @@ export function ReadingTopicsPanel() {
               >
                 {topic.scenario}
               </span>
-              <button
-                type="button"
-                onClick={() => remove.mutate(topic.id)}
-                className="text-xs text-slate-500 transition-colors hover:text-rose-400"
-              >
-                remover
-              </button>
+              {confirmingId === topic.id ? (
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-rose-300">Remover este tema?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      remove.mutate(topic.id);
+                      setConfirmingId(null);
+                    }}
+                    className="rounded-md bg-rose-500/15 px-2 py-1 text-xs font-medium text-rose-300 hover:bg-rose-500/25"
+                  >
+                    Confirmar remoção
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingId(null)}
+                    className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-white/5"
+                  >
+                    Cancelar
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingId(topic.id)}
+                  className="text-xs text-slate-500 transition-colors hover:text-rose-400"
+                >
+                  remover
+                </button>
+              )}
             </li>
           ))}
         </ul>
