@@ -22,13 +22,8 @@ import { Pinyin } from "../components/Pinyin.tsx";
 import { ReadingTopicsPanel } from "../components/ReadingTopicsPanel.tsx";
 import { VocabularyPanel } from "../components/VocabularyPanel.tsx";
 import { partOfSpeechLabel } from "../i18n/partOfSpeech.ts";
+import { readingFormatLabel } from "../i18n/readingFormat.ts";
 import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
-
-const FORMAT_LABELS: Record<ReadingFormat, string> = {
-  paragraph: "Parágrafo",
-  sentences: "Frases soltas",
-  dialogue: "Diálogo",
-};
 
 const MODEL_STORAGE_KEY = "reading.model";
 
@@ -201,7 +196,7 @@ export function Reading() {
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span>#{current.id}</span>
             <span>&middot;</span>
-            <span>{FORMAT_LABELS[current.format]}</span>
+            <span>{readingFormatLabel(current.format)}</span>
             {current.model && (
               <>
                 <span>&middot;</span>
@@ -262,7 +257,7 @@ export function Reading() {
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <span>#{item.id}</span>
                   <span>&middot;</span>
-                  <span>{FORMAT_LABELS[item.format]}</span>
+                  <span>{readingFormatLabel(item.format)}</span>
                   {item.model && (
                     <>
                       <span>&middot;</span>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageCount, pageOffset, pageWindow } from "./pagination.ts";
+import { nextPageOffset, pageCount, pageOffset, pageWindow } from "./pagination.ts";
 
 describe("pagination arithmetic", () => {
   it("counts pages from the exact total, always at least one", () => {
@@ -26,5 +26,12 @@ describe("pagination arithmetic", () => {
     expect(pageWindow(1, 20)).toEqual([1, 2, 3, null, 20]);
     expect(pageWindow(10, 20)).toEqual([1, null, 8, 9, 10, 11, 12, null, 20]);
     expect(pageWindow(20, 20)).toEqual([1, null, 18, 19, 20]);
+  });
+
+  it("derives the next infinite-page offset from the envelope's exact total", () => {
+    expect(nextPageOffset({ items: [1, 2, 3], total: 10 }, 0)).toBe(3);
+    expect(nextPageOffset({ items: [1, 2, 3], total: 3 }, 0)).toBeUndefined();
+    expect(nextPageOffset({ items: [], total: 10 }, 0)).toBeUndefined();
+    expect(nextPageOffset({ items: [1, 2], total: 12 }, 8)).toBe(10);
   });
 });

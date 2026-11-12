@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { applyCachedPriority, predictPriorityPosition } from "../lib/lessonQueue.ts";
 import type { ItemPageRequest } from "../lib/pagination.ts";
+import { nextPageOffset } from "../lib/pagination.ts";
 import { STUDY_SESSION_QUERY, studySessionKey } from "../lib/studySession.ts";
 import { api } from "./client.ts";
 import type {
@@ -31,10 +32,15 @@ export const keys = {
   reviews: (id: number) => ["study-items", id, "reviews"] as const,
   history: (id: number) => ["study-items", id, "history"] as const,
   dictionary: (q: string) => ["dictionary", q] as const,
+  relatedEntriesPrefix: ["dictionary", "related"] as const,
   relatedEntries: (id: number, limit: number, offset: number) =>
     ["dictionary", "related", id, { limit, offset }] as const,
+  relatedEntryPages: (id: number, limit: number) =>
+    ["dictionary", "related", id, { limit }] as const,
   readingHistoryPrefix: ["reading-texts"] as const,
   readingHistory: (limit = 20, offset = 0) => ["reading-texts", "list", { limit, offset }] as const,
+  itemReadings: (entryId: number, limit: number) =>
+    ["reading-texts", "entry", entryId, { limit }] as const,
   readingText: (id: number) => ["reading-texts", "detail", id] as const,
   insightsPrefix: ["insights"] as const,
   extraStudy: (from: string, to: string) => ["insights", "extra-study", { from, to }] as const,
@@ -79,10 +85,7 @@ export function useStudyItemPages(opts: StudyItemListQuery, limit: number) {
     queryKey: keys.studyItemPages(opts, limit),
     queryFn: ({ pageParam }) => api.listStudyItems({ ...opts, limit, offset: pageParam }),
     initialPageParam: 0,
-    getNextPageParam: (lastPage, _pages, lastPageParam) => {
-      const next = lastPageParam + lastPage.items.length;
-      return lastPage.items.length > 0 && next < lastPage.total ? next : undefined;
-    },
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextPageOffset(lastPage, lastPageParam),
   });
 }
 
@@ -148,6 +151,35 @@ export function useRelatedEntries(entryId: number, limit = 8, offset = 0) {
   });
 }
 
+/**
+ * The mobile related-words list: eight-row server pages accumulated behind an
+ * explicit "Carregar mais". The server owns the order and the exact total.
+ */
+export function useRelatedEntryPages(entryId: number, limit = 8) {
+  return useInfiniteQuery({
+    queryKey: keys.relatedEntryPages(entryId, limit),
+    queryFn: ({ pageParam }) => api.listRelatedEntries(entryId, limit, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextPageOffset(lastPage, lastPageParam),
+    enabled: entryId > 0,
+  });
+}
+
+/**
+ * Readings containing one dictionary entry. The list is token-free summary rows
+ * (with the entry match snippet); the full reading is fetched only when a row is
+ * selected, through `useReadingText`.
+ */
+export function useItemReadings(entryId: number, limit = 20) {
+  return useInfiniteQuery({
+    queryKey: keys.itemReadings(entryId, limit),
+    queryFn: ({ pageParam }) => api.listReadingsByEntry(entryId, limit, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextPageOffset(lastPage, lastPageParam),
+    enabled: entryId > 0,
+  });
+}
+
 export function useCharacterStrokes(character: string) {
   return useQuery({
     queryKey: ["strokes", character],
@@ -165,6 +197,8 @@ export function useAddStudyItem() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
       qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
+      // A queued related word flips to "na fila" on the item page too.
+      qc.invalidateQueries({ queryKey: keys.relatedEntriesPrefix });
     },
   });
 }

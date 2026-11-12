@@ -56,6 +56,22 @@ describe("ItemPriorityView", () => {
     expect(pinned).not.toMatch(/<button[^>]*disabled=""[^>]*>Remover<\/button>/);
   });
 
+  it("keeps the mobile compact panel to the status row and actions", () => {
+    const html = renderView({ variant: "compact" });
+
+    expect(html).toContain("Prioridade");
+    expect(html).toContain("Sem prioridade");
+    expect(html).not.toContain(PRIORITY_HINT);
+  });
+
+  it("renders compactly for the identity header without the panel chrome", () => {
+    const html = renderView({ variant: "inline" });
+
+    expect(html).not.toContain("<h2");
+    expect(html).toContain("Sem prioridade");
+    expect(html).toContain("Fixar 學 no início das lições");
+  });
+
   it("shows failures as inline alert text", () => {
     const html = renderView({ error: PRIORITY_CONFLICT_MESSAGE });
 

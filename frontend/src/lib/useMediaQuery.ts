@@ -1,5 +1,8 @@
 import { useCallback, useSyncExternalStore } from "react";
 
+/** The two presentations a responsive surface renders; pages pick one per breakpoint. */
+export type Presentation = "desktop" | "mobile";
+
 /**
  * Subscribe to a CSS media query. It is an external store, so it reads through
  * `useSyncExternalStore` rather than an effect that mirrors it into state.

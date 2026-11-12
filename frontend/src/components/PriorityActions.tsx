@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export type RemoveMode = "hidden" | "enabled" | "disabled";
 
 export interface PriorityActionsProps {
@@ -24,6 +26,11 @@ export function PriorityAlert({
 const BUTTON_CLASS =
   "rounded border border-white/10 px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-800 disabled:opacity-40";
 
+/**
+ * Priority controls shared by the item header and the mobile priority panel.
+ * The two pin actions are reversible; removing a priority is the destructive
+ * one, so it asks for an inline confirmation instead of firing immediately.
+ */
 export function PriorityActions({
   name,
   pending,
@@ -32,8 +39,10 @@ export function PriorityActions({
   onBack,
   onRemove,
 }: PriorityActionsProps) {
+  const [confirming, setConfirming] = useState(false);
+
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       <button
         type="button"
         aria-label={`Fixar ${name} no início das lições`}
@@ -52,17 +61,36 @@ export function PriorityActions({
       >
         Fim
       </button>
-      {removeMode !== "hidden" ? (
+      {removeMode === "hidden" ? null : confirming ? (
+        <span className="flex flex-wrap items-center gap-1">
+          <span className="text-xs text-slate-300">Remover a prioridade de {name}?</span>
+          <button
+            type="button"
+            aria-label={`Confirmar remoção de ${name}`}
+            disabled={pending}
+            onClick={() => {
+              setConfirming(false);
+              onRemove();
+            }}
+            className="rounded bg-rose-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-rose-500 disabled:opacity-40"
+          >
+            Remover
+          </button>
+          <button type="button" onClick={() => setConfirming(false)} className={BUTTON_CLASS}>
+            Cancelar
+          </button>
+        </span>
+      ) : (
         <button
           type="button"
           aria-label={`Remover prioridade de ${name}`}
           disabled={pending || removeMode === "disabled"}
-          onClick={onRemove}
+          onClick={() => setConfirming(true)}
           className={BUTTON_CLASS}
         >
           Remover
         </button>
-      ) : null}
+      )}
     </div>
   );
 }
