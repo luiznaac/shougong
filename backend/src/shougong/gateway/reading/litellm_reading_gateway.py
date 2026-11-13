@@ -64,9 +64,10 @@ _REASONING_EFFORT = "low"
 
 # A non-streaming `/chat/completions` call only returns once the whole text is
 # generated, and a reasoning model routinely needs longer than the shared
-# client's 10s read timeout. This ceiling covers one attempt; the correction
-# loop makes several, each with its own budget.
-_GENERATION_TIMEOUT_SECONDS = 180.0
+# client's 10s read timeout. Live requests at "low" effort spent 5k-13k tokens
+# reasoning and took 86-246s, so this leaves headroom over the slowest observed
+# attempt. It covers one attempt; the correction loop makes several.
+_GENERATION_TIMEOUT_SECONDS = 300.0
 _CONNECT_TIMEOUT_SECONDS = 5.0
 
 _TOOL_SCHEMA = {
