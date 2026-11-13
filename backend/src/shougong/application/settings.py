@@ -53,7 +53,7 @@ class AiGatewayConfig(BaseModel):
     # One non-streaming generation call returns only after the whole text is
     # produced, which routinely outlasts a normal HTTP read timeout. This is the
     # ceiling for a single attempt; the correction loop makes several.
-    generation_timeout_seconds: float = Field(default=180.0, gt=0)
+    generation_timeout_seconds: float = Field(default=300.0, gt=0)
 
 
 class GatewaysConfig(BaseModel):

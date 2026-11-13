@@ -24,6 +24,12 @@ server {
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
+        # A reading generation is a loop of slow, non-streaming LLM calls, and
+        # the 60s default would cut the connection while the app keeps working.
+        # Cover the loop's worst case — the frontend's max attempts (6) times
+        # GATEWAYS__AI__GENERATION_TIMEOUT_SECONDS — plus overhead.
+        proxy_read_timeout 1900s;
+        proxy_send_timeout 1900s;
     }
 
     # Everything else is the SPA; let the client router handle unknown paths.
