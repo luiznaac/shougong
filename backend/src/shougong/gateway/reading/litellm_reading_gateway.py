@@ -62,6 +62,13 @@ _MAX_OUTPUT_TOKENS = 16000
 # effort used the whole budget and truncated.
 _REASONING_EFFORT = "low"
 
+# A non-streaming `/chat/completions` call only returns once the whole text is
+# generated, and a reasoning model routinely needs longer than the shared
+# client's 10s read timeout. This ceiling covers one attempt; the correction
+# loop makes several, each with its own budget.
+_GENERATION_TIMEOUT_SECONDS = 180.0
+_CONNECT_TIMEOUT_SECONDS = 5.0
+
 _TOOL_SCHEMA = {
     "type": "function",
     "function": {
@@ -156,6 +163,12 @@ def _build_messages(
     return messages
 
 
+def _describe_error(exc: Exception) -> str:
+    """`httpcore` raises several exceptions (`ReadTimeout`, `ReadError`, …) with an
+    empty message, so `str(exc)` alone leaves the domain error ending in ': '."""
+    return f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+
+
 class LiteLlmReadingGateway(IReadingTextGateway):
     def __init__(
         self,
@@ -165,12 +178,14 @@ class LiteLlmReadingGateway(IReadingTextGateway):
         *,
         reasoning_effort: str = _REASONING_EFFORT,
         max_output_tokens: int = _MAX_OUTPUT_TOKENS,
+        generation_timeout: float = _GENERATION_TIMEOUT_SECONDS,
     ) -> None:
         self._client = client
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._reasoning_effort = reasoning_effort
         self._max_output_tokens = max_output_tokens
+        self._generation_timeout = generation_timeout
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -183,7 +198,7 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             body = response.json()
             return tuple(sorted(str(entry["id"]) for entry in body["data"]))
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-            raise ReadingGenerationError(f"ai gateway request failed: {exc}") from exc
+            raise ReadingGenerationError(f"ai gateway request failed: {_describe_error(exc)}") from exc
 
     async def generate(
         self,
@@ -218,7 +233,10 @@ class LiteLlmReadingGateway(IReadingTextGateway):
 
         try:
             response = await self._client.post(
-                f"{self._base_url}/chat/completions", json=payload, headers=self._headers
+                f"{self._base_url}/chat/completions",
+                json=payload,
+                headers=self._headers,
+                timeout=httpx.Timeout(self._generation_timeout, connect=_CONNECT_TIMEOUT_SECONDS),
             )
             response.raise_for_status()
             body = response.json()
@@ -252,7 +270,7 @@ class LiteLlmReadingGateway(IReadingTextGateway):
                 lines=lines,
             )
         except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-            raise ReadingGenerationError(f"ai gateway request failed: {exc}") from exc
+            raise ReadingGenerationError(f"ai gateway request failed: {_describe_error(exc)}") from exc
 
 
 def _parse_lines(raw: Any) -> tuple[DialogueLine, ...]:

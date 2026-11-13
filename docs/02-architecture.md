@@ -166,6 +166,7 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 | `GATEWAYS__AI__API_KEY` | `""` | LiteLLM auth |
 | `GATEWAYS__AI__REASONING_EFFORT` | `low` | Reasoning effort sent to the proxy (reasoning tokens count against the output ceiling) |
 | `GATEWAYS__AI__MAX_OUTPUT_TOKENS` | `16000` | Output-token ceiling for a reading generation |
+| `GATEWAYS__AI__GENERATION_TIMEOUT_SECONDS` | `180` | Per-attempt read timeout for a non-streaming generation (a slow reasoning model outlasts a normal HTTP timeout) |
 
 ## Quality gates
 

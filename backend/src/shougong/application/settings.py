@@ -50,6 +50,10 @@ class AiGatewayConfig(BaseModel):
     # Observed reasoning peaked near 12k, so 16k leaves headroom without paying
     # for tokens the model never generates.
     max_output_tokens: int = Field(default=16_000, ge=256)
+    # One non-streaming generation call returns only after the whole text is
+    # produced, which routinely outlasts a normal HTTP read timeout. This is the
+    # ceiling for a single attempt; the correction loop makes several.
+    generation_timeout_seconds: float = Field(default=180.0, gt=0)
 
 
 class GatewaysConfig(BaseModel):

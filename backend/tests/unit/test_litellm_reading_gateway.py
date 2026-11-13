@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import httpx
 import pytest
 from pytest_httpserver import HTTPServer
+from werkzeug.wrappers import Request, Response
 
 from shougong.gateway.reading.litellm_reading_gateway import LiteLlmReadingGateway
 from shougong.usecase.reading.gateway import RejectedDraft
@@ -36,6 +38,11 @@ def _last_request_json(httpserver: HTTPServer) -> dict[str, Any]:
     request, _ = httpserver.log[-1]
     body: dict[str, Any] = request.get_json()
     return body
+
+
+def _slow_tool_call_response(_: Request) -> Response:
+    time.sleep(0.5)
+    return Response(json.dumps(_TOOL_CALL_RESPONSE), content_type="application/json")
 
 
 async def test_list_models_returns_the_proxy_model_ids_sorted(httpserver: HTTPServer) -> None:
@@ -418,6 +425,22 @@ async def test_generate_wraps_an_http_error_in_a_domain_error(httpserver: HTTPSe
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
         with pytest.raises(ReadingGenerationError):
+            await gateway.generate(
+                working_set=_EMPTY_WS,
+                text_format=ReadingFormat.PARAGRAPH,
+                max_extra_words=2,
+                model="claude-haiku-4-5-20251001",
+                topic=None,
+                budget_audience=BudgetAudience.INTERMEDIATE,
+            )
+
+
+async def test_generate_honours_the_generation_timeout(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_handler(_slow_tool_call_response)
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test", generation_timeout=0.05)
+        with pytest.raises(ReadingGenerationError, match="ReadTimeout"):
             await gateway.generate(
                 working_set=_EMPTY_WS,
                 text_format=ReadingFormat.PARAGRAPH,
