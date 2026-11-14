@@ -14,7 +14,7 @@ global state.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from zoneinfo import ZoneInfo
 
@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from shougong.application.settings import Settings
+from shougong.application.telemetry import Telemetry, build_telemetry
 from shougong.gateway.configuration.http_client import build_http_client
 from shougong.gateway.dictionary.cedict_source import CedictSource
 from shougong.gateway.dictionary.hsk_dataset_source import HskDatasetSource
@@ -31,7 +32,7 @@ from shougong.gateway.health.app_health_gateway import AppHealthGateway
 from shougong.gateway.health.http_client_health_check import HttpClientHealthCheck
 from shougong.gateway.reading.litellm_reading_gateway import LiteLlmReadingGateway
 from shougong.gateway.strokes.hanzi_writer_source import HanziWriterSource
-from shougong.httpapi.configuration.server import build_app
+from shougong.httpapi.configuration.server import build_app, install_request_context_middleware
 from shougong.httpapi.controller.base import IController
 from shougong.httpapi.controller.dictionary_controller import DictionaryController
 from shougong.httpapi.controller.health_controller import HealthController
@@ -60,9 +61,11 @@ from shougong.segmentation.jieba_segmenter import JiebaSegmenter
 from shougong.segmentation.jieba_segmenter import warm_up as warm_up_jieba
 from shougong.srs.fsrs_engine import FsrsEngine
 from shougong.usecase.commons.logging import get_logger
+from shougong.usecase.commons.request_context import job_context
 from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.health.checker import IHealthChecker
+from shougong.usecase.health.telemetry import HealthTelemetry
 from shougong.usecase.insights.overview_service import StudyOverviewService
 from shougong.usecase.insights.service import InsightService
 from shougong.usecase.reading.service import ReadingService
@@ -77,22 +80,36 @@ _log = get_logger(__name__)
 
 
 class Container:
-    def __init__(self, settings: Settings, *, clock: IClock | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        clock: IClock | None = None,
+        telemetry: Telemetry | None = None,
+        health_checkers: Sequence[IHealthChecker] | None = None,
+    ) -> None:
         self.settings = settings
         self.clock: IClock = clock or SystemClock()
+        self.telemetry: Telemetry = telemetry or build_telemetry(settings)
 
         # --- infrastructure singletons -------------------------------------
         self.engine: AsyncEngine = build_engine(settings.mysql.url)
+        self.telemetry.instrument_engine(self.engine)
         self._session_factory = build_session_factory(self.engine)
         self.transaction_template = SqlAlchemyTransactionTemplate(self._session_factory)
         self.http_client: httpx.AsyncClient = build_http_client()
+        self.telemetry.instrument_http_client()
 
         # --- health slice ------------------------------------------------
-        self._app_health_gateway = AppHealthGateway(self.http_client, settings.app_host)
-        self.health_checkers: list[IHealthChecker] = [
-            MySqlConnectionHealthCheck(self.engine, self.clock),
-            HttpClientHealthCheck(self._app_health_gateway, self.clock),
-        ]
+        self.health_telemetry = HealthTelemetry(self.telemetry.meter)
+        if health_checkers is None:
+            self._app_health_gateway = AppHealthGateway(self.http_client, settings.app_host)
+            self.health_checkers: list[IHealthChecker] = [
+                MySqlConnectionHealthCheck(self.engine, self.clock),
+                HttpClientHealthCheck(self._app_health_gateway, self.clock),
+            ]
+        else:
+            self.health_checkers = list(health_checkers)
 
         # --- dictionary slice -------------------------------------------
         self._dictionary_repository = DictionaryRepository(self.transaction_template)
@@ -167,7 +184,7 @@ class Container:
 
         # --- http layer ------------------------------------------------
         self.controllers: list[IController] = [
-            HealthController(self.health_checkers),
+            HealthController(self.health_checkers, self.health_telemetry),
             DictionaryController(self._dictionary_service),
             StrokesController(self._stroke_service),
             StudyController(self._study_service, self._insight_service),
@@ -199,35 +216,42 @@ class Container:
                 await self.aclose()
 
         self.app = build_app(self.controllers, lifespan=lifespan)
+        self.telemetry.instrument_app(self.app)
+        install_request_context_middleware(self.app)
+        self.telemetry.instrument_runtime()
 
     async def _autoload_dictionary(self) -> None:
         """Fire-and-forget: fill the dictionary from CC-CEDICT if it is empty,
         then stamp HSK level + POS tags onto it from the HSK dataset.
 
         Runs in the background so the app serves immediately; a download failure
-        is logged, never fatal. Both steps are idempotent.
+        is logged, never fatal. Both steps are idempotent. The task boundary owns
+        a `job.id`, so its single failure record is correlatable.
         """
-        try:
-            if self.settings.dictionary_autoload:
-                await self._dictionary_service.populate_if_empty(self._cedict_source)
-            if self.settings.hsk_enrich_autoload:
-                await self._dictionary_service.enrich_hsk(self._hsk_dataset_source)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            _log.exception("dictionary.autoload.failed")
+        with job_context():
+            try:
+                if self.settings.dictionary_autoload:
+                    await self._dictionary_service.populate_if_empty(self._cedict_source)
+                if self.settings.hsk_enrich_autoload:
+                    await self._dictionary_service.enrich_hsk(self._hsk_dataset_source)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _log.exception("dictionary.autoload.failed")
 
     async def _warm_up_jieba(self) -> None:
         """Fire-and-forget: force jieba's lazy dictionary load now, off the
         event loop thread, so the first real reading-generation request isn't
-        the one paying for it."""
-        try:
-            await anyio.to_thread.run_sync(warm_up_jieba)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            _log.exception("reading.jieba_warmup.failed")
+        the one paying for it. The task boundary owns a `job.id`."""
+        with job_context():
+            try:
+                await anyio.to_thread.run_sync(warm_up_jieba)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _log.exception("reading.jieba_warmup.failed")
 
     async def aclose(self) -> None:
         await self.http_client.aclose()
         await self.engine.dispose()
+        await self.telemetry.async_shutdown()

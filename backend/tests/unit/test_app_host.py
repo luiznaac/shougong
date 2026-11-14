@@ -10,7 +10,7 @@ def test_settings_default_to_the_assigned_dev_ports(monkeypatch) -> None:
     monkeypatch.delenv("HTTP_PORT", raising=False)
     monkeypatch.delenv("MYSQL__PORT", raising=False)
 
-    settings = settings_module.Settings(_env_file=None)
+    settings = settings_module.Settings(_env_file=None, app_env="dev")
 
     assert settings.http_port == 8130
     assert settings.mysql.port == 8132
@@ -66,7 +66,7 @@ async def test_container_builds_the_self_health_gateway_from_the_derived_host(mo
 
     monkeypatch.delenv("GATEWAYS__APP__HOST", raising=False)
     monkeypatch.setattr(container_module, "AppHealthGateway", _RecordingGateway)
-    settings = settings_module.Settings(_env_file=None, http_port=9102)
+    settings = settings_module.Settings(_env_file=None, app_env="test", http_port=9102)
 
     instance = container_module.Container(settings)
     try:

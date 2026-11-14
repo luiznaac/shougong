@@ -9,8 +9,14 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from itertools import count, pairwise
-from typing import TypeVar
+from typing import Any, TypeVar
 
+from opentelemetry.sdk._logs import ReadableLogRecord
+from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter
+from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+
+from shougong.application.settings import Settings
+from shougong.application.telemetry import Telemetry
 from shougong.usecase.commons.page import Page
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
@@ -21,6 +27,7 @@ from shougong.usecase.dictionary.model import (
     RelatedEntry,
     RelatedEntryPage,
 )
+from shougong.usecase.health.checker import HealthCheckResult, IHealthChecker
 from shougong.usecase.insights.gateway import IInsightRepository
 from shougong.usecase.insights.model import GradeWindow, InsightBucket, ReviewGrade, StudyCounts
 from shougong.usecase.insights.policy import WINDOW_SIZE, is_leech, order_leeches
@@ -679,3 +686,60 @@ class FakeReadingWordUsageRepository(IReadingWordUsageRepository):
         for word in words:
             current = self.usage.get(word)
             self.usage[word] = WordUsage(uses=(current.uses if current else 0) + 1, last_used_at=at)
+
+
+class StubHealthChecker(IHealthChecker):
+    """A health checker that reports a fixed result, with no I/O."""
+
+    def __init__(self, service_name: str = "app-health", *, is_healthy: bool = True) -> None:
+        self._service_name = service_name
+        self._is_healthy = is_healthy
+
+    async def get_health_status(self) -> HealthCheckResult:
+        return HealthCheckResult(
+            service_name=self._service_name,
+            is_healthy=self._is_healthy,
+            timestamp=_EPOCH,
+        )
+
+
+def build_test_settings(**overrides: object) -> Settings:
+    """Settings shaped for the test profile: in-memory telemetry, no autoload."""
+    values: dict[str, object] = {
+        "app_env": "test",
+        "dictionary_autoload": False,
+        "hsk_enrich_autoload": False,
+        **overrides,
+    }
+    return Settings(_env_file=None, **values)  # type: ignore[arg-type]
+
+
+def log_records(telemetry: Telemetry) -> list[ReadableLogRecord]:
+    exporter = telemetry.log_exporter
+    assert isinstance(exporter, InMemoryLogRecordExporter)
+    return list(exporter.get_finished_logs())
+
+
+def new_log_records(telemetry: Telemetry, start: int) -> list[ReadableLogRecord]:
+    return log_records(telemetry)[start:]
+
+
+def metrics_by_name(telemetry: Telemetry) -> dict[str, Any]:
+    reader = telemetry.metric_reader
+    assert isinstance(reader, InMemoryMetricReader)
+    metrics: dict[str, Any] = {}
+    for resource_metric in reader.get_metrics_data().resource_metrics:
+        for scope_metric in resource_metric.scope_metrics:
+            for metric in scope_metric.metrics:
+                metrics[metric.name] = metric
+    return metrics
+
+
+def metric_names(telemetry: Telemetry) -> set[str]:
+    return set(metrics_by_name(telemetry))
+
+
+def metric(telemetry: Telemetry, name: str) -> Any:
+    metrics = metrics_by_name(telemetry)
+    assert name in metrics, f"metric {name} not exported"
+    return metrics[name]

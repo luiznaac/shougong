@@ -39,6 +39,18 @@ services:
     environment:
       - APP_ENV=prod
       - LOG_LEVEL=INFO
+      # Telemetry: APP_ENV=prod requires an endpoint, and no Collector ships in
+      # this compose. Export OTEL_EXPORTER_OTLP_ENDPOINT to the host/infra
+      # Collector (e.g. http://host.docker.internal:4318); it is passed through
+      # with no default, so an unset endpoint fails the app's boot loudly rather
+      # than silently degrading. A configured-but-down Collector only degrades
+      # (one WARN, retries).
+      - OTEL_SERVICE_NAME=shougong
+      - OTEL_EXPORTER_OTLP_ENDPOINT
+      - OTEL_SEMCONV_STABILITY_OPT_IN=http,database
+      # Emergency export stop, no code change (keep the endpoint above):
+      # - OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER:-otlp}
+      # - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-otlp}
       - API_PORT=8080
       - WEB_PORT=8081
       # Container-internal: the app serves here, so the self-health gateway
@@ -53,6 +65,9 @@ services:
       - MYSQL__DATABASE=shougong
       - GATEWAYS__AI__BASE_URL=${GATEWAYS_AI_BASE_URL:-http://localhost:4000}
       - GATEWAYS__AI__API_KEY=${GATEWAYS_AI_API_KEY:-}
+    # Lets the OTLP endpoint default reach a Collector running on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${HTTP_PORT:-8130}:8080"       # API      (uvicorn)
       - "${WEB_HOST_PORT:-8131}:8081"   # web / UI  (nginx: SPA + /api proxy)

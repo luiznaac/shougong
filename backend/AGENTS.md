@@ -39,6 +39,7 @@ uv run poe migrate            # apply pending migrations locally
 - **`gateway/reading/system_prompt.txt` is product behavior, not config.** It's the LLM prompt that shapes every generated reading text — changing it changes what learners see, review it like you would a usecase change, not a copy edit.
 - **DB migrations**: Alembic autogenerate + review, never hand-write SQL or add to `mysql/init.sql` (doesn't exist) — see [`../docs/02-architecture.md`](../docs/02-architecture.md) for the baseline/`compare_metadata` guard mechanics, same shape as the Kotlin repos' Flyway setup (see salgadinhos' `python-db-migration` skill).
 - **`frontend/src/api/types.ts` mirrors `httpapi/schema.py`** — update both in the same commit (see root [`AGENTS.md`](../AGENTS.md)).
+- **Telemetry is logs + metrics over OTLP/HTTP — never traces, never `/metrics`.** `application/telemetry.py` builds the SDK first in the composition root and owns exporters/flush; `usecase` may import the OTel *API* only (static test + import-linter keep the SDK out); structlog is the log API and stdlib `logging` is the chokepoint. The normative contract is `environments/python/docs/observability.md`; uvicorn access logs stay off and prod boots only with `OTEL_EXPORTER_OTLP_ENDPOINT` set.
 
 ## Stack pitfalls
 

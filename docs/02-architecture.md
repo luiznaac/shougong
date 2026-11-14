@@ -167,6 +167,13 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 | `GATEWAYS__AI__REASONING_EFFORT` | `low` | Reasoning effort sent to the proxy (reasoning tokens count against the output ceiling) |
 | `GATEWAYS__AI__MAX_OUTPUT_TOKENS` | `16000` | Output-token ceiling for a reading generation |
 | `GATEWAYS__AI__GENERATION_TIMEOUT_SECONDS` | `300` | Per-attempt read timeout for a non-streaming generation (a slow reasoning model outlasts a normal HTTP timeout) |
+| `OTEL_SERVICE_NAME` | `shougong` | Telemetry resource `service.name` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` in dev; **required in prod** | OTLP/HTTP Collector endpoint; a missing value under `APP_ENV=prod` fails boot |
+| `SERVICE_VERSION` | the installed package version | Telemetry resource `service.version` |
+| `TELEMETRY_CONSOLE` | `false` | Dev-only: swap both exporters for console exporters (fully offline); never a prod switch |
+| `OTEL_SEMCONV_STABILITY_OPT_IN` | unset — the deploy sets `http,database` | Selects the current HTTP/DB semantic-convention metric names |
+
+Telemetry is logs + metrics over OTLP/HTTP, with no traces and no `/metrics` endpoint. `TELEMETRY_CONSOLE=true` is the offline dev path; the test profile (`APP_ENV=test`) exports nothing and asserts through in-memory readers. The full contract is `environments/python/docs/observability.md`; the deploy that turns it on waits on the host Collector and this service's telemetry env.
 
 ## Quality gates
 
