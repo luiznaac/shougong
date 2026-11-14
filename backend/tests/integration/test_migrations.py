@@ -11,6 +11,7 @@ alembic/env.py), which cannot happen from inside a running event loop.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -66,10 +67,14 @@ def test_migrations_produce_exactly_the_schema_the_entities_declare() -> None:
         }
         previous = {key: os.environ.get(key) for key in env}
         os.environ.update(env)
+        # A logger created before the migration must survive it: Alembic's
+        # `fileConfig` defaults to disabling every existing logger.
+        sentinel = logging.getLogger("shougong.integration.migration_sentinel")
         try:
             config = Config(str(_BACKEND_DIR / "alembic.ini"))
             config.set_main_option("script_location", str(_BACKEND_DIR / "alembic"))
             command.upgrade(config, "head")
+            assert sentinel.disabled is False
 
             url = f"mysql+asyncmy://{mysql.username}:{mysql.password}@{mysql.get_container_host_ip()}:{mysql.get_exposed_port(3306)}/{mysql.dbname}"
             assert asyncio.run(_pending_diff(url)) == []

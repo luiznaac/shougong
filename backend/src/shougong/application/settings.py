@@ -9,6 +9,7 @@ project's assigned host block, while any other profile keeps the canonical
 
 from __future__ import annotations
 
+import socket
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -61,6 +62,18 @@ class GatewaysConfig(BaseModel):
     ai: AiGatewayConfig = Field(default_factory=AiGatewayConfig)
 
 
+class TelemetryConfig(BaseModel):
+    """The telemetry keys, typed once from the standard env names."""
+
+    service_name: str
+    service_version: str | None
+    host_name: str
+    endpoint: str | None
+    console: bool
+    batch_schedule_delay_ms: int
+    metric_export_interval_ms: int
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -72,6 +85,14 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     http_port: int = 8080
     log_level: str = "INFO"
+
+    otel_service_name: str = Field(default="shougong", validation_alias="OTEL_SERVICE_NAME")
+    otlp_endpoint: str | None = Field(default=None, validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT")
+    telemetry_console: bool = Field(default=False, validation_alias="TELEMETRY_CONSOLE")
+    service_version: str | None = Field(default=None, validation_alias="SERVICE_VERSION")
+    host_name: str = Field(default_factory=socket.gethostname, validation_alias="HOSTNAME")
+    otel_batch_schedule_delay: int = Field(default=5000, validation_alias="OTEL_BLRP_SCHEDULE_DELAY")
+    otel_metric_export_interval: int = Field(default=60000, validation_alias="OTEL_METRIC_EXPORT_INTERVAL")
 
     # On startup, download CC-CEDICT and fill `dictionary_entry` if it is empty.
     dictionary_autoload: bool = True
@@ -119,3 +140,18 @@ class Settings(BaseSettings):
     @property
     def app_host(self) -> str:
         return self.gateways.app.host or f"http://localhost:{self.http_port}"
+
+    @property
+    def telemetry(self) -> TelemetryConfig:
+        endpoint = self.otlp_endpoint
+        if endpoint is None and self.app_env != "prod":
+            endpoint = "http://localhost:4318"
+        return TelemetryConfig(
+            service_name=self.otel_service_name,
+            service_version=self.service_version,
+            host_name=self.host_name,
+            endpoint=endpoint,
+            console=self.telemetry_console,
+            batch_schedule_delay_ms=self.otel_batch_schedule_delay,
+            metric_export_interval_ms=self.otel_metric_export_interval,
+        )

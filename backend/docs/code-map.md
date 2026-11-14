@@ -6,7 +6,7 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 
 ### `usecase` — domain, ports and services
 **Purpose**: the pure core — frozen dataclasses, `typing.Protocol` ports (`I*` prefix) and the services per slice: dictionary, study + SRS, strokes, reading/vocabulary, study-item history, insights, plus `commons/` and the transaction port. It must not import `fastapi`, `sqlalchemy`, `httpx`, `uvicorn`, `pydantic`, `fsrs` or `jieba`; import-linter enforces it.
-**Files**: `backend/src/shougong/usecase/dictionary/{model,pinyin,service,gateway}.py`; `usecase/study/{model,service,gateway,shuffler}.py`; `usecase/srs/{model,engine,day_boundary}.py`; `usecase/strokes/{model,service,gateway}.py`; `usecase/reading/{model,service,topic_service,vocabulary_service,gateway,dialogue,speakers,topics,proficiency,validation,working_set,vocabulary}.py`; `usecase/study_item_history/{model,service,gateway}.py`; `usecase/insights/{model,policy,gateway,service}.py`; `usecase/health/{checker,gateway}.py`; `usecase/configuration/transaction.py`; `usecase/commons/{asyncx,exceptions,logging,time}.py`
+**Files**: `backend/src/shougong/usecase/dictionary/{model,pinyin,service,gateway}.py`; `usecase/study/{model,service,gateway,shuffler}.py`; `usecase/srs/{model,engine,day_boundary}.py`; `usecase/strokes/{model,service,gateway}.py`; `usecase/reading/{model,service,topic_service,vocabulary_service,gateway,dialogue,speakers,topics,proficiency,validation,working_set,vocabulary}.py`; `usecase/study_item_history/{model,service,gateway}.py`; `usecase/insights/{model,policy,gateway,service}.py`; `usecase/health/{checker,gateway,telemetry}.py`; `usecase/configuration/transaction.py`; `usecase/commons/{asyncx,exceptions,logging,request_context,time}.py`
 **Seam(s)**:
 - **Ports (`I*` Protocol)** — `IDictionaryRepository`/`ICedictSource`/`IHskDatasetSource` (`dictionary/gateway.py`), `IStudyItemRepository` (`study/gateway.py`; `prioritise`/`deprioritise`/`list_for_session` above the `list` method that must stay last), `IShuffler` (`study/shuffler.py`), `ISrsEngine` (`srs/engine.py`), `IStrokeRepository`/`IHanziStrokeSource` (`strokes/gateway.py`), `IReadingTextGateway`/`ISegmenter`/`IReadingHistoryRepository`/`IReadingWordUsageRepository`/`IReadingTopicRepository` (`reading/gateway.py`), `IStudyItemHistoryRepository` (`study_item_history/gateway.py`), `IInsightRepository` (`insights/gateway.py`), `IHealthChecker`/`IHealthGateway` (`health/`), `IClock` (`commons/time.py`). Every adapter explicitly inherits its port, so mypy and the IDE can jump port ↔ implementation.
 - **`ITransactionTemplate.execute(...)`** (`usecase/configuration/transaction.py`) — lets a service compose several repository calls atomically without importing SQLAlchemy; nested calls join the outer transaction.
@@ -14,6 +14,8 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 - **Clock seam** (`usecase/commons/time.py`) — logic reads time through `IClock`, never `datetime.now()`; tests pass a fixed clock into `Container(settings, clock=...)`.
 - **Insight rules** (`usecase/insights/policy.py`) — the leech window/threshold/ordering and the Extra Study range constants; `InsightService` returns the id→leech map from one batched window read and both buckets, and its port exposes no write method at all.
 - **Reading behaviour** (`usecase/reading/`) — `ReadingService` orchestrates the LLM gateway + segmenter + repositories; the LLM prompt itself is the product-behaviour file `gateway/reading/system_prompt.txt`.
+- **Log bridge and correlation** (`usecase/commons/logging.py`, `usecase/commons/request_context.py`) — structlog is the call-site API but feeds stdlib `logging`; a terminal processor splits the event name (body) from attributes and redacts secrets/bodies, and `ContextVar`s carry `request.id` / `job.id` into every record. The OTel SDK stays out of `usecase` (static test).
+- **Health instruments** (`usecase/health/telemetry.py`) — `HealthTelemetry.record(result)` updates the `health.check.status` gauge and `health.check.failures` counter and logs only on a WARN/INFO transition; it never performs I/O.
 - **Queue priority and sessions** (`usecase/study/`) — `StudyService.prioritise`/`deprioritise`/`session`; the domain carries `priority_position` as an opaque key, and `IShuffler` is injected so ordering tests substitute a deterministic double instead of patching randomness.
 
 ### `persistence` — SQLAlchemy adapters and migrations
@@ -32,6 +34,7 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 **Files**: `backend/src/shougong/gateway/configuration/http_client.py`; `gateway/dictionary/{cedict_source,hsk_dataset_source}.py`; `gateway/reading/litellm_reading_gateway.py`, `gateway/reading/system_prompt.txt`; `gateway/strokes/hanzi_writer_source.py`; `gateway/health/{app_health_gateway,http_client_health_check}.py`
 **Seam(s)**:
 - **Source adapters** — `CedictSource`/`HskDatasetSource` implement the dictionary sources; `HanziWriterSource` implements `IHanziStrokeSource`; `LiteLlmReadingGateway` implements `IReadingTextGateway`. All share `build_http_client()`.
+- **Outbound correlation** (`configuration/http_client.py`) — a request hook copies the bound `request.id` onto every outbound call as `X-Request-ID`; the `HTTPXClientInstrumentor` (installed by the composition root) owns `http.client.request.duration`.
 - **Prompt seam** (`gateway/reading/system_prompt.txt`) — product behaviour, not config: changing it changes every generated reading, so review it like a usecase change.
 - **Self-health** (`gateway/health/`) — `AppHealthGateway` probes `GATEWAYS__APP__HOST` (the service's own `/health/internal`); `HttpClientHealthCheck` adapts it to `IHealthChecker`.
 
@@ -52,17 +55,19 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 
 ### `httpapi` — FastAPI controllers and DTOs
 **Purpose**: the HTTP surface — controllers returning `APIRouter`s, Pydantic transport DTOs, the app factory and the domain-exception handlers.
-**Files**: `backend/src/shougong/httpapi/controller/base.py`, `controller/{health,dictionary,strokes,study,study_session,study_item_history,insights,reading,reading_topic,vocabulary}_controller.py`; `httpapi/schema.py`; `httpapi/configuration/server.py`
+**Files**: `backend/src/shougong/httpapi/controller/base.py`, `controller/{health,dictionary,strokes,study,study_session,study_item_history,insights,reading,reading_topic,vocabulary}_controller.py`; `httpapi/schema.py`; `httpapi/configuration/{server,telemetry}.py`
 **Seam(s)**:
 - **`IController.router()`** (`controller/base.py`) — the `ControllerTemplate` equivalent; `Container` builds the controller list and `build_app` mounts each router, so adding an endpoint never edits the server wiring.
 - **DTO seam** (`schema.py`) — Pydantic lives only here (and in `application/settings.py`); every response has a `from_domain(...)` classmethod, and the shapes are mirrored in `frontend/src/api/types.ts` in the same commit.
-- **Error mapping** (`configuration/server.py`) — `_install_exception_handlers` maps `ResourceNotFoundError`→404, `InvalidArgumentError`→400, `ConflictError`→409, `DomainError`→422 with the `{code, detail}` body.
+- **Error mapping** (`configuration/server.py`) — `_install_exception_handlers` maps `ResourceNotFoundError`→404, `InvalidArgumentError`→400, `ConflictError`→409, `DomainError`→422 with the `{code, detail}` body; each handler stashes `error.type` for the boundary record.
+- **Request boundary** (`configuration/server.py`) — `RequestContextMiddleware` is outermost: it resolves/echoes `X-Request-ID`, binds it as a `ContextVar`, and owns the single 4xx WARN / 5xx ERROR `http.request.failed` record. `configuration/telemetry.py` is the only place `FastAPIInstrumentor` is applied, from the composition root.
 
 ### `application` — composition root and settings
 **Purpose**: the one place that knows every concrete class, plus typed settings and the ASGI entry.
-**Files**: `backend/src/shougong/application/{container,settings,boot}.py`
+**Files**: `backend/src/shougong/application/{container,settings,boot}.py`, `application/telemetry.py`
 **Seam(s)**:
-- **`Container`** (`application/container.py`) — builds the engine, HTTP client, every adapter/service (including the `RandomShuffler`) and the `controllers`/`health_checkers` lists, then `build_app(..., lifespan=...)`; adding a slice is a class plus one wiring line here. Tests construct their own `Container` with fakes/fixed clock.
+- **`Container`** (`application/container.py`) — builds telemetry first, then the engine, HTTP client, every adapter/service (including the `RandomShuffler`) and the `controllers`/`health_checkers` lists; installs SQLAlchemy/httpx/FastAPI/runtime instrumentation, `build_app(..., lifespan=...)`, the request-id middleware, and flushes telemetry in `aclose()`. Adding a slice is a class plus one wiring line here. Tests construct their own `Container` with fakes/fixed clock/in-memory telemetry.
+- **`build_telemetry`** (`application/telemetry.py`) — the one place the OTel SDK exists: resource (six attributes), providers/exporters (OTLP dev/prod, console when `TELEMETRY_CONSOLE`, in-memory under `APP_ENV=test`), metric views/buckets, the SQLAlchemy pool series, the log bridge, and the 10 s shutdown flush. Prod without `OTEL_EXPORTER_OTLP_ENDPOINT` raises `TelemetryConfigError`.
 - **Lifespan** (`application/container.py`) — the async lifespan starts the dictionary/HSK autoload and the jieba warm-up, and cancels them plus `aclose()` on shutdown.
 - **Settings** (`application/settings.py`) — `pydantic-settings`, `__`-nested env vars, `APP_ENV` profile; `MySqlConfig.url` is the one DB URL shape. `Settings.app_host` derives the self-health base URL from `HTTP_PORT` unless `GATEWAYS__APP__HOST` is set explicitly.
 
@@ -84,6 +89,7 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 
 - `backend/src/shougong/application/boot.py` — `app` (what uvicorn imports: `shougong.application.boot:app`) and `main()` (`poe run`), which serves on `HTTP_PORT` (8130) with reload only in `dev`.
 - `backend/src/shougong/application/container.py` — the composition root; builds the object graph, controllers and FastAPI app.
+- `backend/src/shougong/application/telemetry.py` — `build_telemetry(settings)`: the SDK lifecycle, resource, exporters, metric views, pool series, log bridge and shutdown flush.
 - `backend/src/shougong/httpapi/configuration/server.py` — `build_app(...)`: mounts every `IController` router and installs the exception handlers.
 - `backend/scripts/migrate.py` — the migration entry (`poe migrate`, `deploy/entrypoint.sh`); baseline-stamp then upgrade to head.
 - `backend/alembic/env.py` — Alembic's online/offline environment over `Base.metadata`.

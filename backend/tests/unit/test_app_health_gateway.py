@@ -28,5 +28,5 @@ async def test_health_check_swallows_transport_errors() -> None:
     check = HttpClientHealthCheck(_Boom(), FixedClock(datetime(2026, 1, 1, tzinfo=UTC)))
     result = await check.get_health_status()
 
-    assert result.service_name == "http-client"
+    assert result.service_name == "app-health"
     assert result.is_healthy is False

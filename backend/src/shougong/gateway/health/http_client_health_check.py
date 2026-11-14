@@ -19,7 +19,7 @@ class HttpClientHealthCheck(IHealthChecker):
             is_healthy = False
 
         return HealthCheckResult(
-            service_name="http-client",
+            service_name="app-health",
             is_healthy=is_healthy,
             timestamp=self._clock.now(),
         )

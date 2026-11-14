@@ -44,7 +44,13 @@ A gitignored `.env` may override a host port locally; the committed defaults abo
 
 One image holds both processes — `uvicorn` (API) and `nginx` (the built SPA, which also reverse-proxies `/api` to uvicorn) — supervised by `supervisord`, on separate ports. The database is **not** in the image.
 
+The app runs as `APP_ENV=prod`, so it requires an OTLP endpoint: export
+`OTEL_EXPORTER_OTLP_ENDPOINT` (for a Collector on the host,
+`http://host.docker.internal:4318`). Without it the app's boot fails loudly;
+the `mysql` service alone still starts.
+
 ```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4318
 docker compose up --build     # app + MySQL, full stack
 #   UI   -> http://localhost:8131
 #   API  -> http://localhost:8130

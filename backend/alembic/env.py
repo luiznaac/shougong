@@ -31,10 +31,12 @@ from shougong.persistence.study_item_history.entity import StudyItemHistoryEntit
 # access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# Interpret the config file for Python logging. Keep the app's already-configured
+# loggers alive: the default (`disable_existing_loggers=True`) disables every
+# logger created before this runs, which strands telemetry when a migration runs
+# in-process (tests, `poe migrate`).
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

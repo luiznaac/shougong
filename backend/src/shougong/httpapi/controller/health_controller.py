@@ -14,11 +14,13 @@ from shougong.httpapi.controller.base import IController
 from shougong.httpapi.schema import HealthCheckResponse
 from shougong.usecase.commons.asyncx import map_async
 from shougong.usecase.health.checker import IHealthChecker
+from shougong.usecase.health.telemetry import HealthTelemetry
 
 
 class HealthController(IController):
-    def __init__(self, health_checkers: Sequence[IHealthChecker]) -> None:
+    def __init__(self, health_checkers: Sequence[IHealthChecker], telemetry: HealthTelemetry) -> None:
         self._health_checkers = health_checkers
+        self._telemetry = telemetry
 
     def router(self) -> APIRouter:
         router = APIRouter(tags=["health"])
@@ -29,6 +31,8 @@ class HealthController(IController):
                 self._health_checkers,
                 lambda checker: checker.get_health_status(),
             )
+            for result in results:
+                self._telemetry.record(result)
             return [HealthCheckResponse.from_domain(result) for result in results]
 
         @router.get("/health/internal")
