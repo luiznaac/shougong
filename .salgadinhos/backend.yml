@@ -3,6 +3,18 @@
 source: python
 lane: backend
 applied:
-  revision: 3
-  scaffold_sha: c0afa7c61b1c52d3e58a32e45db133b3c4249d78
-allow: []
+  revision: 4
+  scaffold_sha: 0399d39291a6f21ab5be5cd657e2a4cec71a154c
+allow:
+  # shougong's port adapted these two files; the scaffold's Python copy lacks the adaptations,
+  # so an overwrite breaks the lane's contract tests. Renúncia until the scaffold adopts them.
+  - entry: src/template/application/telemetry.py
+    reason: >-
+      The lane's composition root honors OTEL_LOGS_EXPORTER/OTEL_METRICS_EXPORTER=none with an
+      in-memory metric reader and no log exporter; the scaffold's copy does not, so propagating
+      it would break test_the_emergency_env_stop_disables_both_signals.
+  - entry: src/template/usecase/commons/logging.py
+    reason: >-
+      The lane's structlog bridge namespaces a reserved stdlib log key as event.<key>; the
+      scaffold's copy does not, so propagating it would break
+      test_a_reserved_stdlib_key_is_namespaced_not_rejected.
