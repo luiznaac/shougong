@@ -25,6 +25,13 @@ class StudyItem:
     priority_position: int | None = None
 
 
+class ItemSource(StrEnum):
+    """Where a study item came from: a single add or a CSV batch row."""
+
+    API = "api"
+    IMPORT = "import"
+
+
 class PriorityEdge(StrEnum):
     FRONT = "front"
     BACK = "back"
@@ -93,6 +100,15 @@ class BatchRowStatus(StrEnum):
     CREATED = "created"
     SKIPPED = "skipped"
     ERROR = "error"
+
+
+class ImportSkipReason(StrEnum):
+    """The bounded reason a batch-import row produced no item."""
+
+    FORMAT = "format"
+    NOT_FOUND = "not_found"
+    AMBIGUOUS = "ambiguous"
+    DUPLICATE = "duplicate"
 
 
 @dataclass(frozen=True, slots=True)

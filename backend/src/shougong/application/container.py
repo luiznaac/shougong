@@ -74,6 +74,7 @@ from shougong.usecase.reading.vocabulary_service import VocabularyOverviewServic
 from shougong.usecase.srs.day_boundary import DayBoundaryEngine
 from shougong.usecase.strokes.service import StrokeService
 from shougong.usecase.study.service import StudyService
+from shougong.usecase.study.telemetry import StudyTelemetry
 from shougong.usecase.study_item_history.service import StudyItemHistoryService
 
 _log = get_logger(__name__)
@@ -129,6 +130,7 @@ class Container:
             self.transaction_template,
             self._study_item_history_repository,
         )
+        self._study_telemetry = StudyTelemetry(self.telemetry.meter)
         self._study_service = StudyService(
             self._study_item_repository,
             self._dictionary_repository,
@@ -137,6 +139,7 @@ class Container:
             self.transaction_template,
             self._stroke_service,
             RandomShuffler(),
+            self._study_telemetry,
         )
         self._study_item_history_service = StudyItemHistoryService(
             self._study_item_history_repository,

@@ -218,7 +218,7 @@ def test_the_console_renderer_never_sees_a_content_key(telemetry: Telemetry, cap
 
 
 def test_a_reserved_stdlib_key_is_namespaced_not_rejected(telemetry: Telemetry) -> None:
-    get_logger("test").info("study.batch.imported", created=3)
+    get_logger("test").info("widgets.imported", created=3)
 
     record = _only(telemetry).log_record
     assert record.attributes["event.created"] == 3

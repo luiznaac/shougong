@@ -9,7 +9,6 @@ from dataclasses import dataclass, replace
 
 from shougong.usecase.commons.asyncx import fire_and_forget
 from shougong.usecase.commons.exceptions import ConflictError, InvalidRangeError, ResourceNotFoundError
-from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.page import Page
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.configuration.transaction import ITransactionTemplate
@@ -25,6 +24,8 @@ from shougong.usecase.study.model import (
     BatchImportReport,
     BatchImportRow,
     BatchRowStatus,
+    ImportSkipReason,
+    ItemSource,
     PriorityEdge,
     ReviewResult,
     SessionKind,
@@ -33,8 +34,7 @@ from shougong.usecase.study.model import (
     StudySession,
 )
 from shougong.usecase.study.shuffler import IShuffler
-
-_log = get_logger(__name__)
+from shougong.usecase.study.telemetry import StudyTelemetry
 
 
 def _batch_outcome(
@@ -63,13 +63,18 @@ def _describe(entry: DictionaryEntry) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class _NeedsAChoice:
-    """A row that can't be auto-resolved but has candidates the caller can pick
-    from anyway — either several entries matched exactly, or none did but the
-    hanzi exists under other readings."""
+class _Unresolved:
+    """A row that produced no item: the bounded reason telemetry counts and the
+    human-readable detail the HTTP response carries.
 
+    `candidates` is populated only for an ambiguous match the caller can resolve
+    by hand — several entries matched exactly, or none did but the hanzi exists
+    under other readings.
+    """
+
+    reason: ImportSkipReason
     detail: str
-    candidates: tuple[DictionaryEntry, ...]
+    candidates: tuple[DictionaryEntry, ...] = ()
 
 
 class StudyService:
@@ -82,6 +87,7 @@ class StudyService:
         transaction_template: ITransactionTemplate,
         stroke_service: StrokeService,
         shuffler: IShuffler,
+        telemetry: StudyTelemetry,
     ) -> None:
         self._study = study_repository
         self._dictionary = dictionary_repository
@@ -90,6 +96,7 @@ class StudyService:
         self._tx = transaction_template
         self._strokes = stroke_service
         self._shuffler = shuffler
+        self._telemetry = telemetry
 
     async def add_item(self, entry_id: int) -> StudyItem:
         async def _run() -> StudyItem:
@@ -100,7 +107,7 @@ class StudyService:
                 raise ConflictError(f"dictionary entry {entry_id} is already a study item")
             now = self._clock.now()
             item = await self._study.create(entry, self._engine.new_card(now), now)
-            _log.info("study.item.added", item_id=item.id, entry_id=entry_id)
+            self._telemetry.item_added(item_id=item.id, entry_id=entry_id, source=ItemSource.API)
             return item
 
         item = await self._tx.execute(_run)
@@ -137,7 +144,7 @@ class StudyService:
                 pinyin = raw.pinyin.strip()
                 resolved = await self._resolve_batch_row(hanzi, pinyin)
 
-                if isinstance(resolved, _NeedsAChoice):
+                if isinstance(resolved, _Unresolved):
                     outcomes.append(
                         _batch_outcome(
                             index,
@@ -148,24 +155,21 @@ class StudyService:
                             candidates=resolved.candidates,
                         )
                     )
-                    continue
-                if isinstance(resolved, str):
-                    outcomes.append(_batch_outcome(index, hanzi, pinyin, BatchRowStatus.ERROR, detail=resolved))
+                    self._telemetry.import_row_skipped(reason=resolved.reason)
                     continue
                 if resolved.id in used_entry_ids or await self._study.exists_for_entry(resolved.id):
                     outcomes.append(
                         _batch_outcome(index, hanzi, pinyin, BatchRowStatus.SKIPPED, detail="já está na fila")
                     )
+                    self._telemetry.import_row_skipped(reason=ImportSkipReason.DUPLICATE)
                     continue
 
                 item = await self._study.create(resolved, self._engine.new_card(now), now)
                 used_entry_ids.add(resolved.id)
                 outcomes.append(_batch_outcome(index, hanzi, pinyin, BatchRowStatus.CREATED, study_item_id=item.id))
+                self._telemetry.item_added(item_id=item.id, entry_id=resolved.id, source=ItemSource.IMPORT)
 
-            created = sum(1 for o in outcomes if o.status is BatchRowStatus.CREATED)
-            skipped = sum(1 for o in outcomes if o.status is BatchRowStatus.SKIPPED)
-            errored = sum(1 for o in outcomes if o.status is BatchRowStatus.ERROR)
-            _log.info("study.batch.imported", rows=len(rows), created=created, skipped=skipped, errors=errored)
+            self._telemetry.batch_imported()
             return BatchImportReport(outcomes=tuple(outcomes))
 
         report = await self._tx.execute(_run)
@@ -174,11 +178,13 @@ class StudyService:
                 self._warm_strokes(outcome.hanzi)
         return report
 
-    async def _resolve_batch_row(self, hanzi: str, pinyin: str) -> DictionaryEntry | str | _NeedsAChoice:
-        """The dictionary entry for one CSV row; a plain error message when there's
-        nothing to offer; or, when the row can't be auto-resolved but the hanzi has
-        candidates in the dictionary (several exact matches, or none but other
-        readings exist), a `_NeedsAChoice` the caller can resolve by hand.
+    async def _resolve_batch_row(self, hanzi: str, pinyin: str) -> DictionaryEntry | _Unresolved:
+        """The dictionary entry for one CSV row, or the bounded reason it produced
+        no item plus the detail the caller can act on.
+
+        A row that can't be auto-resolved but has candidates in the dictionary
+        (several exact matches, or none but other readings exist) is ambiguous and
+        carries those candidates so the caller can resolve it by hand.
 
         Stored `dictionary_entry.pinyin` is sanitised on import (lower-cased, ü as
         `v` — see `sanitize_pinyin`), so the row's pinyin is sanitised the same way
@@ -186,24 +192,32 @@ class StudyService:
         touches tones or syllables.
         """
         if not hanzi:
-            return "hanzi vazio"
+            return _Unresolved(ImportSkipReason.FORMAT, "hanzi vazio")
         if not is_numbered_pinyin(pinyin):
-            return "pinyin fora do formato esperado (use tons numéricos, ex.: xue2 xi2)"
+            return _Unresolved(
+                ImportSkipReason.FORMAT,
+                "pinyin fora do formato esperado (use tons numéricos, ex.: xue2 xi2)",
+            )
 
         candidates = await self._dictionary.find_by_simplified(hanzi)
         if not candidates:
-            return "hanzi não encontrado no dicionário"
+            return _Unresolved(ImportSkipReason.NOT_FOUND, "hanzi não encontrado no dicionário")
 
         matches = [entry for entry in candidates if entry.pinyin == sanitize_pinyin(pinyin)]
         if not matches:
             listed = ", ".join(_describe(entry) for entry in candidates)
-            return _NeedsAChoice(
-                detail=f"sem correspondência exata; outras leituras no dicionário: {listed}",
-                candidates=tuple(candidates),
+            return _Unresolved(
+                ImportSkipReason.AMBIGUOUS,
+                f"sem correspondência exata; outras leituras no dicionário: {listed}",
+                tuple(candidates),
             )
         if len(matches) > 1:
             listed = ", ".join(_describe(entry) for entry in matches)
-            return _NeedsAChoice(detail=f"múltiplas entradas do dicionário casam: {listed}", candidates=tuple(matches))
+            return _Unresolved(
+                ImportSkipReason.AMBIGUOUS,
+                f"múltiplas entradas do dicionário casam: {listed}",
+                tuple(matches),
+            )
         return matches[0]
 
     async def list_items(
@@ -244,9 +258,7 @@ class StudyService:
                 raise ResourceNotFoundError("study_item", str(item_id))
             if item.card.state is not SrsState.LEARNING:
                 raise ConflictError(f"study item {item_id} is not learning")
-            updated = await self._study.prioritise(item_id, edge)
-            _log.info("study.item.prioritised", item_id=item_id, edge=edge.value)
-            return updated
+            return await self._study.prioritise(item_id, edge)
 
         return await self._tx.execute(_run)
 
@@ -257,7 +269,6 @@ class StudyService:
             if await self._study.get(item_id) is None:
                 raise ResourceNotFoundError("study_item", str(item_id))
             await self._study.deprioritise(item_id)
-            _log.info("study.item.deprioritised", item_id=item_id)
 
         await self._tx.execute(_run)
 
@@ -276,7 +287,7 @@ class StudyService:
             pinned = [item for item in items if item.priority_position is not None]
             remainder = [item for item in items if item.priority_position is None]
             ordered = [*pinned, *self._shuffler.shuffle(remainder)]
-        _log.info("study.session.created", kind=kind.value, items=len(ordered))
+        self._telemetry.session_created(kind=kind, size=len(ordered))
         return StudySession(session_id=uuid.uuid4().hex, kind=kind, items=tuple(ordered))
 
     async def review_item(self, item_id: int, rating: SrsRating) -> ReviewResult:
@@ -287,10 +298,14 @@ class StudyService:
             now = self._clock.now()
             if item.card.due > now:
                 raise ConflictError(f"study item {item_id} is not due until {item.card.due.isoformat()}")
+            previous_state = item.card.state
             next_card, log = self._engine.review(item.card, rating, now)
             updated = await self._study.update_card(item_id, next_card, now)
             await self._study.add_review_log(item_id, log)
-            _log.info("study.item.reviewed", item_id=item_id, rating=rating.name.lower(), due=next_card.due.isoformat())
+            self._telemetry.item_reviewed(rating=rating, state=previous_state)
+            if previous_state is SrsState.LEARNING and next_card.state is SrsState.REVIEW:
+                self._telemetry.item_graduated()
+            self._telemetry.review_lag((now - item.card.due).total_seconds())
             return ReviewResult(item=updated, log=log)
 
         return await self._tx.execute(_run)
