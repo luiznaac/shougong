@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
-from shougong.usecase.insights.model import DueWindow, GradeWindow, InsightBucket, StudyCounts
+from shougong.usecase.insights.model import DueWindow, GradeWindow, InsightBucket, StudyCounts, StudyDistribution
 
 
 class IInsightRepository(Protocol):
@@ -38,11 +38,14 @@ class IInsightRepository(Protocol):
         """The queue-wide dashboard counts, computed as one aggregate over the item table."""
         ...
 
-    async def stability_counts(self, *, boundaries: Sequence[float]) -> list[int]:
-        """A stability histogram with `len(boundaries) + 1` buckets, ascending.
+    async def study_distribution(self, *, boundaries: Sequence[float]) -> StudyDistribution:
+        """The stability histogram and the difficulty bands in one aggregate.
 
-        Bucket `i` counts items whose stability is at most `boundaries[i]` and greater
-        than `boundaries[i - 1]`; a missing stability counts as zero.
+        `stability` has `len(boundaries) + 1` buckets, ascending: bucket `i` counts
+        items whose stability is at most `boundaries[i]` and greater than
+        `boundaries[i - 1]`; a missing stability counts as zero. `difficulty` bands
+        each item's FSRS difficulty to the nearest band 1..10, or `unset` when
+        absent, from the same statement.
         """
         ...
 

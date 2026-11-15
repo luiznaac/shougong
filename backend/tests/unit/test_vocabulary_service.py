@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from opentelemetry.metrics import NoOpMeter
+
 from shougong.usecase.dictionary.model import DictionaryEntry
+from shougong.usecase.insights.telemetry import InsightsTelemetry
 from shougong.usecase.reading.vocabulary import VocabularyCategory
 from shougong.usecase.reading.vocabulary_service import VocabularyOverviewService
 from tests.fixtures import FakeDictionaryRepository, FakeStudyItemRepository, make_dictionary_entry, make_study_item
 
 Word = tuple[str, int | None, tuple[str, ...]]
+
+
+def _telemetry() -> InsightsTelemetry:
+    return InsightsTelemetry(NoOpMeter("test"))
 
 
 def _entries(words: Sequence[Word], start: int) -> list[DictionaryEntry]:
@@ -23,7 +30,7 @@ def _service(known: Sequence[Word], *, also_in_hsk: Sequence[Word] = ()) -> Voca
     studied = _entries(known, start=1)
     dictionary_only = _entries(also_in_hsk, start=1000)
     study = FakeStudyItemRepository([make_study_item(item_id=e.id, entry=e) for e in studied])
-    return VocabularyOverviewService(study, FakeDictionaryRepository([*studied, *dictionary_only]))
+    return VocabularyOverviewService(study, FakeDictionaryRepository([*studied, *dictionary_only]), _telemetry())
 
 
 async def test_list_derives_word_classes_and_carries_pinyin_and_gloss() -> None:
@@ -42,7 +49,7 @@ async def test_list_derives_word_classes_and_carries_pinyin_and_gloss() -> None:
             )
         ]
     )
-    service = VocabularyOverviewService(study, FakeDictionaryRepository())
+    service = VocabularyOverviewService(study, FakeDictionaryRepository(), _telemetry())
 
     listed = await service.list()
 
@@ -94,7 +101,7 @@ async def test_a_word_with_several_readings_is_one_word_here() -> None:
         entry_id=2, simplified="行", pinyin="hang2", definitions=("firm",), hsk_level=2, pos_tags=("n",)
     )
     study = FakeStudyItemRepository([make_study_item(item_id=1, entry=walk), make_study_item(item_id=2, entry=firm)])
-    service = VocabularyOverviewService(study, FakeDictionaryRepository([walk, firm]))
+    service = VocabularyOverviewService(study, FakeDictionaryRepository([walk, firm]), _telemetry())
 
     assert len(await service.list()) == 1
     assert (await service.summary()).total == 1

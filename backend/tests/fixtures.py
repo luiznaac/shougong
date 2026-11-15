@@ -29,8 +29,14 @@ from shougong.usecase.dictionary.model import (
 )
 from shougong.usecase.health.checker import HealthCheckResult, IHealthChecker
 from shougong.usecase.insights.gateway import IInsightRepository
-from shougong.usecase.insights.model import GradeWindow, InsightBucket, ReviewGrade, StudyCounts
-from shougong.usecase.insights.policy import WINDOW_SIZE, is_leech, order_leeches
+from shougong.usecase.insights.model import (
+    GradeWindow,
+    InsightBucket,
+    ReviewGrade,
+    StudyCounts,
+    StudyDistribution,
+)
+from shougong.usecase.insights.policy import DIFFICULTY_BANDS, WINDOW_SIZE, is_leech, order_leeches
 from shougong.usecase.reading.gateway import (
     DialogueLine,
     IReadingHistoryRepository,
@@ -131,6 +137,7 @@ class FakeDictionaryRepository(IDictionaryRepository):
         self.entries: list[DictionaryEntry] = list(entries or [])
         # entry id -> the id of the study item queuing it
         self.study_items: dict[int, int] = dict(study_items or {})
+        self.hsk_words_calls = 0
         self._ids = count(1)
 
     async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryEntry]:
@@ -200,6 +207,7 @@ class FakeDictionaryRepository(IDictionaryRepository):
         return sum(1 for e in self.entries if e.hsk_level is not None)
 
     async def hsk_words(self) -> list[HskDatasetWord]:
+        self.hsk_words_calls += 1
         seen: dict[str, HskDatasetWord] = {}
         for e in self.entries:
             if e.hsk_level is not None and e.simplified not in seen:
@@ -321,6 +329,7 @@ class FakeStudyItemRepository(IStudyItemRepository):
         self.review_logs: dict[int, list[SrsReviewLog]] = {}
         self.priorities: dict[int, int] = {}
         self.history = history or FakeStudyItemHistoryRepository()
+        self.list_known_entries_calls = 0
         self._ids = count(1)
 
     def _with_priority(self, item: StudyItem) -> StudyItem:
@@ -344,6 +353,7 @@ class FakeStudyItemRepository(IStudyItemRepository):
         return [item for item in self.items if item.id in wanted]
 
     async def list_known_entries(self) -> list[DictionaryEntry]:
+        self.list_known_entries_calls += 1
         return [item.entry for item in self.items]
 
     async def prioritise(self, item_id: int, edge: PriorityEdge) -> StudyItem:
@@ -453,6 +463,7 @@ class FakeInsightRepository(IInsightRepository):
         learned: InsightBucket | None = None,
         counts: StudyCounts | None = None,
         stability: Sequence[int] | None = None,
+        difficulty: Mapping[str, int] | None = None,
         due_windows: Sequence[int] | None = None,
         transitions: Sequence[datetime] | None = None,
         leeches: int = 0,
@@ -462,6 +473,7 @@ class FakeInsightRepository(IInsightRepository):
         self.learned = learned or InsightBucket(total=0, items=())
         self.counts = counts or StudyCounts(total=0, learning=0, due=0, due_learning=0)
         self.stability = list(stability or [0, 0, 0, 0, 0])
+        self.difficulty = dict(difficulty or dict.fromkeys(DIFFICULTY_BANDS, 0))
         self.due_windows = list(due_windows or [])
         self.transitions = list(transitions or [])
         self.leeches = leeches
@@ -469,7 +481,7 @@ class FakeInsightRepository(IInsightRepository):
         self.mistake_calls: list[tuple[datetime, datetime, int]] = []
         self.learned_calls: list[tuple[datetime, datetime, int]] = []
         self.counts_calls: list[datetime] = []
-        self.stability_calls: list[tuple[float, ...]] = []
+        self.distribution_calls: list[tuple[float, ...]] = []
         self.due_window_calls: list[list[tuple[datetime, datetime]]] = []
         self.leech_count_calls: list[tuple[int, int]] = []
         self.transition_calls = 0
@@ -493,9 +505,12 @@ class FakeInsightRepository(IInsightRepository):
         self.counts_calls.append(now)
         return self.counts
 
-    async def stability_counts(self, *, boundaries: Sequence[float]) -> list[int]:
-        self.stability_calls.append(tuple(boundaries))
-        return list(self.stability)
+    async def study_distribution(self, *, boundaries: Sequence[float]) -> StudyDistribution:
+        self.distribution_calls.append(tuple(boundaries))
+        return StudyDistribution(
+            stability=tuple(self.stability),
+            difficulty=dict(self.difficulty),
+        )
 
     async def leech_count(self, *, window_size: int, threshold: int) -> int:
         self.leech_count_calls.append((window_size, threshold))

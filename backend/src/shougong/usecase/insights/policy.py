@@ -21,6 +21,9 @@ THRESHOLD = 3
 STABILITY_BOUNDS: tuple[float, ...] = (4.0, 14.0, 60.0, 365.0)
 STAGES: tuple[SrsStage, ...] = tuple(SrsStage)
 
+# The closed difficulty-band labels: nearest integer 1..10, or `unset` when absent.
+DIFFICULTY_BANDS: tuple[str, ...] = (*(str(band) for band in range(1, 11)), "unset")
+
 # Extra Study accepts at most a 32-day instant range and returns at most 200 items per bucket.
 MAX_RANGE_DAYS = 32
 ITEM_CAP = 200

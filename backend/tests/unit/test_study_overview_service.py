@@ -9,12 +9,14 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import pytest
+from opentelemetry.metrics import NoOpMeter
 
 from shougong.usecase.commons.exceptions import InvalidRangeError
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.insights.model import StudyCounts
 from shougong.usecase.insights.overview_service import StudyOverviewService
 from shougong.usecase.insights.policy import STABILITY_BOUNDS, THRESHOLD, WINDOW_SIZE
+from shougong.usecase.insights.telemetry import InsightsTelemetry
 from tests.fixtures import FakeInsightRepository
 
 # 2026-03-02T02:00Z is 2026-03-01 21:00 in UTC-5, so the learner's today is still March 1.
@@ -23,7 +25,7 @@ _WEST = -300
 
 
 def _service(insights: FakeInsightRepository, *, now: datetime = _NOW) -> StudyOverviewService:
-    return StudyOverviewService(insights, FixedClock(now))
+    return StudyOverviewService(insights, FixedClock(now), InsightsTelemetry(NoOpMeter("test")))
 
 
 async def test_counts_map_onto_the_response_and_review_is_the_due_minus_learning() -> None:
@@ -72,7 +74,7 @@ async def test_srs_distribution_zips_the_histogram_onto_the_five_stages() -> Non
         "expert": 0,
         "master": 0,
     }
-    assert insights.stability_calls == [STABILITY_BOUNDS]
+    assert insights.distribution_calls == [STABILITY_BOUNDS]
 
 
 async def test_forecast_is_seven_local_days_starting_tomorrow() -> None:
