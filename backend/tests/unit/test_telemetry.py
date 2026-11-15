@@ -179,6 +179,72 @@ async def test_the_pool_series_are_emitted_under_the_catalog_names() -> None:
             assert point.attributes["db.system.name"] == "mysql"
             assert point.attributes["db.namespace"] == "shop"
             assert point.attributes["db.client.connection.pool.name"]
+
+        # SQLAlchemy exposes no waiter count, so the series stays present at 0.
+        pending_points = pending.data.data_points
+        assert [point.value for point in pending_points] == [0]
+        assert pending_points[0].attributes["db.system.name"] == "mysql"
+        assert pending_points[0].attributes["db.namespace"] == "shop"
+        assert pending_points[0].attributes["db.client.connection.pool.name"]
     finally:
         await engine.dispose()
+        telemetry.shutdown()
+
+
+# The operation histogram's allowlist, literals — not the implementation's constant.
+_DB_OPERATION_ATTRIBUTE_KEYS = {
+    "db.system.name",
+    "db.namespace",
+    "db.operation.name",
+    "server.address",
+    "server.port",
+    "error.type",
+}
+
+
+async def test_the_pinned_sqlalchemy_instrumentor_creates_no_operation_histogram() -> None:
+    # Pins the instrument-creation surface the allowlist guards: 0.66b2 creates only
+    # the legacy connections-usage counter (dropped in favour of the pool series
+    # above). A dependency bump that adds the operation histogram at instrumentation
+    # time fails here, which is the signal to re-check the allowlist against the new
+    # instrumentor.
+    telemetry = build_telemetry(build_test_settings())
+    engine = create_async_engine("mysql+asyncmy://user:pass@localhost:3306/shop")
+    try:
+        telemetry.instrument_engine(engine)
+        assert "db.client.operation.duration" not in metric_names(telemetry)
+    finally:
+        await engine.dispose()
+        telemetry.shutdown()
+
+
+def test_the_db_operation_histogram_exports_only_its_allowlisted_attributes() -> None:
+    # Drives the view directly: the pinned instrumentor creates no such histogram, so
+    # this pins the filter itself rather than the instrumentor's emission.
+    telemetry = build_telemetry(build_test_settings())
+    try:
+        histogram = telemetry.meter.create_histogram("db.client.operation.duration", unit="s")
+        histogram.record(
+            0.02,
+            {
+                "db.system.name": "mysql",
+                "db.namespace": "shop",
+                "db.operation.name": "SELECT",
+                "server.address": "localhost",
+                "server.port": 3306,
+                "error.type": "",
+                "db.query.text": "SELECT * FROM study_item",
+                "db.statement": "SELECT * FROM study_item",
+                "db.user": "root",
+            },
+        )
+
+        operation = metric(telemetry, "db.client.operation.duration")
+        assert operation.unit == "s"
+        point = operation.data.data_points[0]
+        assert set(point.attributes) == _DB_OPERATION_ATTRIBUTE_KEYS
+        assert point.attributes["db.operation.name"] == "SELECT"
+        assert point.attributes["server.address"] == "localhost"
+        assert point.attributes["server.port"] == 3306
+    finally:
         telemetry.shutdown()

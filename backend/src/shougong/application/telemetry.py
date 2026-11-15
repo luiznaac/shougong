@@ -74,6 +74,24 @@ HTTP_DURATION_BUCKETS: tuple[float, ...] = (
     10,
 )
 DB_OPERATION_BUCKETS: tuple[float, ...] = (0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10)
+# At the pinned SQLAlchemy instrumentation (0.66b2) no operation histogram is created
+# at all — its only DB metric is the legacy connections-usage counter this service
+# replaces with its own pool series. This view is the guard for
+# `db.client.operation.duration` once the instrumentation emits it: the keys are the
+# ones the instrumentation maps onto an operation under the deploy's `http,database`
+# semantic-convention opt-in, plus `error.type`, which the metric semconv records on a
+# failed operation. The statement text (`db.query.text` / `db.statement`) is
+# deliberately absent: it is learner content and must never become an attribute.
+DB_OPERATION_ATTRIBUTE_KEYS: frozenset[str] = frozenset(
+    {
+        "db.system.name",
+        "db.namespace",
+        "db.operation.name",
+        "server.address",
+        "server.port",
+        "error.type",
+    }
+)
 
 RUNTIME_METRICS: dict[str, list[str] | None] = {
     "process.cpu.time": ["user", "system"],
@@ -150,6 +168,7 @@ def _views() -> Sequence[View]:
         ),
         View(
             instrument_name="db.client.operation.duration",
+            attribute_keys=set(DB_OPERATION_ATTRIBUTE_KEYS),
             aggregation=ExplicitBucketHistogramAggregation(boundaries=DB_OPERATION_BUCKETS),
         ),
         View(instrument_name=_LEGACY_DB_CONNECTIONS_USAGE, aggregation=DropAggregation()),
