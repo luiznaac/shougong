@@ -18,6 +18,7 @@ from shougong.application.container import Container
 from shougong.application.settings import Settings
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.srs.model import SrsRating, SrsState
+from tests.fixtures import metrics_by_name
 
 _NOW = datetime(2026, 3, 10, 12, tzinfo=UTC)
 
@@ -42,6 +43,7 @@ async def _seed_item(
     state: SrsState,
     due: datetime,
     stability: float | None,
+    difficulty: float | None = None,
 ) -> tuple[int, int]:
     async with container.engine.begin() as conn:
         entry = await conn.execute(
@@ -53,12 +55,13 @@ async def _seed_item(
             text(
                 "INSERT INTO study_item"
                 " (entry_id, card_state, card_stability, card_difficulty, card_due, card_last_review, created_at)"
-                " VALUES (:e, :state, :stability, NULL, :due, NULL, :created)"
+                " VALUES (:e, :state, :stability, :difficulty, :due, NULL, :created)"
             ),
             {
                 "e": entry_id,
                 "state": int(state),
                 "stability": stability,
+                "difficulty": difficulty,
                 "due": _naive(due),
                 "created": _naive(_NOW),
             },
@@ -246,6 +249,36 @@ async def test_the_stability_boundaries_collapse_into_five_groups(
         "journeyman": 2,  # 30, 60
         "expert": 3,  # 120, 240, 365
         "master": 1,  # 366
+    }
+
+
+async def test_the_difficulty_bands_ride_the_overview_read(container: Container, client: httpx.AsyncClient) -> None:
+    for index, difficulty in enumerate((1.0, 1.4, 3.5, 7.6, 10.0, 10.4, None)):
+        await _seed_item(
+            container,
+            simplified=f"字{index}",
+            state=SrsState.REVIEW,
+            due=_NOW,
+            stability=10.0,
+            difficulty=difficulty,
+        )
+
+    await _overview(client)
+
+    metric = metrics_by_name(container.telemetry)["study.item_difficulty"]
+    points = {point.attributes["srs.difficulty"]: point.value for point in metric.data.data_points}
+    assert points == {
+        "1": 2,  # 1.0, 1.4
+        "2": 0,
+        "3": 0,
+        "4": 1,  # 3.5 rounds to 4
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 1,  # 7.6
+        "9": 0,
+        "10": 2,  # 10.0, 10.4
+        "unset": 1,
     }
 
 
