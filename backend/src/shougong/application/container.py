@@ -194,6 +194,7 @@ class Container:
             self._reading_word_usage_repository,
             self._reading_topic_repository,
             self.clock,
+            self.reading_telemetry,
         )
         self._vocabulary_overview_service = VocabularyOverviewService(
             self._study_item_repository,

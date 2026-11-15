@@ -14,6 +14,7 @@ decides what counts as "known".
 from __future__ import annotations
 
 import random
+import time
 from collections import Counter
 from dataclasses import replace
 
@@ -37,6 +38,7 @@ from shougong.usecase.reading.model import (
     GeneratedReading,
     GenerationAttempt,
     ReadingFormat,
+    ReadingGenerationError,
     ReadingPunctuation,
     ReadingRequest,
     ReadingSpeaker,
@@ -47,6 +49,7 @@ from shougong.usecase.reading.model import (
 )
 from shougong.usecase.reading.proficiency import BudgetAudience, budget_audience, estimate_proficiency
 from shougong.usecase.reading.speakers import resolve_speakers, usage_keys, usage_keys_for
+from shougong.usecase.reading.telemetry import ReadingTelemetry
 from shougong.usecase.reading.topics import resolve_topic
 from shougong.usecase.reading.validation import is_chinese_word, out_of_vocabulary
 from shougong.usecase.reading.vocabulary import VocabularyWord, categories_for, hsk_level_stats
@@ -68,6 +71,7 @@ class ReadingService:
         word_usage_repository: IReadingWordUsageRepository,
         topic_repository: IReadingTopicRepository,
         clock: IClock,
+        telemetry: ReadingTelemetry,
         rng: random.Random | None = None,
     ) -> None:
         self._gateway = gateway
@@ -78,6 +82,7 @@ class ReadingService:
         self._word_usage = word_usage_repository
         self._topics = topic_repository
         self._clock = clock
+        self._telemetry = telemetry
         self._rng = rng or random.Random()
 
     async def generate(self, request: ReadingRequest) -> SavedReadingText:
@@ -105,18 +110,39 @@ class ReadingService:
         drafts: list[ReadingDraft] = []
         segmentations: list[tuple[SegmentedToken, ...]] = []
         prior: list[RejectedDraft] = []
+        # Resolved once per request from the gateway's cache — never awaited, so a
+        # generation is never held up by the proxy's model list.
+        model_label = self._gateway.model_label(request.model)
 
         for _ in range(request.max_attempts):
-            draft = await self._gateway.generate(
-                working_set=working_set,
-                text_format=request.format,
-                max_extra_words=request.max_extra_words,
-                model=request.model,
-                topic=request.topic,
-                budget_audience=audience,
-                avoid_openings=avoid_openings,
-                speakers=speaker_names,
-                prior_attempts=prior,
+            # A duration, not business time: the monotonic clock is immune to wall
+            # clock adjustments, which is what a latency histogram must measure.
+            started = time.monotonic()
+            try:
+                draft = await self._gateway.generate(
+                    working_set=working_set,
+                    text_format=request.format,
+                    max_extra_words=request.max_extra_words,
+                    model=request.model,
+                    topic=request.topic,
+                    budget_audience=audience,
+                    avoid_openings=avoid_openings,
+                    speakers=speaker_names,
+                    prior_attempts=prior,
+                )
+            except ReadingGenerationError as error:
+                self._telemetry.record_attempt_failed(
+                    model=model_label, error_type=error.code.value, duration=time.monotonic() - started
+                )
+                self._telemetry.record_generation_failed(
+                    reading_format=request.format, model=model_label, error_type=error.code.value
+                )
+                raise
+            self._telemetry.record_attempt_succeeded(
+                model=model_label,
+                input_tokens=draft.prompt_tokens,
+                output_tokens=draft.completion_tokens,
+                duration=time.monotonic() - started,
             )
             segmented = self._segmenter.segment(draft.text)
             extras = out_of_vocabulary([t.text for t in segmented], validation_words)
@@ -142,6 +168,15 @@ class ReadingService:
 
         chosen = _choose_attempt(attempts, request.max_extra_words)
         attempts[chosen] = replace(attempts[chosen], chosen=True)
+        chosen_attempt = attempts[chosen]
+        budget_exceeded = len(chosen_attempt.extra_words) > request.max_extra_words
+        if budget_exceeded or chosen_attempt.dialogue_problems:
+            self._telemetry.record_generation_degraded(
+                reading_format=request.format,
+                attempts=len(attempts),
+                extra_words=len(chosen_attempt.extra_words),
+                problems=len(chosen_attempt.dialogue_problems),
+            )
 
         if is_dialogue and drafts[chosen].lines:
             tokens = await self._resolve_dialogue(drafts[chosen].lines, known_index, speaker_chars)
@@ -160,7 +195,16 @@ class ReadingService:
         await self._record_word_usage(segmentations[chosen], known_words)
         if speakers:
             await self._word_usage.record(usage_keys_for(speakers), self._clock.now())
-        return await self._history.save(request, reading, self._clock.now())
+        saved = await self._history.save(request, reading, self._clock.now())
+        self._telemetry.record_generated(
+            reading_format=request.format,
+            model=model_label,
+            corrected=chosen > 0,
+            attempts=len(attempts),
+            extra_words=len(chosen_attempt.extra_words),
+            budget_exceeded=budget_exceeded,
+        )
+        return saved
 
     async def _resolve_topic(self, request: ReadingRequest) -> ReadingRequest:
         if request.topic and request.topic.strip():

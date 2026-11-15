@@ -554,3 +554,61 @@ async def test_generate_honours_the_generation_timeout(httpserver: HTTPServer) -
 
     assert caught.value.code is ReadingFailureCode.TIMEOUT
     assert str(caught.value) == "ai gateway request timed out"
+
+
+# --- model label cache -----------------------------------------------------
+
+
+async def test_the_model_label_is_other_until_the_list_is_warmed(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/models", method="GET").respond_with_json({"data": [{"id": "claude-haiku-4-5"}]})
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+
+        assert gateway.model_label("claude-haiku-4-5") == "_OTHER"
+        await gateway.list_models()
+        assert gateway.model_label("claude-haiku-4-5") == "claude-haiku-4-5"
+        assert gateway.model_label("caller-supplied-nonsense") == "_OTHER"
+
+
+async def test_list_models_serves_the_cache_inside_the_five_minute_floor(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/models", method="GET").respond_with_json({"data": [{"id": "claude-haiku-4-5"}]})
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        first = await gateway.list_models()
+        second = await gateway.list_models()
+
+    assert first == second == ("claude-haiku-4-5",)
+    model_calls = [request for request, _ in httpserver.log if request.path == "/models"]
+    assert len(model_calls) == 1
+
+
+async def test_generation_never_requests_or_blocks_on_the_model_list(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(_TOOL_CALL_RESPONSE)
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        await gateway.generate(
+            working_set=_EMPTY_WS,
+            text_format=ReadingFormat.PARAGRAPH,
+            max_extra_words=2,
+            model="claude-haiku-4-5",
+            topic=None,
+            budget_audience=BudgetAudience.INTERMEDIATE,
+        )
+
+    assert [request.path for request, _ in httpserver.log] == ["/chat/completions"]
+    assert gateway.model_label("claude-haiku-4-5") == "_OTHER"
+
+
+async def test_an_unreachable_proxy_degrades_the_label_to_other() -> None:
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unreachable)) as client:
+        gateway = LiteLlmReadingGateway(client, "http://proxy.test", "sk-test")
+        with pytest.raises(ReadingGenerationError):
+            await gateway.list_models()
+
+        assert gateway.model_label("claude-haiku-4-5") == "_OTHER"

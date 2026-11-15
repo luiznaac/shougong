@@ -50,9 +50,11 @@ from shougong.usecase.reading.gateway import (
     SegmentedToken,
 )
 from shougong.usecase.reading.model import (
+    OTHER_MODEL_LABEL,
     GeneratedReading,
     PartOfSpeech,
     ReadingFormat,
+    ReadingGenerationError,
     ReadingRequest,
     ReadingSummary,
     ReadingTopic,
@@ -533,8 +535,9 @@ class FakeInsightRepository(IInsightRepository):
 
 
 # A canned gateway response: a plain string is the text; a dict is
-# {"text": ..., "lines": [{"speaker", "text"}, ...]} for dialogue.
-FakeReadingResponse = str | dict[str, object]
+# {"text": ..., "lines": [{"speaker", "text"}, ...]} for dialogue; an error is
+# raised on the call that reaches it.
+FakeReadingResponse = str | dict[str, object] | ReadingGenerationError
 
 
 class FakeReadingTextGateway(IReadingTextGateway):
@@ -545,13 +548,17 @@ class FakeReadingTextGateway(IReadingTextGateway):
         self, response: FakeReadingResponse | Sequence[FakeReadingResponse], *, tokens_per_call: int = 100
     ) -> None:
         # One item → returned every call; a sequence → one per call, last repeats.
-        self._responses = [response] if isinstance(response, str | dict) else list(response)
+        single = isinstance(response, (str, dict, ReadingGenerationError))
+        self._responses = [response] if single else list(response)
         self._tokens_per_call = tokens_per_call
         self.calls: list[dict[str, object]] = []
         self.models: tuple[str, ...] = ("fake-model",)
 
     async def list_models(self) -> tuple[str, ...]:
         return self.models
+
+    def model_label(self, requested: str) -> str:
+        return requested if requested in self.models else OTHER_MODEL_LABEL
 
     async def generate(
         self,
@@ -580,6 +587,8 @@ class FakeReadingTextGateway(IReadingTextGateway):
             }
         )
         response = self._responses[min(len(self.calls) - 1, len(self._responses) - 1)]
+        if isinstance(response, ReadingGenerationError):
+            raise response
         if isinstance(response, str):
             text, lines = response, ()
         else:

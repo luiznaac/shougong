@@ -52,6 +52,11 @@ class ReadingFormat(StrEnum):
     DIALOGUE = "dialogue"
 
 
+# The bounded `gen_ai.request.model` label for a model the proxy's cached list
+# does not contain — a caller-supplied id never becomes a metric dimension.
+OTHER_MODEL_LABEL = "_OTHER"
+
+
 class PartOfSpeech(StrEnum):
     """Grammatical class of a word, in this app's own vocabulary — never a raw
     tag from whatever segmentation library resolves it (see `ISegmenter`).
