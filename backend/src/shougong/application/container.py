@@ -76,6 +76,7 @@ from shougong.usecase.reading.topic_service import ReadingTopicService
 from shougong.usecase.reading.vocabulary_service import VocabularyOverviewService
 from shougong.usecase.srs.day_boundary import DayBoundaryEngine
 from shougong.usecase.strokes.service import StrokeService
+from shougong.usecase.strokes.telemetry import StrokesTelemetry
 from shougong.usecase.study.service import StudyService
 from shougong.usecase.study.telemetry import StudyTelemetry
 from shougong.usecase.study_item_history.service import StudyItemHistoryService
@@ -123,9 +124,14 @@ class Container:
         self._hsk_dataset_source = HskDatasetSource(self.http_client, settings.hsk_dataset_url)
 
         # --- strokes slice -------------------------------------------------
+        self.strokes_telemetry = StrokesTelemetry(self.telemetry.meter)
         self._stroke_repository = StrokeRepository(self.transaction_template)
         self._stroke_source = HanziWriterSource(self.http_client)
-        self._stroke_service = StrokeService(self._stroke_repository, self._stroke_source)
+        self._stroke_service = StrokeService(
+            self._stroke_repository,
+            self._stroke_source,
+            self.strokes_telemetry,
+        )
 
         # --- study slice ----------------------------------------------
         self._srs_engine = DayBoundaryEngine(FsrsEngine(), ZoneInfo(settings.study_timezone))

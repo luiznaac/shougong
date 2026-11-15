@@ -39,6 +39,7 @@ from tests.fixtures import (
     FakeStudyItemRepository,
     FakeTransactionTemplate,
     StubSrsEngine,
+    build_strokes_telemetry,
     build_test_settings,
     log_records,
     make_dictionary_entry,
@@ -267,7 +268,7 @@ def _service(
         StubSrsEngine(),
         FixedClock(_NOW),
         FakeTransactionTemplate(),
-        StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource()),
+        StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource(), build_strokes_telemetry()),
         DeterministicShuffler(),
         telemetry,
     )
