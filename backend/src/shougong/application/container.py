@@ -64,11 +64,14 @@ from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.request_context import job_context
 from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
+from shougong.usecase.dictionary.telemetry import AutoloadStage, DictionaryTelemetry
 from shougong.usecase.health.checker import IHealthChecker
 from shougong.usecase.health.telemetry import HealthTelemetry
 from shougong.usecase.insights.overview_service import StudyOverviewService
 from shougong.usecase.insights.service import InsightService
+from shougong.usecase.insights.telemetry import InsightsTelemetry
 from shougong.usecase.reading.service import ReadingService
+from shougong.usecase.reading.telemetry import ReadingTelemetry
 from shougong.usecase.reading.topic_service import ReadingTopicService
 from shougong.usecase.reading.vocabulary_service import VocabularyOverviewService
 from shougong.usecase.srs.day_boundary import DayBoundaryEngine
@@ -114,7 +117,8 @@ class Container:
 
         # --- dictionary slice -------------------------------------------
         self._dictionary_repository = DictionaryRepository(self.transaction_template)
-        self._dictionary_service = DictionaryService(self._dictionary_repository)
+        self.dictionary_telemetry = DictionaryTelemetry(self.telemetry.meter)
+        self._dictionary_service = DictionaryService(self._dictionary_repository, self.dictionary_telemetry)
         self._cedict_source = CedictSource(self.http_client)
         self._hsk_dataset_source = HskDatasetSource(self.http_client, settings.hsk_dataset_url)
 
@@ -149,14 +153,20 @@ class Container:
 
         # --- insights slice ---------------------------------------------
         self._insight_repository = InsightRepository(self.transaction_template)
+        self._insights_telemetry = InsightsTelemetry(self.telemetry.meter)
         self._insight_service = InsightService(
             self._insight_repository,
             self._study_item_repository,
             self.transaction_template,
         )
-        self._overview_service = StudyOverviewService(self._insight_repository, self.clock)
+        self._overview_service = StudyOverviewService(
+            self._insight_repository,
+            self.clock,
+            self._insights_telemetry,
+        )
 
         # --- reading slice -----------------------------------------------
+        self.reading_telemetry = ReadingTelemetry(self.telemetry.meter)
         self._segmenter = JiebaSegmenter()
         self._reading_gateway = LiteLlmReadingGateway(
             self.http_client,
@@ -182,6 +192,7 @@ class Container:
         self._vocabulary_overview_service = VocabularyOverviewService(
             self._study_item_repository,
             self._dictionary_repository,
+            self._insights_telemetry,
         )
         self._reading_topic_service = ReadingTopicService(self._reading_topic_repository, self.clock)
 
@@ -232,15 +243,18 @@ class Container:
         a `job.id`, so its single failure record is correlatable.
         """
         with job_context():
+            stage: AutoloadStage = "populate"
             try:
                 if self.settings.dictionary_autoload:
+                    stage = "populate"
                     await self._dictionary_service.populate_if_empty(self._cedict_source)
                 if self.settings.hsk_enrich_autoload:
+                    stage = "enrich"
                     await self._dictionary_service.enrich_hsk(self._hsk_dataset_source)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                _log.exception("dictionary.autoload.failed")
+            except Exception as error:
+                self.dictionary_telemetry.record_autoload_failed(stage, error)
 
     async def _warm_up_jieba(self) -> None:
         """Fire-and-forget: force jieba's lazy dictionary load now, off the
@@ -251,8 +265,8 @@ class Container:
                 await anyio.to_thread.run_sync(warm_up_jieba)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                _log.exception("reading.jieba_warmup.failed")
+            except Exception as error:
+                self.reading_telemetry.record_jieba_warmup_failure(error)
 
     async def aclose(self) -> None:
         await self.http_client.aclose()

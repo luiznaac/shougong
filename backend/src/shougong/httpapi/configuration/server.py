@@ -30,6 +30,7 @@ from shougong.usecase.commons.request_context import (
     reset_request_id,
     resolve_request_id,
 )
+from shougong.usecase.reading.model import ReadingGenerationError
 
 _log = get_logger(__name__)
 
@@ -126,10 +127,12 @@ def _log_5xx(scope: Scope, error: Exception) -> None:
 def _log_5xx_response(scope: Scope, status_code: int) -> None:
     state = scope.get("state") or {}
     error_type = state.get("error_type") or f"http_{status_code}"
-    _log.error(
-        "http.request.failed",
-        **{**_request_attributes(scope, status_code), "error.type": error_type},
-    )
+    attributes = {**_request_attributes(scope, status_code), "error.type": error_type}
+    error = state.get("error_exception")
+    if error is not None:
+        _log.error("http.request.failed", exc_info=error, **attributes)
+        return
+    _log.error("http.request.failed", **attributes)
 
 
 def install_request_context_middleware(app: FastAPI) -> None:
@@ -165,11 +168,17 @@ def _install_exception_handlers(app: FastAPI) -> None:
     async def _conflict(request: Request, exc: ConflictError) -> JSONResponse:
         return _problem(request, 409, "conflict", str(exc))
 
+    @app.exception_handler(ReadingGenerationError)
+    async def _reading_generation(request: Request, exc: ReadingGenerationError) -> JSONResponse:
+        return _problem(request, 502, exc.code.value, str(exc), error=exc)
+
     @app.exception_handler(DomainError)
     async def _domain(request: Request, exc: DomainError) -> JSONResponse:
         return _problem(request, 422, "domain_error", str(exc))
 
 
-def _problem(request: Request, status: int, code: str, detail: str) -> JSONResponse:
+def _problem(request: Request, status: int, code: str, detail: str, *, error: Exception | None = None) -> JSONResponse:
     request.state.error_type = code
+    if error is not None:
+        request.state.error_exception = error
     return JSONResponse(status_code=status, content={"code": code, "detail": detail})

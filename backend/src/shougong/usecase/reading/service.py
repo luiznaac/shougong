@@ -18,7 +18,6 @@ from collections import Counter
 from dataclasses import replace
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
-from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
@@ -56,8 +55,6 @@ from shougong.usecase.study.gateway import IStudyItemRepository
 
 _RECENT_TOPICS = 12
 _RECENT_OPENINGS = 8
-
-_log = get_logger(__name__)
 
 
 class ReadingService:
@@ -101,8 +98,6 @@ class ReadingService:
         is_dialogue = request.format is ReadingFormat.DIALOGUE
         speakers = await self._resolve_speakers(known_words) if is_dialogue else ()
         speaker_names = tuple(s.name for s in speakers)
-        if is_dialogue:
-            _log.info("reading.dialogue.speakers", names=list(speaker_names))
         speaker_chars = frozenset("".join(speaker_names))
         validation_words = known_words | speaker_chars
 

@@ -23,6 +23,7 @@ from shougong.usecase.insights.model import (
     StudyOverview,
 )
 from shougong.usecase.insights.policy import STABILITY_BOUNDS, THRESHOLD, WINDOW_SIZE
+from shougong.usecase.insights.telemetry import InsightsTelemetry
 
 # The client sends `-new Date().getTimezoneOffset()`; UTC-14..UTC+14 is the real span.
 MAX_OFFSET_MINUTES = 840
@@ -69,9 +70,15 @@ def _learned_curve(transitions: Sequence[datetime], now: datetime, tz: timezone)
 
 
 class StudyOverviewService:
-    def __init__(self, insight_repository: IInsightRepository, clock: IClock) -> None:
+    def __init__(
+        self,
+        insight_repository: IInsightRepository,
+        clock: IClock,
+        telemetry: InsightsTelemetry,
+    ) -> None:
         self._insights = insight_repository
         self._clock = clock
+        self._telemetry = telemetry
 
     async def overview(self, *, tz_offset_minutes: int = 0) -> StudyOverview:
         """The dashboard aggregate for the learner's local calendar.
@@ -86,21 +93,34 @@ class StudyOverviewService:
         today = now.astimezone(tz).date()
 
         counts = await self._insights.study_counts(now=now)
-        histogram = await self._insights.stability_counts(boundaries=STABILITY_BOUNDS)
+        distribution = await self._insights.study_distribution(boundaries=STABILITY_BOUNDS)
         forecast = await self._insights.due_counts_in_windows(_forecast_windows(today, tz))
         transitions = await self._insights.learning_to_review_instants()
         leech_count = await self._insights.leech_count(window_size=WINDOW_SIZE, threshold=THRESHOLD)
 
+        srs_distribution = dict(zip(SrsStage, distribution.stability, strict=True))
+        due_learning = counts.due_learning
+        due_review = counts.due - counts.due_learning
+        forecast_by_horizon = dict(enumerate(forecast, start=1))
+
+        self._telemetry.record_overview(
+            stages={stage.value: count for stage, count in srs_distribution.items()},
+            difficulty=distribution.difficulty,
+            due_items={"learning": due_learning, "review": due_review},
+            forecast=forecast_by_horizon,
+            leeches=leech_count,
+        )
+
         return StudyOverview(
             new_count=counts.learning,
             due_count=counts.due,
-            due_review_count=counts.due - counts.due_learning,
-            due_learning_count=counts.due_learning,
+            due_review_count=due_review,
+            due_learning_count=due_learning,
             item_count=counts.total,
             leech_count=leech_count,
-            srs_distribution=dict(zip(SrsStage, histogram, strict=True)),
+            srs_distribution=srs_distribution,
             next_seven_days=tuple(
-                DailyDue(date=today + timedelta(days=offset), due=due) for offset, due in enumerate(forecast, start=1)
+                DailyDue(date=today + timedelta(days=offset), due=due) for offset, due in forecast_by_horizon.items()
             ),
             learned=_learned_curve(transitions, now, tz),
         )

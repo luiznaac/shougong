@@ -17,14 +17,11 @@ from typing import Any
 
 import httpx
 
-from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.dictionary.gateway import IHskDatasetSource
 from shougong.usecase.dictionary.model import HskDatasetWord
 
 _DATASET_URL = "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/main/complete.min.json"
 _DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
-
-_log = get_logger(__name__)
 
 
 def _hsk_level(levels: list[str]) -> int | None:
@@ -59,9 +56,7 @@ class HskDatasetSource(IHskDatasetSource):
     async def fetch(self) -> dict[str, HskDatasetWord]:
         if self._cache is not None:
             return self._cache
-        _log.info("hsk.download.started", url=self._url)
         response = await self._client.get(self._url, timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True)
         response.raise_for_status()
         self._cache = parse_dataset(response.json())
-        _log.info("hsk.download.finished", words=len(self._cache))
         return self._cache
