@@ -82,6 +82,18 @@ class StudyCounts:
 
 
 @dataclass(frozen=True, slots=True)
+class StudyDistribution:
+    """The stability histogram and the FSRS difficulty bands, read in one aggregate.
+
+    `stability` has `len(boundaries) + 1` buckets, ascending. `difficulty` is keyed
+    by band label (`"1"`..`"10"`, plus `"unset"`), every band present.
+    """
+
+    stability: tuple[int, ...]
+    difficulty: Mapping[str, int]
+
+
+@dataclass(frozen=True, slots=True)
 class DailyDue:
     """One forecast row: a local calendar date and how many non-learning cards fall on it."""
 

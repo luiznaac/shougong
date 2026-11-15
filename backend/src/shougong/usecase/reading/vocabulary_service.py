@@ -13,6 +13,7 @@ from collections.abc import Iterable, Sequence
 from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
+from shougong.usecase.insights.telemetry import InsightsTelemetry
 from shougong.usecase.reading.proficiency import estimate_proficiency
 from shougong.usecase.reading.vocabulary import (
     QUALIFIER_FLOOR,
@@ -32,9 +33,11 @@ class VocabularyOverviewService:
         self,
         study_repository: IStudyItemRepository,
         dictionary_repository: IDictionaryRepository,
+        telemetry: InsightsTelemetry,
     ) -> None:
         self._study = study_repository
         self._dictionary = dictionary_repository
+        self._telemetry = telemetry
 
     async def list(self) -> list[VocabularyWord]:
         return [_word_for(entry) for entry in _distinct(await self._study.list_known_entries())]
@@ -50,6 +53,7 @@ class VocabularyOverviewService:
         known_by_level = Counter(w.hsk_level for w in words if w.hsk_level is not None)
 
         _log.info("vocabulary.overview", known=len(words))
+        self._telemetry.record_known_words(len(words))
         return VocabularySummary(
             total=len(words),
             categorised=sum(1 for w in words if w.hsk_level is not None),

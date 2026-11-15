@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime
+from types import MappingProxyType
 
 from sqlalchemy import and_, case, func, select
 
@@ -20,7 +21,15 @@ from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity
 from shougong.persistence.study.repository import to_domain
 from shougong.persistence.study_item_history.entity import StudyItemHistoryEntity
 from shougong.usecase.insights.gateway import IInsightRepository
-from shougong.usecase.insights.model import DueWindow, GradeWindow, InsightBucket, ReviewGrade, StudyCounts
+from shougong.usecase.insights.model import (
+    DueWindow,
+    GradeWindow,
+    InsightBucket,
+    ReviewGrade,
+    StudyCounts,
+    StudyDistribution,
+)
+from shougong.usecase.insights.policy import DIFFICULTY_BANDS
 from shougong.usecase.srs.model import SrsRating, SrsState
 
 
@@ -159,19 +168,36 @@ class InsightRepository(IInsightRepository):
 
         return await self._tx.execute(_run)
 
-    async def stability_counts(self, *, boundaries: Sequence[float]) -> list[int]:
-        async def _run() -> list[int]:
+    async def study_distribution(self, *, boundaries: Sequence[float]) -> StudyDistribution:
+        async def _run() -> StudyDistribution:
             session = current_session()
             stability = func.coalesce(StudyItemEntity.card_stability, 0.0)
-            bucket = case(
+            stage = case(
                 *[(stability <= bound, index) for index, bound in enumerate(boundaries)],
                 else_=len(boundaries),
             )
-            stmt = select(bucket.label("bucket"), func.count()).select_from(StudyItemEntity).group_by(bucket)
-            counts = [0] * (len(boundaries) + 1)
-            for index, total in (await session.execute(stmt)).all():
-                counts[int(index)] = int(total)
-            return counts
+            # The difficulty band rides the same statement: round to the nearest
+            # integer, clamp to 1..10, and 0 marks an absent difficulty.
+            difficulty = StudyItemEntity.card_difficulty
+            band = case(
+                (difficulty.is_(None), 0),
+                else_=func.least(10, func.greatest(1, func.floor(difficulty + 0.5))),
+            )
+            stmt = (
+                select(stage.label("stage"), band.label("band"), func.count())
+                .select_from(StudyItemEntity)
+                .group_by(stage, band)
+            )
+            stability_counts = [0] * (len(boundaries) + 1)
+            difficulty_counts = dict.fromkeys(DIFFICULTY_BANDS, 0)
+            for stage_index, band_value, total in (await session.execute(stmt)).all():
+                stability_counts[int(stage_index)] += int(total)
+                label = "unset" if int(band_value) == 0 else str(int(band_value))
+                difficulty_counts[label] += int(total)
+            return StudyDistribution(
+                stability=tuple(stability_counts),
+                difficulty=MappingProxyType(difficulty_counts),
+            )
 
         return await self._tx.execute(_run)
 

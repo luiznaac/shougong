@@ -13,6 +13,7 @@ from opentelemetry.sdk._logs import ReadableLogRecord
 from shougong.application.telemetry import Telemetry, build_telemetry
 from shougong.usecase.commons.logging import configure_logging, get_logger
 from shougong.usecase.commons.request_context import request_context
+from shougong.usecase.reading.model import ReadingFailureCode, ReadingGenerationError
 from tests.fixtures import build_test_settings, log_records
 
 
@@ -218,7 +219,7 @@ def test_the_console_renderer_never_sees_a_content_key(telemetry: Telemetry, cap
 
 
 def test_a_reserved_stdlib_key_is_namespaced_not_rejected(telemetry: Telemetry) -> None:
-    get_logger("test").info("study.batch.imported", created=3)
+    get_logger("test").info("widgets.imported", created=3)
 
     record = _only(telemetry).log_record
     assert record.attributes["event.created"] == 3
@@ -250,6 +251,40 @@ def test_exception_semconv_is_emitted(telemetry: Telemetry) -> None:
     assert record.attributes["exception.type"] == "RuntimeError"
     assert record.attributes["exception.message"] == "boom"
     assert "RuntimeError" in record.attributes["exception.stacktrace"]
+
+
+def test_a_gateway_failure_keeps_the_type_and_stacktrace_but_drops_the_message(telemetry: Telemetry) -> None:
+    try:
+        raise ReadingGenerationError(
+            "ai gateway returned HTTP 500", ReadingFailureCode.GATEWAY_HTTP_ERROR
+        ) from RuntimeError("upstream echo: 秘密的提示词")
+    except ReadingGenerationError as error:
+        get_logger("test").error("http.request.failed", exc_info=error)
+
+    attributes = _only(telemetry).log_record.attributes
+    assert attributes["exception.type"] == "ReadingGenerationError"
+    assert "ReadingGenerationError" in attributes["exception.stacktrace"]
+    assert "ai gateway returned HTTP 500" in attributes["exception.stacktrace"]
+    assert "exception.message" not in attributes
+    assert "秘密" not in attributes["exception.stacktrace"]
+    assert "upstream echo" not in attributes["exception.stacktrace"]
+
+
+def test_the_console_renderer_drops_a_gateway_exception_message(
+    telemetry: Telemetry, capfd: pytest.CaptureFixture[str]
+) -> None:
+    try:
+        raise ReadingGenerationError(
+            "ai gateway returned HTTP 500", ReadingFailureCode.GATEWAY_HTTP_ERROR
+        ) from RuntimeError("upstream echo: 秘密的提示词")
+    except ReadingGenerationError as error:
+        get_logger("test").error("http.request.failed", exc_info=error)
+
+    output = capfd.readouterr().out
+    payload = json.loads(output.strip().splitlines()[-1])
+    assert payload["exception.type"] == "ReadingGenerationError"
+    assert "exception.message" not in payload
+    assert "秘密" not in output
 
 
 def test_uvicorn_loggers_are_re_parented_and_access_logs_are_off(telemetry: Telemetry) -> None:

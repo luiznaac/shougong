@@ -15,8 +15,35 @@ from enum import StrEnum
 from shougong.usecase.commons.exceptions import DomainError
 
 
+class ReadingFailureCode(StrEnum):
+    """The bounded failure class a reading-generation error carries.
+
+    The HTTP boundary maps it to a 502 and puts it on the record as
+    `error.type`; an unclassified failure falls to `_OTHER`."""
+
+    TIMEOUT = "timeout"
+    GATEWAY_UNREACHABLE = "gateway_unreachable"
+    GATEWAY_RATE_LIMITED = "gateway_rate_limited"
+    GATEWAY_HTTP_ERROR = "gateway_http_error"
+    NO_TOOL_CALL = "no_tool_call"
+    MALFORMED_TOOL_CALL = "malformed_tool_call"
+    EMPTY_TEXT = "empty_text"
+    OTHER = "_OTHER"
+
+
 class ReadingGenerationError(DomainError):
-    """The AI gateway failed to produce usable text."""
+    """The AI gateway failed to produce usable text.
+
+    `message` is a bounded, static description — never upstream body text or an
+    echo — and `code` is the bounded failure class. The log pipeline keeps
+    `exception.type`/`.stacktrace` for this class and drops `.message`, since an
+    upstream echo could otherwise carry prompt or response text."""
+
+    suppress_log_message = True
+
+    def __init__(self, message: str, code: ReadingFailureCode = ReadingFailureCode.OTHER) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class ReadingFormat(StrEnum):
