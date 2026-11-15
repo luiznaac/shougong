@@ -13,14 +13,11 @@ from urllib.parse import quote
 
 import httpx
 
-from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.strokes.gateway import IHanziStrokeSource
 from shougong.usecase.strokes.model import CharacterStrokes
 
 _JSDELIVR_URL_TEMPLATE = "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2/{character}.json"
 _FETCH_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
-
-_log = get_logger(__name__)
 
 
 class HanziWriterSource(IHanziStrokeSource):
@@ -30,7 +27,6 @@ class HanziWriterSource(IHanziStrokeSource):
 
     async def fetch(self, character: str) -> CharacterStrokes | None:
         url = self._url_template.format(character=quote(character, safe=""))
-        _log.info("strokes.fetch.started", character=character)
         response = await self._client.get(url, timeout=_FETCH_TIMEOUT, follow_redirects=True)
         if response.status_code == 404:
             return None

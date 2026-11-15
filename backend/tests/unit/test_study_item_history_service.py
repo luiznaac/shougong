@@ -16,6 +16,7 @@ from tests.fixtures import (
     FakeStudyItemRepository,
     FakeTransactionTemplate,
     StubSrsEngine,
+    build_strokes_telemetry,
     make_dictionary_entry,
     make_srs_card,
 )
@@ -27,7 +28,7 @@ def _services(*, entries: tuple[int, ...] = (1,)) -> tuple[StudyService, StudyIt
     tx = FakeTransactionTemplate()
     study_repo = FakeStudyItemRepository()
     dictionary = FakeDictionaryRepository([make_dictionary_entry(entry_id=n) for n in entries])
-    strokes = StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource())
+    strokes = StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource(), build_strokes_telemetry())
     study = StudyService(
         study_repo, dictionary, StubSrsEngine(), FixedClock(_NOW), tx, strokes, DeterministicShuffler()
     )

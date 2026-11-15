@@ -28,6 +28,7 @@ from tests.fixtures import (
     FakeStudyItemRepository,
     FakeTransactionTemplate,
     StubSrsEngine,
+    build_strokes_telemetry,
     make_character_strokes,
     make_dictionary_entry,
     make_srs_card,
@@ -50,7 +51,7 @@ def _service(
         StubSrsEngine(),
         FixedClock(_NOW),
         FakeTransactionTemplate(),
-        strokes or StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource()),
+        strokes or StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource(), build_strokes_telemetry()),
         shuffler or DeterministicShuffler(),
     )
 
@@ -87,7 +88,7 @@ async def test_add_item_warms_the_stroke_cache_for_each_character() -> None:
     entry = make_dictionary_entry(entry_id=1, simplified="学")
     service = _service(
         dictionary=FakeDictionaryRepository([entry]),
-        strokes=StrokeService(stroke_repository, stroke_source),
+        strokes=StrokeService(stroke_repository, stroke_source, build_strokes_telemetry()),
     )
 
     await service.add_item(1)
@@ -523,7 +524,7 @@ async def test_import_batch_warms_the_stroke_cache_for_created_rows_only() -> No
     stroke_source = FakeHanziStrokeSource({c: make_character_strokes(character=c) for c in "学习你好"})
     service = _service(
         dictionary=FakeDictionaryRepository([_XUE_XI, _NI_HAO]),
-        strokes=StrokeService(stroke_repository, stroke_source),
+        strokes=StrokeService(stroke_repository, stroke_source, build_strokes_telemetry()),
     )
 
     report = await service.import_batch(

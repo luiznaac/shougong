@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from itertools import count, pairwise
 from typing import Any, TypeVar
 
+from opentelemetry import metrics as otel_metrics
 from opentelemetry.sdk._logs import ReadableLogRecord
 from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
@@ -58,6 +59,7 @@ from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog, SrsState
 from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeRepository
 from shougong.usecase.strokes.model import CharacterStrokes, StrokeLookupResult
+from shougong.usecase.strokes.telemetry import StrokesTelemetry
 from shougong.usecase.study.gateway import IStudyItemRepository
 from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem, StudyItemFilters, StudyItemSort
 from shougong.usecase.study.shuffler import IShuffler
@@ -245,6 +247,11 @@ class FakeHanziStrokeSource(IHanziStrokeSource):
     async def fetch(self, character: str) -> CharacterStrokes | None:
         self.fetch_calls += 1
         return self.data.get(character)
+
+
+def build_strokes_telemetry() -> StrokesTelemetry:
+    """The strokes collaborator over the API's no-op meter — behaviour tests never read signals."""
+    return StrokesTelemetry(otel_metrics.NoOpMeter("tests.strokes"))
 
 
 class StubSrsEngine(ISrsEngine):
