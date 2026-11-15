@@ -350,6 +350,7 @@ For dialogue readings, words carry a `speaker`; `speakers` at the reading level 
 - **`entry_id` filter** (optional int): only readings containing a word token that resolves to that dictionary entry under the same hydration rule used on read (the studied reading wins, else the dictionary's first candidate by id); extra words included. An unknown id is `200` with an empty page, not `404`.
 - With `entry_id`, each row also carries `match: { "before", "hit", "after" }` — the first occurrence's token slice, punctuation included, up to 12 tokens each side and clamped to the article edges. Without it, `match` is `null`.
 - `GET /reading-texts/{reading_id}` returns the full `SavedReadingTextResponse` (hydration included) and `404`s for an unknown id.
+- `POST /reading-texts` and `GET /reading-texts/models` return `502` with a bounded gateway code when the AI proxy fails — see the error model below.
 
 ## Error model
 
@@ -364,8 +365,9 @@ The app maps domain exceptions to a consistent problem shape:
 | `400` | `invalid_argument` | Invalid input caught by the service |
 | `404` | `resource_not_found` | Unknown entry/item/character/topic |
 | `409` | `conflict` | Duplicate queue entry, not-yet-due review, duplicate scenario |
-| `422` | `domain_error` | Other domain failures (e.g. AI gateway failure) |
+| `422` | `domain_error` | Other domain failures |
 | `422` | FastAPI validation | Pydantic/query validation failures, unknown rating |
+| `502` | `timeout` / `gateway_unreachable` / `gateway_rate_limited` / `gateway_http_error` / `no_tool_call` / `malformed_tool_call` / `empty_text` / `_OTHER` | Reading generation or model-list failure — the bounded AI-gateway code is also the boundary record's `error.type` |
 
 ## Conventions
 

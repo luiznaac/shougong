@@ -70,7 +70,9 @@ async def test_a_failed_jieba_warmup_emits_one_error_with_a_job_id(
 
     await container._warm_up_jieba()
 
-    records = await _failed_records(telemetry, "reading.jieba_warmup.failed")
+    records = await _failed_records(telemetry, "reading.jieba_warmup_failed")
     assert len(records) == 1
     assert records[0].severity_text == "ERROR"
     assert records[0].attributes["job.id"]
+    assert records[0].attributes["exception.type"] == "RuntimeError"
+    assert records[0].attributes["exception.message"] == "jieba dictionary missing"

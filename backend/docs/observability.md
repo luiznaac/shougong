@@ -152,7 +152,7 @@ Do **not** parse `traceparent` yet; `X-Request-ID` stays compatible with future 
 **Error telemetry — one record per failure, at the boundary that owns the response.** Usecases and gateways never log-and-throw; they throw (or enrich the exception) and the boundary logs once.
 
 - **Every 4xx → one WARN** `http.request.failed`, `error.type` = the stable domain code the transport already exposes (`resource_not_found`, `invalid_argument`, `domain_error`), plus `http.request.method`, `http.route` (preferred) or `url.path`, `http.response.status_code`, `request.id`. **No `exception.*`, no stacktrace** for expected domain errors.
-- **Every 5xx → one ERROR**, `error.type` = the exception class name (not the message), plus `exception.type` / `.message` / `.stacktrace` and the request attributes. A 5xx produced by an expected domain error stays stacktrace-free but is still ERROR.
+- **Every 5xx → one ERROR**, `error.type` = the exception class name (not the message), plus `exception.type` / `.message` / `.stacktrace` and the request attributes. A 5xx produced by an expected domain error stays stacktrace-free but is still ERROR. **Reading-generation failures are the one exception**: their `error.type` is the bounded gateway code (`timeout`, `gateway_unreachable`, `gateway_rate_limited`, `gateway_http_error`, `no_tool_call`, `malformed_tool_call`, `empty_text`, `_OTHER`), and they carry `exception.type` / `.stacktrace` with `.message` dropped (§4). The upstream HTTP status stays on the outbound histogram — never an attribute on this record.
 - **Background-task failure → one ERROR** at the task boundary with `job.id` (plus an inherited `request.id`).
 - **Success (2xx/3xx) produces no per-request record.**
 
@@ -162,6 +162,7 @@ Enforced at **one pipeline chokepoint**, before export and before the stdout ren
 
 - **Never emitted, in either signal:** passwords/passphrases, bearer/refresh/access tokens, API keys, private keys, session ids, `Authorization` / `Cookie` / `Set-Cookie`, credential-bearing connection strings. Key-based, case-insensitive deny-list: the scalar value becomes `[REDACTED]` (the key stays, so presence is visible); a secret-bearing container is dropped.
 - **Bodies never emitted:** request/response bodies are excluded by default in both signals; no full SQL with values (parameterized SQL plus statement name only).
+- **AI-gateway exception messages are suppressed:** an error that declares `suppress_log_message` (the reading-generation error) keeps `exception.type` and an outer-only `exception.stacktrace`, and drops `exception.message` — an upstream echo can otherwise carry prompt or response text. Its call-site message stays bounded, never upstream body text.
 - **PII is allowed** — no PII deny-list; direct identifiers may appear when operationally useful. This is a deliberate, accepted risk for these personal projects. Secrets and bodies remain excluded.
 - **Defense in depth, in this order:** the call-site rule (never pass a secret into a logging call) is primary; pipeline redaction catches accidents. Redaction is best-effort on attribute values, not free-text — an exception message must not embed a secret. Full URLs are not logged by default (`url.path` only); a query string only when known non-secret.
 

@@ -254,14 +254,18 @@ async def test_get_reading_404s_for_an_unknown_id(container: Container, client: 
     assert response.json()["code"] == "resource_not_found"
 
 
+def _gateway_container(settings: Settings, httpserver: HTTPServer) -> Container:
+    ai_settings = settings.model_copy(
+        update={"gateways": GatewaysConfig(ai=AiGatewayConfig(base_url=httpserver.url_for("/"), api_key="sk-test"))}
+    )
+    return Container(ai_settings)
+
+
 async def test_list_models_proxies_the_ai_gateway(settings: Settings, httpserver: HTTPServer) -> None:
     httpserver.expect_request("/models", method="GET").respond_with_json(
         {"data": [{"id": "claude-sonnet-4-5"}, {"id": "claude-haiku-4-5"}]}
     )
-    ai_settings = settings.model_copy(
-        update={"gateways": GatewaysConfig(ai=AiGatewayConfig(base_url=httpserver.url_for("/"), api_key="sk-test"))}
-    )
-    instance = Container(ai_settings)
+    instance = _gateway_container(settings, httpserver)
     try:
         transport = httpx.ASGITransport(app=instance.app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ai_client:
@@ -271,6 +275,37 @@ async def test_list_models_proxies_the_ai_gateway(settings: Settings, httpserver
 
     assert response.status_code == 200
     assert response.json() == ["claude-haiku-4-5", "claude-sonnet-4-5"]
+
+
+async def test_a_generation_failure_is_a_502_with_a_bounded_code(settings: Settings, httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_data(
+        "upstream echo: 秘密的提示词", status=500
+    )
+    instance = _gateway_container(settings, httpserver)
+    try:
+        transport = httpx.ASGITransport(app=instance.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ai_client:
+            response = await ai_client.post("/reading-texts", json={"model": "m"})
+    finally:
+        await instance.aclose()
+
+    assert response.status_code == 502
+    assert response.json() == {"code": "gateway_http_error", "detail": "ai gateway returned HTTP 500"}
+    assert "秘密" not in response.text
+
+
+async def test_a_model_list_failure_is_a_502_with_a_bounded_code(settings: Settings, httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/models", method="GET").respond_with_data(status=503)
+    instance = _gateway_container(settings, httpserver)
+    try:
+        transport = httpx.ASGITransport(app=instance.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ai_client:
+            response = await ai_client.get("/reading-texts/models")
+    finally:
+        await instance.aclose()
+
+    assert response.status_code == 502
+    assert response.json() == {"code": "gateway_http_error", "detail": "ai gateway returned HTTP 503"}
 
 
 async def test_get_reading_tolerates_a_part_of_speech_from_before_the_enum_changed(
