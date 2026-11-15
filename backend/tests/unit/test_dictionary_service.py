@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from opentelemetry.metrics import NoOpMeter
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
 from shougong.usecase.dictionary.service import DictionaryService
+from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 from tests.fixtures import (
     FakeCedictSource,
     FakeDictionaryRepository,
@@ -18,8 +20,12 @@ _RECORDS = [
 ]
 
 
+def _service(repository: FakeDictionaryRepository) -> DictionaryService:
+    return DictionaryService(repository, DictionaryTelemetry(NoOpMeter("test")))
+
+
 async def test_get_returns_the_entry() -> None:
-    service = DictionaryService(FakeDictionaryRepository([make_dictionary_entry(entry_id=7)]))
+    service = _service(FakeDictionaryRepository([make_dictionary_entry(entry_id=7)]))
 
     entry = await service.get(7)
 
@@ -27,7 +33,7 @@ async def test_get_returns_the_entry() -> None:
 
 
 async def test_get_unknown_id_raises_not_found() -> None:
-    service = DictionaryService(FakeDictionaryRepository())
+    service = _service(FakeDictionaryRepository())
 
     with pytest.raises(ResourceNotFoundError):
         await service.get(123)
@@ -35,7 +41,7 @@ async def test_get_unknown_id_raises_not_found() -> None:
 
 async def test_search_trims_query_and_respects_limit() -> None:
     entries = [make_dictionary_entry(entry_id=i, simplified="学习") for i in range(1, 6)]
-    service = DictionaryService(FakeDictionaryRepository(entries))
+    service = _service(FakeDictionaryRepository(entries))
 
     results = await service.search("  学  ", limit=3)
 
@@ -44,7 +50,7 @@ async def test_search_trims_query_and_respects_limit() -> None:
 
 async def test_search_pages_matches_with_an_exact_total() -> None:
     entries = [make_dictionary_entry(entry_id=i, simplified="学习") for i in range(1, 6)]
-    service = DictionaryService(FakeDictionaryRepository(entries))
+    service = _service(FakeDictionaryRepository(entries))
 
     first = await service.search("学", limit=2, offset=0)
     second = await service.search("学", limit=2, offset=2)
@@ -59,7 +65,7 @@ async def test_search_pages_matches_with_an_exact_total() -> None:
 async def test_populate_if_empty_loads_when_table_is_empty() -> None:
     repo = FakeDictionaryRepository()
     source = FakeCedictSource(_RECORDS)
-    service = DictionaryService(repo)
+    service = _service(repo)
 
     added = await service.populate_if_empty(source)
 
@@ -70,7 +76,7 @@ async def test_populate_if_empty_loads_when_table_is_empty() -> None:
 async def test_populate_if_empty_is_a_noop_when_already_populated() -> None:
     repo = FakeDictionaryRepository([make_dictionary_entry()])
     source = FakeCedictSource(_RECORDS)
-    service = DictionaryService(repo)
+    service = _service(repo)
 
     added = await service.populate_if_empty(source)
 
@@ -85,7 +91,7 @@ async def test_enrich_hsk_stamps_every_row_that_shares_a_simplified() -> None:
     repo = FakeDictionaryRepository([walk, firm, other])
     source = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ("v", "n"))})
 
-    applied = await DictionaryService(repo).enrich_hsk(source)
+    applied = await _service(repo).enrich_hsk(source)
 
     assert applied == 1
     assert [(e.simplified, e.hsk_level, e.pos_tags) for e in repo.entries] == [
@@ -99,7 +105,7 @@ async def test_enrich_hsk_is_a_noop_once_any_row_has_a_level() -> None:
     repo = FakeDictionaryRepository([make_dictionary_entry(simplified="书", hsk_level=1, pos_tags=("n",))])
     source = FakeHskDatasetSource({"书": HskDatasetWord("书", 3, ("n",))})
 
-    applied = await DictionaryService(repo).enrich_hsk(source)
+    applied = await _service(repo).enrich_hsk(source)
 
     assert applied == 0
     assert source.fetch_calls == 0
@@ -118,7 +124,7 @@ def _knowing_family() -> list[DictionaryEntry]:
 
 
 async def test_related_matches_shared_characters_excluding_target_and_its_readings() -> None:
-    service = DictionaryService(FakeDictionaryRepository(_knowing_family()))
+    service = _service(FakeDictionaryRepository(_knowing_family()))
 
     rows, total = await service.related(1)
 
@@ -134,7 +140,7 @@ async def test_related_orders_by_shared_characters_then_hsk_then_length() -> Non
         make_dictionary_entry(entry_id=3, simplified="知道路"),
         make_dictionary_entry(entry_id=4, simplified="知道者", hsk_level=2),
     ]
-    service = DictionaryService(FakeDictionaryRepository(entries))
+    service = _service(FakeDictionaryRepository(entries))
 
     rows, _ = await service.related(1)
 
@@ -143,7 +149,7 @@ async def test_related_orders_by_shared_characters_then_hsk_then_length() -> Non
 
 
 async def test_related_unknown_target_raises_not_found() -> None:
-    service = DictionaryService(FakeDictionaryRepository(_knowing_family()))
+    service = _service(FakeDictionaryRepository(_knowing_family()))
 
     with pytest.raises(ResourceNotFoundError):
         await service.related(123)
@@ -154,7 +160,7 @@ async def test_related_returns_an_empty_page_when_nothing_shares_a_character() -
         make_dictionary_entry(entry_id=1, simplified="水"),
         make_dictionary_entry(entry_id=2, simplified="山"),
     ]
-    service = DictionaryService(FakeDictionaryRepository(entries))
+    service = _service(FakeDictionaryRepository(entries))
 
     rows, total = await service.related(1)
 
@@ -164,7 +170,7 @@ async def test_related_returns_an_empty_page_when_nothing_shares_a_character() -
 
 async def test_related_carries_the_queued_study_item_id() -> None:
     repo = FakeDictionaryRepository(_knowing_family(), study_items={3: 99})
-    service = DictionaryService(repo)
+    service = _service(repo)
 
     rows, _ = await service.related(1)
 
@@ -172,7 +178,7 @@ async def test_related_carries_the_queued_study_item_id() -> None:
 
 
 async def test_related_pages_without_changing_total() -> None:
-    service = DictionaryService(FakeDictionaryRepository(_knowing_family()))
+    service = _service(FakeDictionaryRepository(_knowing_family()))
 
     rows, total = await service.related(1, limit=1, offset=1)
 

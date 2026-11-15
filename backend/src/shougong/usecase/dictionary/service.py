@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
-from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
 from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntryPage
-
-_log = get_logger(__name__)
+from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 
 
 class DictionaryService:
-    def __init__(self, repository: IDictionaryRepository) -> None:
+    def __init__(self, repository: IDictionaryRepository, telemetry: DictionaryTelemetry) -> None:
         self._repository = repository
+        self._telemetry = telemetry
 
     async def search(self, query: str, limit: int = 20, offset: int = 0) -> Page[DictionaryEntry]:
         page = await self._repository.search(query.strip(), limit=limit, offset=offset)
-        _log.info("dictionary.searched", query=query, count=len(page.items), total=page.total)
+        self._telemetry.record_search(hit=page.total > 0)
         return page
 
     async def get(self, entry_id: int) -> DictionaryEntry:
@@ -41,9 +40,7 @@ class DictionaryService:
             ResourceNotFoundError: no entry has this id.
         """
         target = await self.get(entry_id)
-        rows, total = await self._repository.find_related(target, limit=limit, offset=offset)
-        _log.info("dictionary.related_listed", entry_id=entry_id, count=len(rows), total=total)
-        return rows, total
+        return await self._repository.find_related(target, limit=limit, offset=offset)
 
     async def populate_if_empty(self, source: ICedictSource) -> int:
         """Download CC-CEDICT and fill the table, but only if it is empty.
@@ -53,13 +50,13 @@ class DictionaryService:
         """
         existing = await self._repository.count()
         if existing > 0:
-            _log.info("dictionary.populate.skipped", existing=existing)
+            self._telemetry.record_populate_skipped(existing=existing)
             return 0
 
-        _log.info("dictionary.populate.started")
         records = await source.fetch()
+        self._telemetry.record_source_downloaded("cedict", len(records))
         added = await self._repository.bulk_add(records)
-        _log.info("dictionary.populate.finished", count=added)
+        self._telemetry.record_populated(records=added)
         return added
 
     async def enrich_hsk(self, source: IHskDatasetSource) -> int:
@@ -70,11 +67,11 @@ class DictionaryService:
         """
         existing = await self._repository.count_with_hsk()
         if existing > 0:
-            _log.info("dictionary.hsk_enrich.skipped", existing=existing)
+            self._telemetry.record_hsk_enrich_skipped(existing=existing)
             return 0
 
-        _log.info("dictionary.hsk_enrich.started")
         dataset = await source.fetch()
+        self._telemetry.record_source_downloaded("hsk", len(dataset))
         applied = await self._repository.apply_hsk(dataset)
-        _log.info("dictionary.hsk_enrich.finished", words=applied)
+        self._telemetry.record_hsk_enriched(records=applied)
         return applied
