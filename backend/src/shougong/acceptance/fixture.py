@@ -153,6 +153,7 @@ class SeedOutcome:
     """What `apply_acceptance_fixture` wrote; a skipped run writes nothing."""
 
     seeded: bool
+    existing_entries: int
     dictionary_entries: int
     study_items: int
     readings: int
@@ -604,8 +605,14 @@ async def apply_acceptance_fixture(settings: Settings, *, now: datetime | None =
         async with session_factory() as session, session.begin():
             existing = await session.scalar(select(func.count()).select_from(DictionaryEntryEntity))
             if existing:
-                _log.info("acceptance.seed.skipped", existing=int(existing))
-                return SeedOutcome(seeded=False, dictionary_entries=0, study_items=0, readings=0, strokes=0)
+                return SeedOutcome(
+                    seeded=False,
+                    existing_entries=int(existing),
+                    dictionary_entries=0,
+                    study_items=0,
+                    readings=0,
+                    strokes=0,
+                )
 
             entry_rows = tuple(item.entry for item in fixture.study_items) + fixture.dictionary_only
             entries = {id(row): _entry_entity(row) for row in entry_rows}
@@ -626,36 +633,37 @@ async def apply_acceptance_fixture(settings: Settings, *, now: datetime | None =
             session.add_all(_reading_entity(row) for row in fixture.readings)
             session.add_all(_stroke_entity(row) for row in fixture.strokes)
 
-            outcome = SeedOutcome(
+            return SeedOutcome(
                 seeded=True,
+                existing_entries=0,
                 dictionary_entries=len(entries),
                 study_items=len(items),
                 readings=len(fixture.readings),
                 strokes=len(fixture.strokes),
             )
-            _log.info(
-                "acceptance.seed.finished",
-                dictionary_entries=outcome.dictionary_entries,
-                study_items=outcome.study_items,
-                readings=outcome.readings,
-                strokes=outcome.strokes,
-            )
-            return outcome
     finally:
         await engine.dispose()
 
 
+def _log_outcome(outcome: SeedOutcome) -> None:
+    """Emit the CLI's single outcome record: seeded counts or the skip reason."""
+    if not outcome.seeded:
+        _log.info("acceptance.seed_skipped", **{"acceptance.existing": outcome.existing_entries})
+        return
+    _log.info(
+        "acceptance.seed_finished",
+        **{
+            "acceptance.dictionary_entries": outcome.dictionary_entries,
+            "acceptance.study_items": outcome.study_items,
+            "acceptance.reading_texts": outcome.readings,
+            "acceptance.strokes": outcome.strokes,
+        },
+    )
+
+
 def main() -> None:
     """Apply the fixture with the process environment's settings."""
-    outcome = asyncio.run(apply_acceptance_fixture(Settings()))
-    _log.info(
-        "acceptance.seed",
-        seeded=outcome.seeded,
-        dictionary_entries=outcome.dictionary_entries,
-        study_items=outcome.study_items,
-        readings=outcome.readings,
-        strokes=outcome.strokes,
-    )
+    _log_outcome(asyncio.run(apply_acceptance_fixture(Settings())))
 
 
 if __name__ == "__main__":

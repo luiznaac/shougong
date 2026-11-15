@@ -9,16 +9,28 @@ stroke cache.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from itertools import pairwise
+from typing import Any
 
 import pytest
 
-from shougong.acceptance.fixture import DETAIL_WORD, AcceptanceFixture, StudyItemRow, build_fixture
+from shougong.acceptance.fixture import (
+    DETAIL_WORD,
+    AcceptanceFixture,
+    SeedOutcome,
+    StudyItemRow,
+    _log_outcome,
+    build_fixture,
+)
+from shougong.application.telemetry import Telemetry, build_telemetry
+from shougong.usecase.commons.logging import configure_logging
 from shougong.usecase.insights.model import GradeWindow, ReviewGrade
 from shougong.usecase.insights.policy import WINDOW_SIZE, is_leech
 from shougong.usecase.reading.model import ReadingFormat, ReadingWord
 from shougong.usecase.srs.model import SrsState
+from tests.fixtures import build_test_settings, log_records
 
 _NOW = datetime(2026, 6, 1, 12, tzinfo=UTC)
 _ITEM_PAGE_SIZE = 24
@@ -196,3 +208,47 @@ def test_strokes_cover_every_character_of_the_detail_word(fixture: AcceptanceFix
 
     assert set(detail) <= cached
     assert all(row.strokes for row in fixture.strokes)
+
+
+@pytest.fixture
+def telemetry() -> Iterator[Telemetry]:
+    instance = build_telemetry(build_test_settings())
+    configure_logging("INFO", json=True)
+    instance.install_log_bridge()
+    try:
+        yield instance
+    finally:
+        instance.shutdown()
+
+
+def _emitted(telemetry: Telemetry) -> list[Any]:
+    return [item.log_record for item in log_records(telemetry)]
+
+
+def test_the_cli_logs_one_seed_finished_record(telemetry: Telemetry) -> None:
+    _log_outcome(
+        SeedOutcome(seeded=True, existing_entries=0, dictionary_entries=12, study_items=7, readings=3, strokes=4)
+    )
+
+    records = _emitted(telemetry)
+    assert len(records) == 1
+    assert records[0].body == "acceptance.seed_finished"
+    assert records[0].severity_text == "INFO"
+    assert records[0].attributes == {
+        "acceptance.dictionary_entries": 12,
+        "acceptance.study_items": 7,
+        "acceptance.reading_texts": 3,
+        "acceptance.strokes": 4,
+    }
+
+
+def test_the_cli_logs_one_seed_skipped_record(telemetry: Telemetry) -> None:
+    _log_outcome(
+        SeedOutcome(seeded=False, existing_entries=9, dictionary_entries=0, study_items=0, readings=0, strokes=0)
+    )
+
+    records = _emitted(telemetry)
+    assert len(records) == 1
+    assert records[0].body == "acceptance.seed_skipped"
+    assert records[0].severity_text == "INFO"
+    assert records[0].attributes == {"acceptance.existing": 9}

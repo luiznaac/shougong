@@ -74,6 +74,26 @@ _SECRET_KEY = re.compile(
     re.IGNORECASE,
 )
 _BODY_KEY = re.compile(r"(^|[._])(body|payload)$", re.IGNORECASE)
+# Learner content is banned from both signals at every level. The match is on
+# the whole attribute key, so a namespaced key (`reading.format`) survives while
+# its bare root (`reading`) does not.
+_CONTENT_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "query",
+        "text",
+        "content",
+        "pinyin",
+        "hanzi",
+        "character",
+        "reading",
+        "topic",
+        "topics",
+        "names",
+        "speakers",
+        "prompt",
+        "completion",
+    }
+)
 
 _REDACTED = "[REDACTED]"
 
@@ -86,6 +106,8 @@ _DROP = _Drop()
 
 
 def _redact(key: str, value: Any) -> Any:
+    if key.lower() in _CONTENT_KEYS:
+        return _DROP
     if _BODY_KEY.search(key):
         return _DROP
     if _SECRET_KEY.search(key):
@@ -115,7 +137,7 @@ def _redact_event_dict(_: WrappedLogger, __: str, event_dict: EventDict) -> Even
 
 
 class SensitiveDataFilter(logging.Filter):
-    """Defense-in-depth on every handler: stamp `event.name`, redact secrets."""
+    """Defense-in-depth on every handler: stamp `event.name`, drop content and secrets."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         if not getattr(record, "event.name", None):
