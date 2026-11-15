@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import timedelta
 
 import pytest
+from opentelemetry.metrics import NoOpMeter
 
 from shougong.usecase.commons.exceptions import ConflictError, InvalidRangeError, ResourceNotFoundError
 from shougong.usecase.commons.time import FixedClock
@@ -20,6 +21,7 @@ from shougong.usecase.study.model import (
     StudyItemSort,
 )
 from shougong.usecase.study.service import StudyService
+from shougong.usecase.study.telemetry import StudyTelemetry
 from tests.fixtures import (
     DeterministicShuffler,
     FakeDictionaryRepository,
@@ -52,6 +54,7 @@ def _service(
         FakeTransactionTemplate(),
         strokes or StrokeService(FakeStrokeRepository(), FakeHanziStrokeSource()),
         shuffler or DeterministicShuffler(),
+        StudyTelemetry(NoOpMeter("test")),
     )
 
 
