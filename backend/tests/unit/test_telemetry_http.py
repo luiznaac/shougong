@@ -19,6 +19,7 @@ from pytest_httpserver import HTTPServer
 from shougong.application.container import Container
 from shougong.application.telemetry import Telemetry, build_telemetry
 from shougong.usecase.commons.logging import configure_logging
+from shougong.usecase.reading.model import ReadingFailureCode, ReadingGenerationError
 from tests.fixtures import (
     StubHealthChecker,
     build_test_settings,
@@ -54,6 +55,10 @@ async def container(telemetry: Telemetry) -> AsyncIterator[Container]:
     @instance.app.get("/unavailable")
     async def unavailable() -> JSONResponse:
         return JSONResponse(status_code=503, content={"code": "unavailable"})
+
+    @instance.app.get("/generation-failure")
+    async def generation_failure() -> None:
+        raise ReadingGenerationError("ai gateway returned HTTP 500", ReadingFailureCode.GATEWAY_HTTP_ERROR)
 
     @instance.app.get("/framework")
     async def framework() -> dict[str, bool]:
@@ -167,6 +172,27 @@ async def test_a_handled_5xx_response_still_produces_one_error(client: httpx.Asy
     assert record.attributes["http.response.status_code"] == 503
     assert record.attributes["error.type"] == "http_503"
     assert "exception.type" not in record.attributes
+
+
+async def test_a_generation_failure_is_a_502_with_one_bounded_error_record(
+    client: httpx.AsyncClient, telemetry: Telemetry
+) -> None:
+    start = len(log_records(telemetry))
+
+    response = await client.get("/generation-failure", headers={"X-Request-ID": "abcdefgh"})
+
+    assert response.status_code == 502
+    assert response.json() == {"code": "gateway_http_error", "detail": "ai gateway returned HTTP 500"}
+    failures = _failure_records(new_log_records(telemetry, start))
+    assert len(failures) == 1
+    record = failures[0].log_record
+    assert record.severity_text == "ERROR"
+    assert record.attributes["http.response.status_code"] == 502
+    assert record.attributes["error.type"] == "gateway_http_error"
+    assert record.attributes["request.id"] == "abcdefgh"
+    assert record.attributes["exception.type"] == "ReadingGenerationError"
+    assert "exception.stacktrace" in record.attributes
+    assert "exception.message" not in record.attributes
 
 
 async def test_a_success_echoes_the_request_id_and_emits_no_boundary_record(

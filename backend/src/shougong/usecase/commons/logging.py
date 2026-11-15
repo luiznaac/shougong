@@ -136,12 +136,28 @@ def _redact_event_dict(_: WrappedLogger, __: str, event_dict: EventDict) -> Even
     return event_dict
 
 
+def _suppress_exception_message(record: logging.LogRecord) -> None:
+    """Keep `exception.type`/`.stacktrace`, drop `.message`, for a domain error
+    that declares its message unsafe to log — an upstream echo can otherwise
+    carry prompt or response text. The chain is omitted too, since the cause
+    carries the same upstream text."""
+    exc_info = getattr(record, "exc_info", None)
+    if exc_info is None or exc_info[1] is None:
+        return
+    if not getattr(exc_info[1], "suppress_log_message", False):
+        return
+    record.exc_info = None
+    record.__dict__["exception.type"] = exc_info[0].__name__ if exc_info[0] is not None else None
+    record.__dict__["exception.stacktrace"] = "".join(traceback.format_exception(*exc_info, chain=False))
+
+
 class SensitiveDataFilter(logging.Filter):
     """Defense-in-depth on every handler: stamp `event.name`, drop content and secrets."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         if not getattr(record, "event.name", None):
             record.__dict__["event.name"] = record.getMessage()
+        _suppress_exception_message(record)
         request_id = current_request_id()
         if request_id is not None and "request.id" not in record.__dict__:
             record.__dict__["request.id"] = request_id
