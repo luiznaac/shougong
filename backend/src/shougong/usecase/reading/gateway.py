@@ -59,6 +59,12 @@ class IReadingTextGateway(Protocol):
         """Model ids the backing proxy currently exposes, sorted."""
         ...
 
+    def model_label(self, requested: str) -> str:
+        """The bounded `gen_ai.request.model` label: `requested` when the
+        gateway's cached proxy model list contains it, else `_OTHER`. Reads the
+        cache only — it never performs I/O, so generation never waits on the list."""
+        ...
+
     async def generate(
         self,
         *,

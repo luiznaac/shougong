@@ -16,6 +16,7 @@ context (docs aren't needed in the image), and this isn't documentation.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,12 @@ from typing import Any
 import httpx
 
 from shougong.usecase.reading.gateway import DialogueLine, IReadingTextGateway, ReadingDraft, RejectedDraft
-from shougong.usecase.reading.model import ReadingFailureCode, ReadingFormat, ReadingGenerationError
+from shougong.usecase.reading.model import (
+    OTHER_MODEL_LABEL,
+    ReadingFailureCode,
+    ReadingFormat,
+    ReadingGenerationError,
+)
 from shougong.usecase.reading.proficiency import BudgetAudience
 from shougong.usecase.reading.working_set import WorkingSet
 
@@ -69,6 +75,11 @@ _REASONING_EFFORT = "low"
 # attempt. It covers one attempt; the correction loop makes several.
 _GENERATION_TIMEOUT_SECONDS = 300.0
 _CONNECT_TIMEOUT_SECONDS = 5.0
+
+# The proxy's model list is the allowlist the `gen_ai.request.model` metric label
+# is validated against. It is refreshed at most this often, so the label resolver
+# never turns a generation into a model-list round trip.
+_MODEL_LIST_TTL_SECONDS = 300.0
 
 _TOOL_SCHEMA = {
     "type": "function",
@@ -206,12 +217,36 @@ class LiteLlmReadingGateway(IReadingTextGateway):
         self._reasoning_effort = reasoning_effort
         self._max_output_tokens = max_output_tokens
         self._generation_timeout = generation_timeout
+        self._model_ids: frozenset[str] | None = None
+        self._models_cached_at: float | None = None
 
     @property
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
     async def list_models(self) -> tuple[str, ...]:
+        """The proxy's model ids, served from the cache inside the refresh floor.
+
+        A failed refresh raises a bounded error and leaves the previous list (if
+        any) in place; only a never-warmed list makes the label resolver fall
+        back to `_OTHER`."""
+        if (
+            self._model_ids is not None
+            and self._models_cached_at is not None
+            and time.monotonic() - self._models_cached_at < _MODEL_LIST_TTL_SECONDS
+        ):
+            return tuple(sorted(self._model_ids))
+        models = await self._fetch_models()
+        self._model_ids = frozenset(models)
+        self._models_cached_at = time.monotonic()
+        return models
+
+    def model_label(self, requested: str) -> str:
+        if self._model_ids is not None and requested in self._model_ids:
+            return requested
+        return OTHER_MODEL_LABEL
+
+    async def _fetch_models(self) -> tuple[str, ...]:
         try:
             response = await self._client.get(f"{self._base_url}/models", headers=self._headers)
             response.raise_for_status()

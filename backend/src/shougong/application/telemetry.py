@@ -74,6 +74,28 @@ HTTP_DURATION_BUCKETS: tuple[float, ...] = (
     10,
 )
 DB_OPERATION_BUCKETS: tuple[float, ...] = (0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10)
+# The GenAI inference-duration histogram's semconv doubling ceiling, extended
+# with three more steps because a reasoning model routinely spends minutes on a
+# single reading-generation attempt.
+GENAI_DURATION_BUCKETS: tuple[float, ...] = (
+    0.01,
+    0.02,
+    0.04,
+    0.08,
+    0.16,
+    0.32,
+    0.64,
+    1.28,
+    2.56,
+    5.12,
+    10.24,
+    20.48,
+    40.96,
+    81.92,
+    163.84,
+    327.68,
+    655.36,
+)
 # At the pinned SQLAlchemy instrumentation (0.66b2) no operation histogram is created
 # at all — its only DB metric is the legacy connections-usage counter this service
 # replaces with its own pool series. This view is the guard for
@@ -101,6 +123,35 @@ RUNTIME_METRICS: dict[str, list[str] | None] = {
     "cpython.gc.collections": None,
     "cpython.gc.collected_objects": None,
     "cpython.gc.uncollectable_objects": None,
+}
+
+# The reading/AI family's closed attribute sets, enforced by the SDK views. The
+# model label is already bounded by the gateway (`_OTHER` fallback), so no
+# caller-supplied string can mint a series here.
+_GENAI_ATTRIBUTE_KEYS: frozenset[str] = frozenset(
+    {
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "gen_ai.token.modality",
+    }
+)
+_GENAI_DURATION_ATTRIBUTE_KEYS: frozenset[str] = frozenset(
+    {
+        "gen_ai.operation.name",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "error.type",
+    }
+)
+READING_ATTRIBUTE_KEYS: dict[str, frozenset[str]] = {
+    "reading.generated": frozenset({"reading.format", "gen_ai.request.model", "reading.corrected"}),
+    "reading.generation_failed": frozenset({"reading.format", "gen_ai.request.model", "error.type"}),
+    "reading.correction_attempts": frozenset({"reading.format"}),
+    "reading.extra_words": frozenset({"reading.format"}),
+    "reading.budget_exceeded": frozenset({"reading.format"}),
+    "gen_ai.client.inference.usage.input_tokens": _GENAI_ATTRIBUTE_KEYS,
+    "gen_ai.client.inference.usage.output_tokens": _GENAI_ATTRIBUTE_KEYS,
 }
 
 _LEGACY_DB_CONNECTIONS_USAGE = "db.client.connections.usage"
@@ -171,8 +222,14 @@ def _views() -> Sequence[View]:
             attribute_keys=set(DB_OPERATION_ATTRIBUTE_KEYS),
             aggregation=ExplicitBucketHistogramAggregation(boundaries=DB_OPERATION_BUCKETS),
         ),
+        View(
+            instrument_name="gen_ai.client.inference.duration",
+            attribute_keys=set(_GENAI_DURATION_ATTRIBUTE_KEYS),
+            aggregation=ExplicitBucketHistogramAggregation(boundaries=GENAI_DURATION_BUCKETS),
+        ),
         View(instrument_name=_LEGACY_DB_CONNECTIONS_USAGE, aggregation=DropAggregation()),
     ]
+    views.extend(View(instrument_name=name, attribute_keys=set(keys)) for name, keys in READING_ATTRIBUTE_KEYS.items())
     views.extend(View(instrument_name=name, aggregation=DropAggregation()) for name in _LEGACY_HTTP_METRICS)
     return views
 

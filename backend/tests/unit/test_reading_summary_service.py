@@ -3,6 +3,8 @@ from __future__ import annotations
 import random
 from datetime import UTC, datetime
 
+from opentelemetry.metrics import NoOpMeter
+
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.reading.model import (
     GeneratedReading,
@@ -13,6 +15,7 @@ from shougong.usecase.reading.model import (
     SavedReadingText,
 )
 from shougong.usecase.reading.service import ReadingService
+from shougong.usecase.reading.telemetry import ReadingTelemetry
 from tests.fixtures import (
     FakeDictionaryRepository,
     FakeReadingHistoryRepository,
@@ -43,6 +46,7 @@ def _service(
         FakeReadingWordUsageRepository(),
         FakeReadingTopicRepository(),
         FixedClock(_NOW),
+        ReadingTelemetry(NoOpMeter("test")),
         rng=random.Random(0),
     )
 
