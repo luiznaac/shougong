@@ -13,7 +13,7 @@ from werkzeug.wrappers import Request, Response
 
 from shougong.gateway.reading.litellm_reading_gateway import LiteLlmReadingGateway
 from shougong.usecase.reading.gateway import RejectedDraft
-from shougong.usecase.reading.model import ReadingFormat, ReadingGenerationError
+from shougong.usecase.reading.model import ReadingFailureCode, ReadingFormat, ReadingGenerationError
 from shougong.usecase.reading.proficiency import BudgetAudience
 from shougong.usecase.reading.working_set import WorkingSet
 
@@ -59,13 +59,26 @@ async def test_list_models_returns_the_proxy_model_ids_sorted(httpserver: HTTPSe
     assert request.headers["Authorization"] == "Bearer sk-test"
 
 
-async def test_list_models_wraps_an_http_error_in_a_domain_error(httpserver: HTTPServer) -> None:
+async def test_list_models_wraps_an_http_error_in_a_bounded_domain_error(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/models", method="GET").respond_with_data(status=500)
 
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
-        with pytest.raises(ReadingGenerationError):
+        with pytest.raises(ReadingGenerationError) as caught:
             await gateway.list_models()
+
+    assert caught.value.code is ReadingFailureCode.GATEWAY_HTTP_ERROR
+
+
+async def test_list_models_classifies_a_malformed_body_as_other(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/models", method="GET").respond_with_json({"models": []})
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        with pytest.raises(ReadingGenerationError) as caught:
+            await gateway.list_models()
+
+    assert caught.value.code is ReadingFailureCode.OTHER
 
 
 async def test_generate_extracts_text_from_the_tool_call(httpserver: HTTPServer) -> None:
@@ -366,7 +379,7 @@ async def test_generate_explains_a_response_truncated_before_the_tool_call(https
 
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
-        with pytest.raises(ReadingGenerationError, match="finish_reason='length'"):
+        with pytest.raises(ReadingGenerationError) as caught:
             await gateway.generate(
                 working_set=_EMPTY_WS,
                 text_format=ReadingFormat.SENTENCES,
@@ -375,6 +388,9 @@ async def test_generate_explains_a_response_truncated_before_the_tool_call(https
                 topic=None,
                 budget_audience=BudgetAudience.INTERMEDIATE,
             )
+
+    assert caught.value.code is ReadingFailureCode.NO_TOOL_CALL
+    assert str(caught.value) == "ai gateway returned no tool call"
 
 
 async def test_generate_explains_a_truncated_tool_call(httpserver: HTTPServer) -> None:
@@ -392,7 +408,7 @@ async def test_generate_explains_a_truncated_tool_call(httpserver: HTTPServer) -
 
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
-        with pytest.raises(ReadingGenerationError, match="malformed tool call"):
+        with pytest.raises(ReadingGenerationError) as caught:
             await gateway.generate(
                 working_set=_EMPTY_WS,
                 text_format=ReadingFormat.SENTENCES,
@@ -402,13 +418,16 @@ async def test_generate_explains_a_truncated_tool_call(httpserver: HTTPServer) -
                 budget_audience=BudgetAudience.INTERMEDIATE,
             )
 
+    assert caught.value.code is ReadingFailureCode.MALFORMED_TOOL_CALL
+    assert str(caught.value) == "ai gateway returned a malformed tool call"
 
-async def test_generate_wraps_a_malformed_response_in_a_domain_error(httpserver: HTTPServer) -> None:
-    httpserver.expect_request("/chat/completions", method="POST").respond_with_json({"choices": []})
+
+async def test_generate_wraps_a_malformed_response_in_an_other_coded_error(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json([])
 
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
-        with pytest.raises(ReadingGenerationError):
+        with pytest.raises(ReadingGenerationError) as caught:
             await gateway.generate(
                 working_set=_EMPTY_WS,
                 text_format=ReadingFormat.PARAGRAPH,
@@ -418,13 +437,15 @@ async def test_generate_wraps_a_malformed_response_in_a_domain_error(httpserver:
                 budget_audience=BudgetAudience.INTERMEDIATE,
             )
 
+    assert caught.value.code is ReadingFailureCode.OTHER
 
-async def test_generate_wraps_an_http_error_in_a_domain_error(httpserver: HTTPServer) -> None:
+
+async def test_generate_wraps_an_http_error_in_a_bounded_domain_error(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/chat/completions", method="POST").respond_with_data(status=500)
 
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
-        with pytest.raises(ReadingGenerationError):
+        with pytest.raises(ReadingGenerationError) as caught:
             await gateway.generate(
                 working_set=_EMPTY_WS,
                 text_format=ReadingFormat.PARAGRAPH,
@@ -433,6 +454,87 @@ async def test_generate_wraps_an_http_error_in_a_domain_error(httpserver: HTTPSe
                 topic=None,
                 budget_audience=BudgetAudience.INTERMEDIATE,
             )
+
+    assert caught.value.code is ReadingFailureCode.GATEWAY_HTTP_ERROR
+    assert str(caught.value) == "ai gateway returned HTTP 500"
+
+
+async def test_generate_classifies_a_rate_limited_response(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_data(status=429)
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        with pytest.raises(ReadingGenerationError) as caught:
+            await gateway.generate(
+                working_set=_EMPTY_WS,
+                text_format=ReadingFormat.PARAGRAPH,
+                max_extra_words=2,
+                model="claude-haiku-4-5-20251001",
+                topic=None,
+                budget_audience=BudgetAudience.INTERMEDIATE,
+            )
+
+    assert caught.value.code is ReadingFailureCode.GATEWAY_RATE_LIMITED
+
+
+async def test_an_upstream_body_never_reaches_the_exception_message(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_data(
+        "upstream echo: 秘密的提示词", status=500
+    )
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        with pytest.raises(ReadingGenerationError) as caught:
+            await gateway.generate(
+                working_set=_EMPTY_WS,
+                text_format=ReadingFormat.PARAGRAPH,
+                max_extra_words=2,
+                model="claude-haiku-4-5-20251001",
+                topic=None,
+                budget_audience=BudgetAudience.INTERMEDIATE,
+            )
+
+    assert "秘密" not in str(caught.value)
+    assert "upstream echo" not in str(caught.value)
+
+
+async def test_generate_classifies_an_empty_reading_text(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/chat/completions", method="POST").respond_with_json(
+        {"choices": [{"message": {"tool_calls": [{"function": {"arguments": '{"text": "  "}'}}]}}], "usage": {}}
+    )
+
+    async with httpx.AsyncClient() as client:
+        gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test")
+        with pytest.raises(ReadingGenerationError) as caught:
+            await gateway.generate(
+                working_set=_EMPTY_WS,
+                text_format=ReadingFormat.PARAGRAPH,
+                max_extra_words=2,
+                model="claude-haiku-4-5-20251001",
+                topic=None,
+                budget_audience=BudgetAudience.INTERMEDIATE,
+            )
+
+    assert caught.value.code is ReadingFailureCode.EMPTY_TEXT
+
+
+async def test_generate_classifies_a_transport_error_as_unreachable() -> None:
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unreachable)) as client:
+        gateway = LiteLlmReadingGateway(client, "http://proxy.test", "sk-test")
+        with pytest.raises(ReadingGenerationError) as caught:
+            await gateway.generate(
+                working_set=_EMPTY_WS,
+                text_format=ReadingFormat.PARAGRAPH,
+                max_extra_words=2,
+                model="claude-haiku-4-5-20251001",
+                topic=None,
+                budget_audience=BudgetAudience.INTERMEDIATE,
+            )
+
+    assert caught.value.code is ReadingFailureCode.GATEWAY_UNREACHABLE
 
 
 async def test_generate_honours_the_generation_timeout(httpserver: HTTPServer) -> None:
@@ -440,7 +542,7 @@ async def test_generate_honours_the_generation_timeout(httpserver: HTTPServer) -
 
     async with httpx.AsyncClient() as client:
         gateway = LiteLlmReadingGateway(client, httpserver.url_for("/"), "sk-test", generation_timeout=0.05)
-        with pytest.raises(ReadingGenerationError, match="ReadTimeout"):
+        with pytest.raises(ReadingGenerationError) as caught:
             await gateway.generate(
                 working_set=_EMPTY_WS,
                 text_format=ReadingFormat.PARAGRAPH,
@@ -449,3 +551,6 @@ async def test_generate_honours_the_generation_timeout(httpserver: HTTPServer) -
                 topic=None,
                 budget_audience=BudgetAudience.INTERMEDIATE,
             )
+
+    assert caught.value.code is ReadingFailureCode.TIMEOUT
+    assert str(caught.value) == "ai gateway request timed out"

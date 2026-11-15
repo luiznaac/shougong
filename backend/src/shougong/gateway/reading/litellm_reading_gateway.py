@@ -23,7 +23,7 @@ from typing import Any
 import httpx
 
 from shougong.usecase.reading.gateway import DialogueLine, IReadingTextGateway, ReadingDraft, RejectedDraft
-from shougong.usecase.reading.model import ReadingFormat, ReadingGenerationError
+from shougong.usecase.reading.model import ReadingFailureCode, ReadingFormat, ReadingGenerationError
 from shougong.usecase.reading.proficiency import BudgetAudience
 from shougong.usecase.reading.working_set import WorkingSet
 
@@ -164,10 +164,29 @@ def _build_messages(
     return messages
 
 
-def _describe_error(exc: Exception) -> str:
-    """`httpcore` raises several exceptions (`ReadTimeout`, `ReadError`, …) with an
-    empty message, so `str(exc)` alone leaves the domain error ending in ': '."""
-    return f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+_TIMEOUT_MESSAGE = "ai gateway request timed out"
+_UNREACHABLE_MESSAGE = "ai gateway is unreachable"
+_RATE_LIMITED_MESSAGE = "ai gateway rate limited the request"
+_UNEXPECTED_MESSAGE = "ai gateway returned an unexpected response"
+
+
+def _http_failure(exc: httpx.HTTPError) -> ReadingGenerationError:
+    """Classify a transport/status failure without letting any upstream text
+    into the message — only the bounded class and, for a status, the code."""
+    if isinstance(exc, httpx.TimeoutException):
+        return ReadingGenerationError(_TIMEOUT_MESSAGE, ReadingFailureCode.TIMEOUT)
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        if status == httpx.codes.TOO_MANY_REQUESTS:
+            return ReadingGenerationError(_RATE_LIMITED_MESSAGE, ReadingFailureCode.GATEWAY_RATE_LIMITED)
+        return ReadingGenerationError(f"ai gateway returned HTTP {status}", ReadingFailureCode.GATEWAY_HTTP_ERROR)
+    if isinstance(exc, httpx.TransportError):
+        return ReadingGenerationError(_UNREACHABLE_MESSAGE, ReadingFailureCode.GATEWAY_UNREACHABLE)
+    return ReadingGenerationError(_UNEXPECTED_MESSAGE, ReadingFailureCode.OTHER)
+
+
+def _unexpected_failure() -> ReadingGenerationError:
+    return ReadingGenerationError(_UNEXPECTED_MESSAGE, ReadingFailureCode.OTHER)
 
 
 class LiteLlmReadingGateway(IReadingTextGateway):
@@ -198,8 +217,10 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             response.raise_for_status()
             body = response.json()
             return tuple(sorted(str(entry["id"]) for entry in body["data"]))
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-            raise ReadingGenerationError(f"ai gateway request failed: {_describe_error(exc)}") from exc
+        except httpx.HTTPError as exc:
+            raise _http_failure(exc) from exc
+        except Exception as exc:
+            raise _unexpected_failure() from exc
 
     async def generate(
         self,
@@ -245,16 +266,12 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             message = choices[0].get("message") or {} if choices else {}
             tool_calls = message.get("tool_calls") or []
             if not tool_calls:
-                finish_reason = choices[0].get("finish_reason") if choices else None
-                raise ReadingGenerationError(
-                    f"ai gateway returned no tool call (finish_reason={finish_reason!r}) — "
-                    "the model likely spent the whole output budget reasoning before calling the tool"
-                )
+                raise ReadingGenerationError("ai gateway returned no tool call", ReadingFailureCode.NO_TOOL_CALL)
             try:
                 arguments = json.loads(tool_calls[0]["function"]["arguments"])
             except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
                 raise ReadingGenerationError(
-                    "ai gateway returned a malformed tool call — the response was likely truncated"
+                    "ai gateway returned a malformed tool call", ReadingFailureCode.MALFORMED_TOOL_CALL
                 ) from exc
             usage = body.get("usage") or {}
             lines = _parse_lines(arguments.get("lines"))
@@ -263,15 +280,19 @@ class LiteLlmReadingGateway(IReadingTextGateway):
             # turns rather than failing the whole generation.
             text = str(arguments.get("text") or "").strip() or "".join(line.text for line in lines)
             if not text:
-                raise ReadingGenerationError("ai gateway returned an empty reading text")
+                raise ReadingGenerationError("ai gateway returned an empty reading text", ReadingFailureCode.EMPTY_TEXT)
             return ReadingDraft(
                 text=text,
                 prompt_tokens=int(usage.get("prompt_tokens", 0)),
                 completion_tokens=int(usage.get("completion_tokens", 0)),
                 lines=lines,
             )
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-            raise ReadingGenerationError(f"ai gateway request failed: {_describe_error(exc)}") from exc
+        except ReadingGenerationError:
+            raise
+        except httpx.HTTPError as exc:
+            raise _http_failure(exc) from exc
+        except Exception as exc:
+            raise _unexpected_failure() from exc
 
 
 def _parse_lines(raw: Any) -> tuple[DialogueLine, ...]:

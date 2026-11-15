@@ -70,6 +70,7 @@ from shougong.usecase.insights.overview_service import StudyOverviewService
 from shougong.usecase.insights.service import InsightService
 from shougong.usecase.insights.telemetry import InsightsTelemetry
 from shougong.usecase.reading.service import ReadingService
+from shougong.usecase.reading.telemetry import ReadingTelemetry
 from shougong.usecase.reading.topic_service import ReadingTopicService
 from shougong.usecase.reading.vocabulary_service import VocabularyOverviewService
 from shougong.usecase.srs.day_boundary import DayBoundaryEngine
@@ -160,6 +161,7 @@ class Container:
         )
 
         # --- reading slice -----------------------------------------------
+        self.reading_telemetry = ReadingTelemetry(self.telemetry.meter)
         self._segmenter = JiebaSegmenter()
         self._reading_gateway = LiteLlmReadingGateway(
             self.http_client,
@@ -255,8 +257,8 @@ class Container:
                 await anyio.to_thread.run_sync(warm_up_jieba)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                _log.exception("reading.jieba_warmup.failed")
+            except Exception as error:
+                self.reading_telemetry.record_jieba_warmup_failure(error)
 
     async def aclose(self) -> None:
         await self.http_client.aclose()

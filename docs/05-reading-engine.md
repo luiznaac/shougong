@@ -88,6 +88,10 @@ The chosen draft is resolved into tokens:
 
 The saved `reading_text` stores the fully resolved token stream as immutable history. On list reads the service re-hydrates pinyin/definitions/entry ids from the current dictionary and study queue, so the displayed text always matches the current lexicon.
 
+## Failure handling
+
+A gateway or parse failure is terminal: no retry, and no reading is saved. The gateway raises `ReadingGenerationError` carrying one of eight bounded codes — `timeout`, `gateway_unreachable`, `gateway_rate_limited`, `gateway_http_error`, `no_tool_call`, `malformed_tool_call`, `empty_text`, `_OTHER` (the fallback for anything unclassified). The HTTP boundary maps it to `502`, puts the code on the request state as `error.type`, and emits the single ERROR record for the failure. The message is bounded — never upstream body text — and the log record keeps `exception.type`/`.stacktrace` while dropping `exception.message`. A model-list failure follows the same mapping but is not a generation attempt.
+
 ## Quality outcomes
 
 - **Vocabulary control**: `max_extra_words` is a hard ceiling on distinct words outside known vocabulary; repetition of an allowed extra word is free.
