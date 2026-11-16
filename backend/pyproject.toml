@@ -71,7 +71,7 @@ run = "python -m shougong.application.boot"
 # ---------------------------------------------------------------------------
 migrate = "python scripts/migrate.py"
 "migrate:generate" = "alembic revision --autogenerate"
-# Dev-only acceptance fixture (docs/acceptance-runbook.md). Never runs in
+# Dev-only acceptance fixture (docs/runbooks/acceptance.md). Never runs in
 # production; the acceptance package is excluded from the image.
 "seed:acceptance" = "python -m shougong.acceptance.fixture"
 

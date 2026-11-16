@@ -2,6 +2,8 @@
 
 All routes live under the FastAPI app; in the Docker deployment nginx exposes them at `/api/...`.
 
+`backend/postman/shougong.postman_collection.json` is a Postman collection covering every endpoint; import it and set the `baseUrl` variable.
+
 ## Endpoint map
 
 ### Health

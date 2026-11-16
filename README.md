@@ -1,79 +1,93 @@
-# shougong (手工)
+# shougong
 
-Monorepo for the Chinese handwriting SRS.
+A handwriting-first Chinese trainer for self-learners: FSRS-scheduled character practice plus vocabulary-constrained AI reading.
 
-| Path         | What                                                                        |
-| ------------ | -------------------------------------------------------------------------- |
-| [`backend/`](backend/)   | FastAPI + hexagonal service (uv, SQLAlchemy/MySQL, FSRS). See [backend/README.md](backend/README.md) and [backend/AGENTS.md](backend/AGENTS.md). |
-| [`frontend/`](frontend/) | React + Vite SPA — the inverted-review handwriting trainer. See [frontend/README.md](frontend/README.md). |
+![The Hoje dashboard with seeded study items: due-review and new-card counts, the SRS distribution, upcoming reviews and the learned-items chart](docs/assets/primary-screen.png)
 
-The frontend's `src/api/types.ts` mirrors the backend's `httpapi/schema.py`; keep them in sync in the same change — that's the reason these two live in one repo.
+## Quickstart
 
-## Documentation
-
-`docs/` holds the business overview, technical architecture, data model, API reference, reading-engine explainer, desktop UI/UX proposal, and a backlog of proposed endpoints. Start at [docs/README.md](docs/README.md).
-
-## Dev
+Prerequisites: Docker with a running daemon, `uv` (Python 3.12+), and Node 22 + npm.
 
 ```bash
-npm run setup      # npm install in frontend/ + uv sync in backend/
-npm run db         # start MySQL (docker) for the backend
+npm run setup
 ```
 
-Then, in two shells:
+Start MySQL and the API:
 
 ```bash
-npm run be:run     # backend  -> http://localhost:8130
-npm run fe:dev     # frontend -> http://localhost:8133  (proxies /api -> :8130)
+npm run db
+npm run db:migrate
+npm run be:run
 ```
 
-## Ports
-
-Local host ports are shougong's assigned block, recorded in [`.salgadinhos/ports.json`](.salgadinhos/ports.json). Only the published side of a compose mapping varies — container-internal ports stay fixed.
-
-| Role | Host port | Env key | Container-internal |
-| --- | --- | --- | --- |
-| `api` | `8130` | `HTTP_PORT` | `8080` (`API_PORT`) |
-| `web` (combined image: SPA + `/api` proxy) | `8131` | `WEB_HOST_PORT` | `8081` (`WEB_PORT`) |
-| `mysql` | `8132` | `MYSQL__PORT` | `3306` |
-| `frontend-dev` (Vite) | `8133` | `FRONTEND_DEV_PORT` | — |
-
-A gitignored `.env` may override a host port locally; the committed defaults above apply to a fresh clone. The block is dev-only: a non-dev `APP_ENV` (and the published image) keeps the canonical `8080`/`3306` unless a port is set explicitly, so deploys reach a local MySQL on `3306`. The DB port recipe is `docker compose port mysql 3306`.
-
-## Docker
-
-One image holds both processes — `uvicorn` (API) and `nginx` (the built SPA, which also reverse-proxies `/api` to uvicorn) — supervised by `supervisord`, on separate ports. The database is **not** in the image.
-
-The app runs as `APP_ENV=prod`, so it requires an OTLP endpoint: export
-`OTEL_EXPORTER_OTLP_ENDPOINT` (for a Collector on the host,
-`http://host.docker.internal:4318`). Without it the app's boot fails loudly;
-the `mysql` service alone still starts.
+In a second shell, start the SPA:
 
 ```bash
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4318
-docker compose up --build     # app + MySQL, full stack
-#   UI   -> http://localhost:8131
-#   API  -> http://localhost:8130
-docker compose up -d mysql    # just the DB (host :8132), for local `cd backend && uv run poe run`
+npm run fe:dev
 ```
 
-The published ports are configurable with `HTTP_PORT` / `WEB_HOST_PORT`; inside the container the app still listens on `API_PORT=8080` and nginx on `WEB_PORT=8081`. For a standalone run against an external database:
-
-```bash
-docker run --rm -p 8130:8080 -p 8131:8081 \
-  -e MYSQL__HOST=host.docker.internal -e MYSQL__PORT=3306 -e MYSQL__DATABASE=shougong \
-  -e MYSQL__USER=root -e MYSQL__PASSWORD= \
-  luiznaac/shougong:latest
-```
-
-**Publishing:** after CI passes on a push to `master`, the `publish` job in `.github/workflows/ci.yml` builds and pushes `luiznaac/shougong:latest` and `:v<run-number>` (a sequential build number) to Docker Hub. Needs repo secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+The app opens at <http://localhost:8133/>. The API listens on `:8130`, MySQL on `:8132`, and the combined image serves the SPA on `:8131`. A gitignored `.env` may override a host port; the committed defaults apply to a fresh clone.
 
 ## Checks
 
 ```bash
-npm run check      # backend `poe check` + frontend typecheck + build
+npm run be:check
 ```
 
-CI (`.github/workflows/ci.yml`) runs the backend and frontend jobs independently, then a `publish` job (master pushes only) that gates the Docker image on both.
+```bash
+npm run be:test
+```
 
-`package.json` at the repo root is only a script shim (no dependencies) — the real toolchains are `uv` in `backend/` and `npm` in `frontend/`.
+```bash
+npm run fe:check
+```
+
+```bash
+npm run fe:build
+```
+
+```bash
+npm run check
+```
+
+`npm run be:check` runs backend lint, format-check, `mypy --strict`, import contracts and unit tests; `npm run fe:check` runs the frontend typecheck, lint and tests. The canonical all-checks command mirrors the pre-commit hooks, including the Docker-backed integration suite:
+
+```bash
+npm run be:check && npm run be:test && npm run fe:check
+```
+
+`npm run check` is the no-Docker convenience: backend check, frontend check and the production build.
+
+## Limits
+
+- AI reading generation needs an external LiteLLM gateway; the Quickstart does not start it, so the Leitura screen's generation stays unavailable until one is reachable. Its address is in [`backend/.env.example`](backend/.env.example).
+- The combined image boots as a production profile, so it needs an OTLP endpoint; publishing it needs Docker Hub credentials. See the [deploy runbook](docs/runbooks/deploy.md).
+- Acceptance needs Docker and the free `8130`–`8133` port block; the bootstrap-only steps and the fold-aware visual rule are in the [acceptance runbook](docs/runbooks/acceptance.md).
+- The social preview is a manual upload: a 1280×640 crop of the primary screenshot, set once from the repository settings page.
+
+## Docs
+
+- [Code map](docs/code-map.md) — open it when you need the module, seam or entry-point map.
+- [Repository conventions](AGENTS.md) — open it when you need the surface, run story or agent rules.
+- [Domain glossary](CONTEXT.md) — open it when a domain term is unclear.
+- [Backend conventions](backend/AGENTS.md) — open it before touching the backend.
+- [Coding standards — Python lane](backend/CODING_STANDARDS.md) — open it when writing backend idiom-sensitive code.
+- [Code map — backend](backend/docs/code-map.md) — open it for the backend's exhaustive module and seam index.
+- [Observability — logging & metrics](backend/docs/observability.md) — open it before emitting or configuring telemetry.
+- [Frontend conventions](frontend/AGENTS.md) — open it before touching the frontend.
+- [Coding standards — React lane](frontend/CODING_STANDARDS.md) — open it when writing frontend idiom-sensitive code.
+- [Code map — frontend](frontend/docs/code-map.md) — open it for the frontend's exhaustive module and seam index.
+- [Business Overview](docs/01-business.md) — open it for the product intent, personas and workflows.
+- [Technical Architecture](docs/02-architecture.md) — open it for the hexagonal layering, component inventory and configuration.
+- [Data Model](docs/03-data-model.md) — open it before changing the schema or reading the FSRS fields.
+- [HTTP API Reference](docs/04-api.md) — open it when adding or consuming an endpoint.
+- [Reading Engine](docs/05-reading-engine.md) — open it before changing reading generation or its prompt.
+- [UI / UX Spec — Responsive Redesign](docs/06-ui-ux-proposal.md) — open it for the responsive information architecture and interaction patterns.
+- [Proposed API Additions](docs/07-api-gaps.md) — open it before assuming a missing endpoint has no plan.
+- [Acceptance runbook — shougong](docs/runbooks/acceptance.md) — open it to boot the stack for self-served acceptance.
+- [Deploy runbook — shougong](docs/runbooks/deploy.md) — open it to run or publish the combined image.
+
+## Related projects
+
+- [salgadinhos](https://github.com/luiznaac/salgadinhos) — the family's skills, adapters and engineering conventions.
+- [environments](https://github.com/luiznaac/environments) — the scaffolds this repo's lanes were generated from.

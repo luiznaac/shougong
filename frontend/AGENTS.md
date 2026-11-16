@@ -18,6 +18,8 @@ npm run check        # typecheck + lint + test — run before considering a chan
 npm run build        # tsc -b && vite build
 ```
 
+`npm run build` writes `dist/` under the `/shougong/` base path the reverse proxy expects; `VITE_BASE=/ npm run build` builds at the root. On Windows PowerShell, a blocked `npm` runs as `npm.cmd`.
+
 Tests run in two Vitest projects, split by file name:
 
 - `*.test.{ts,tsx}` — node environment: pure helpers in `src/lib/`, and markup-only component tests (`src/components/**/*.test.tsx`) through `react-dom/server` for what a single render shows.
