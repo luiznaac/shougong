@@ -1,6 +1,6 @@
 """The committed acceptance fixture for the list and item-detail surfaces.
 
-`docs/acceptance-runbook.md` boots MySQL empty, so the walkthroughs need a seed
+`docs/runbooks/acceptance.md` boots MySQL empty, so the walkthroughs need a seed
 the runbook itself can apply. `build_fixture` is the deterministic data plan —
 dictionary entries and study items covering more than one 24-row page, every SRS
 state, every HSK bucket (1..9 and none), a leech and a pinned item — plus the
