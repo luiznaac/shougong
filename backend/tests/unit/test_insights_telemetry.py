@@ -15,6 +15,7 @@ import pytest
 from opentelemetry.sdk.metrics.export import Gauge, InMemoryMetricReader
 
 from shougong.application.telemetry import Telemetry, build_telemetry
+from shougong.usecase.commons.logging import configure_logging
 from shougong.usecase.commons.time import FixedClock
 from shougong.usecase.insights.model import StudyCounts
 from shougong.usecase.insights.overview_service import StudyOverviewService
@@ -25,6 +26,7 @@ from tests.fixtures import (
     FakeInsightRepository,
     FakeStudyItemRepository,
     build_test_settings,
+    log_records,
     make_dictionary_entry,
     make_study_item,
     metrics_by_name,
@@ -50,6 +52,8 @@ _DIFFICULTY = {
 @pytest.fixture
 def telemetry() -> Iterator[Telemetry]:
     instance = build_telemetry(build_test_settings())
+    configure_logging("INFO", json=True)
+    instance.install_log_bridge()
     try:
         yield instance
     finally:
@@ -228,6 +232,8 @@ async def test_the_vocabulary_read_records_the_known_word_count(telemetry: Telem
 
     known = _gauge(telemetry, "vocabulary.known_words")
     assert [(point.value, dict(point.attributes)) for point in known.data.data_points] == [(2, {})]
+    # The gauge is the read's only signal; the overview read emits no log.
+    assert log_records(telemetry) == []
 
     # The summary makes its existing two reads; collecting the gauge adds none.
     reads = (study.list_known_entries_calls, dictionary.hsk_words_calls)
