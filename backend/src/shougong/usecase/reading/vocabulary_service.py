@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterable, Sequence
 
-from shougong.usecase.commons.logging import get_logger
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.insights.telemetry import InsightsTelemetry
@@ -24,8 +23,6 @@ from shougong.usecase.reading.vocabulary import (
     hsk_level_stats,
 )
 from shougong.usecase.study.gateway import IStudyItemRepository
-
-_log = get_logger(__name__)
 
 
 class VocabularyOverviewService:
@@ -52,7 +49,6 @@ class VocabularyOverviewService:
         by_level = Counter(str(w.hsk_level) if w.hsk_level is not None else "none" for w in words)
         known_by_level = Counter(w.hsk_level for w in words if w.hsk_level is not None)
 
-        _log.info("vocabulary.overview", known=len(words))
         self._telemetry.record_known_words(len(words))
         return VocabularySummary(
             total=len(words),
