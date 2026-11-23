@@ -34,11 +34,12 @@ def parse_cedict(text: str) -> list[CedictRecord]:
         match = _LINE_RE.match(line)
         if match is None:
             continue
+        definitions = tuple(match["defs"].split("/"))
         records.append(
             CedictRecord(
                 simplified=match["simplified"],
                 pinyin=sanitize_pinyin(match["pinyin"]),
-                definitions=tuple(match["defs"].split("/")),
+                definitions=definitions,
             )
         )
     return records

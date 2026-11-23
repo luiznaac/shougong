@@ -102,6 +102,7 @@ Bundled lexicon, populated from CC-CEDICT and enriched with HSK 3.0 level + POS 
 
 - `simplified` and `pinyin` are indexed for search and exact matching.
 - `pinyin` is normalized at import: lowercase, `ü` written as `v` (`lv4 xing2`).
+- Import applies one **set-level policy** (not a per-line rule): an alias row whose primary gloss only points at another form of the same word (`old variant of 寇`) is dropped **only** when the same `simplified` has a real entry, so a character that exists only as a variant stays searchable; byte-identical duplicates — same `(simplified, pinyin, definitions)` — are dropped. Genuine homographs (same `simplified` and `pinyin`, different meanings, e.g. `下面` "below" vs "to boil noodles") stay as separate rows.
 - `hsk_level`/`pos_tags` are stamped by the versioned enrichment pass; the same values apply to every row sharing a `simplified`.
 - A hanzi can have several rows (multiple readings); each is a distinct entry.
 
@@ -111,7 +112,8 @@ The single-row marker recording which enrichment version last stamped `dictionar
 
 - The row is absent until the pass first runs; the pass skips while the stored `version` matches the code's.
 - Advancing the version re-runs the pass, updating `dictionary_entry` rows in place so row ids, study items and study history survive and no duplicate rows appear.
-- Created by migration `0007_dictionary_enrich`.
+- The pass also **cleans existing data in place** with the same import policy a fresh import applies: it deletes alias rows that have a real sibling and byte-identical duplicates, and keeps variant-only rows. A row a `study_item` or `study_item_history` references is never deleted, so a learner's queue and its history survive.
+- Created by migration `0007_dictionary_enrich`; version 2 is the first that applies the import policy.
 
 ### `study_item`
 

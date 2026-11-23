@@ -7,9 +7,23 @@ session bound to that transaction via `current_session()`.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import cast
+from typing import Any, cast
 
-from sqlalchemy import ColumnElement, Table, and_, bindparam, case, func, insert, literal, or_, select, update
+from sqlalchemy import (
+    ColumnElement,
+    CursorResult,
+    Table,
+    and_,
+    bindparam,
+    case,
+    delete,
+    func,
+    insert,
+    literal,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects import mysql
 
 from shougong.persistence.configuration.transaction import (
@@ -18,6 +32,7 @@ from shougong.persistence.configuration.transaction import (
 )
 from shougong.persistence.dictionary.entity import DictionaryEnrichmentStateEntity, DictionaryEntryEntity
 from shougong.persistence.study.entity import StudyItemEntity
+from shougong.persistence.study_item_history.entity import StudyItemHistoryEntity
 from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import (
@@ -157,6 +172,36 @@ class DictionaryRepository(IDictionaryRepository):
             session = current_session()
             total = await session.scalar(select(func.count()).select_from(DictionaryEntryEntity))
             return int(total or 0)
+
+        return await self._tx.execute(_run)
+
+    async def list_all(self) -> list[DictionaryEntry]:
+        async def _run() -> list[DictionaryEntry]:
+            session = current_session()
+            stmt = select(DictionaryEntryEntity).order_by(DictionaryEntryEntity.id)
+            rows = (await session.execute(stmt)).scalars().all()
+            return [to_domain(row) for row in rows]
+
+        return await self._tx.execute(_run)
+
+    async def protected_entry_ids(self) -> frozenset[int]:
+        async def _run() -> frozenset[int]:
+            session = current_session()
+            queued = (await session.execute(select(StudyItemEntity.entry_id))).scalars().all()
+            historical = (await session.execute(select(StudyItemHistoryEntity.entry_id))).scalars().all()
+            return frozenset(int(entry_id) for entry_id in (*queued, *historical))
+
+        return await self._tx.execute(_run)
+
+    async def delete_entries(self, entry_ids: Sequence[int]) -> int:
+        async def _run() -> int:
+            session = current_session()
+            removed = 0
+            for start in range(0, len(entry_ids), _BULK_BATCH):
+                batch = entry_ids[start : start + _BULK_BATCH]
+                result = await session.execute(delete(DictionaryEntryEntity).where(DictionaryEntryEntity.id.in_(batch)))
+                removed += cast(CursorResult[Any], result).rowcount or 0
+            return removed
 
         return await self._tx.execute(_run)
 

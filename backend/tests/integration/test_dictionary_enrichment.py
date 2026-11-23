@@ -112,3 +112,63 @@ async def test_advancing_the_version_updates_rows_in_place_and_keeps_study_histo
 
     stored_item = (await client.get(f"/study-items/{item['id']}")).json()
     assert stored_item["entry"]["id"] == ids["行|xing2"]
+
+
+_CLEANUP_SEED = [
+    {"s": "吃", "p": "chi1", "d": ["to eat"]},
+    {"s": "吃", "p": "chi1", "d": ["variant of 吃[chi1]"]},
+    {"s": "水", "p": "shui3", "d": ["water"]},
+    {"s": "水", "p": "shui3", "d": ["water"]},
+    {"s": "㑳", "p": "zhou4", "d": ["old variant of 媰[zhou4]"]},
+]
+
+type _CleanupRow = tuple[int, str, str, tuple[str, ...]]
+
+
+async def _insert_cleanup_seed(container: Container) -> list[_CleanupRow]:
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO dictionary_entry (simplified, pinyin, definitions) VALUES (:s, :p, :d)"),
+            [{"s": row["s"], "p": row["p"], "d": json.dumps(row["d"])} for row in _CLEANUP_SEED],
+        )
+    return await _cleanup_rows(container)
+
+
+async def _cleanup_rows(container: Container) -> list[_CleanupRow]:
+    async with container.engine.connect() as conn:
+        rows = (
+            await conn.execute(text("SELECT id, simplified, pinyin, definitions FROM dictionary_entry ORDER BY id"))
+        ).all()
+    return [(int(row[0]), row[1], row[2], tuple(json.loads(row[3]))) for row in rows]
+
+
+async def test_the_versioned_pass_cleans_alias_and_duplicate_rows_and_keeps_history(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    seeded = await _insert_cleanup_seed(container)
+    by_definitions = {row[3]: row[0] for row in seeded}
+    real_eat = by_definitions[("to eat",)]
+    alias_eat = by_definitions[("variant of 吃[chi1]",)]
+    first_water = next(row[0] for row in seeded if row[1] == "水")
+    variant_only = by_definitions[("old variant of 媰[zhou4]",)]
+
+    item = (await client.post("/study-items", json={"dictionary_entry_id": real_eat})).json()
+    await client.post(f"/study-items/{item['id']}/reviews", json={"rating": "good"})
+    history_before = await _history_rows(container, item["id"])
+
+    applied = await _service(container, version=1).enrich_hsk(
+        FakeHskDatasetSource({"吃": HskDatasetWord("吃", 1, ("v",))})
+    )
+
+    assert applied == 1
+    # the alias and the byte-identical duplicate are gone; the real 吃, the first
+    # 水 and the variant-only 㑳 keep their original ids
+    assert await _cleanup_rows(container) == [
+        (real_eat, "吃", "chi1", ("to eat",)),
+        (first_water, "水", "shui3", ("water",)),
+        (variant_only, "㑳", "zhou4", ("old variant of 媰[zhou4]",)),
+    ]
+    assert alias_eat not in {row[0] for row in await _cleanup_rows(container)}
+    assert await _history_rows(container, item["id"]) == history_before
+    stored_item = (await client.get(f"/study-items/{item['id']}")).json()
+    assert stored_item["entry"]["id"] == real_eat

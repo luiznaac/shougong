@@ -5,6 +5,7 @@ from __future__ import annotations
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
+from shougong.usecase.dictionary.import_policy import apply_import_policy, select_cleanup_ids
 from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntryPage
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 
@@ -52,8 +53,9 @@ class DictionaryService:
     async def populate_if_empty(self, source: ICedictSource) -> int:
         """Download CC-CEDICT and fill the table, but only if it is empty.
 
-        Idempotent: once loaded, every later call is a no-op. Runs from the
-        startup hook in the composition root.
+        Idempotent: once loaded, every later call is a no-op. The set-level import
+        policy trims alias and duplicate rows before they reach the table. Runs
+        from the startup hook in the composition root.
         """
         existing = await self._repository.count()
         if existing > 0:
@@ -62,7 +64,7 @@ class DictionaryService:
 
         records = await source.fetch()
         self._telemetry.record_source_downloaded("cedict", len(records))
-        added = await self._repository.bulk_add(records)
+        added = await self._repository.bulk_add(apply_import_policy(records))
         self._telemetry.record_populated(records=added)
         return added
 
@@ -71,9 +73,10 @@ class DictionaryService:
 
         Versioned and idempotent: the pass persists the enrichment version it ran
         and skips once the stored version matches the code's. Advancing the
-        version re-runs it, updating existing rows in place so row ids and study
-        history survive. Runs from the startup hook, after the dictionary is
-        populated.
+        version re-runs it, first cleaning the alias and exact-duplicate rows a
+        pre-policy import left behind, then updating existing rows in place so row
+        ids and study items/history survive. Runs from the startup hook, after the
+        dictionary is populated.
         """
         stored = await self._repository.enrichment_version()
         if stored == self.enrichment_version:
@@ -91,7 +94,24 @@ class DictionaryService:
         # leave the marker unset so the next boot retries.
         if not dataset:
             return 0
+        await self._clean_import_noise()
         applied = await self._repository.apply_hsk(dataset)
         await self._repository.set_enrichment_version(self.enrichment_version)
         self._telemetry.record_hsk_enriched(records=applied)
         return applied
+
+    async def _clean_import_noise(self) -> None:
+        """Remove the alias and exact-duplicate rows a pre-policy import left behind.
+
+        Re-derives the import policy over the stored rows and deletes what it would
+        have dropped on a fresh import, so an old database converges on the same
+        rows without a reload. Rows a study item or its history references are kept,
+        so no learner's queue breaks. Runs inside the versioned enrichment pass.
+        """
+        entries = await self._repository.list_all()
+        protected = await self._repository.protected_entry_ids()
+        to_delete = select_cleanup_ids(entries, protected)
+        if not to_delete:
+            return
+        removed = await self._repository.delete_entries(sorted(to_delete))
+        self._telemetry.record_import_cleaned(removed=removed)

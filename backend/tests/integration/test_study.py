@@ -3,9 +3,15 @@ from __future__ import annotations
 import json
 
 import httpx
+from opentelemetry.metrics import NoOpMeter
 from sqlalchemy import text
 
 from shougong.application.container import Container
+from shougong.gateway.dictionary.cedict_source import parse_cedict
+from shougong.persistence.dictionary.repository import DictionaryRepository
+from shougong.usecase.dictionary.service import DictionaryService
+from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
+from tests.fixtures import FakeCedictSource
 
 
 async def _seed_entry(
@@ -186,3 +192,95 @@ async def test_review_rejects_an_unknown_rating(container: Container, client: ht
     response = await client.post(f"/study-items/{item_id}/reviews", json={"rating": "meh"})
 
     assert response.status_code == 422
+
+
+_COLLIDING_CEDICT = "\n".join(
+    [
+        "了 了 [le5] /(completed action marker)/",
+        "了 了 [liao3] /to finish/variant of 瞭|了[liao3]/",
+        "瞭 了 [liao3] /(bound form) clear in one's mind/",
+        "和 和 [he2] /(joining two nouns) and/together with/",
+        "咊 和 [he2] /old variant of 和[he2]/",
+        "龢 和 [he2] /(literary) harmonious (variant of 和[he2])/",
+        "和 和 [He2] /surname He/",
+        "吃 吃 [chi1] /to eat/",
+        "喫 吃 [chi1] /variant of 吃[chi1]/",
+        "你 你 [ni3] /you (informal)/",
+        "妳 你 [ni3] /you (Note: In Taiwan, 妳 is used to address females.)/",
+        "下面 下面 [xia4 mian4] /below/under/",
+        "下麵 下面 [xia4 mian4] /to boil noodles/",
+    ]
+)
+
+
+async def _populate(container: Container, cedict: str) -> int:
+    service = DictionaryService(
+        DictionaryRepository(container.transaction_template),
+        DictionaryTelemetry(NoOpMeter("test")),
+        enrichment_version=1,
+    )
+    return await service.populate_if_empty(FakeCedictSource(parse_cedict(cedict)))
+
+
+async def test_batch_import_creates_words_whose_only_collisions_were_aliases(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    await _populate(container, _COLLIDING_CEDICT)
+
+    response = await client.post(
+        "/study-items/batch",
+        json={
+            "rows": [
+                {"hanzi": "了", "pinyin": "le5"},
+                {"hanzi": "吃", "pinyin": "chi1"},
+            ]
+        },
+    )
+
+    body = response.json()
+    assert [outcome["status"] for outcome in body["outcomes"]] == ["created", "created"]
+    assert (body["created"], body["skipped"], body["errors"]) == (2, 0, 0)
+    listed = await client.get("/study-items")
+    assert {row["entry"]["simplified"] for row in listed.json()["items"]} == {"了", "吃"}
+
+
+async def test_batch_import_still_reports_every_genuine_homograph_with_its_meanings(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    await _populate(container, _COLLIDING_CEDICT)
+
+    response = await client.post(
+        "/study-items/batch",
+        json={
+            "rows": [
+                {"hanzi": "和", "pinyin": "he2"},  # conjunction vs the surname He
+                {"hanzi": "你", "pinyin": "ni3"},  # 你 vs the female form 妳
+                {"hanzi": "下面", "pinyin": "xia4 mian4"},  # below vs to boil noodles
+            ]
+        },
+    )
+
+    outcomes = response.json()["outcomes"]
+    assert [outcome["status"] for outcome in outcomes] == ["error", "error", "error"]
+
+    surname_or_conjunction = {candidate["definitions"][0] for candidate in outcomes[0]["candidates"]}
+    assert "surname He" in surname_or_conjunction
+    assert len(outcomes[0]["candidates"]) == 2  # both aliases already dropped
+
+    assert all("you" in candidate["definitions"][0] for candidate in outcomes[1]["candidates"])
+    assert len(outcomes[1]["candidates"]) == 2
+
+    assert {candidate["definitions"][0] for candidate in outcomes[2]["candidates"]} == {
+        "below",
+        "to boil noodles",
+    }
+
+
+async def test_the_import_policy_keeps_a_variant_only_character_searchable(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    await _populate(container, "㑳 㑳 [zhou4] /old variant of 媰[zhou4]/\n")
+
+    response = await client.get("/dictionary-entries", params={"q": "㑳"})
+
+    assert response.json()["total"] == 1

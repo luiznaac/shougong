@@ -51,6 +51,19 @@ class IDictionaryRepository(Protocol):
 
     async def count(self) -> int: ...
 
+    async def list_all(self) -> list[DictionaryEntry]:
+        """Every stored entry, ordered by id — the input to the in-place cleanup."""
+        ...
+
+    async def protected_entry_ids(self) -> frozenset[int]:
+        """Entry ids referenced by a study item or its history. The cleanup never
+        deletes one, so a learner's queue and its history survive."""
+        ...
+
+    async def delete_entries(self, entry_ids: Sequence[int]) -> int:
+        """Delete the given dictionary entries, returning how many were removed."""
+        ...
+
     async def bulk_add(self, records: Sequence[CedictRecord]) -> int: ...
 
     async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:

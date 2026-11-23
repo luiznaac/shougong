@@ -74,7 +74,7 @@ sequenceDiagram
     end
 ```
 
-Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent: CC-CEDICT fills only an empty table (`count() == 0`), and HSK enrichment is versioned — it records the version it ran in `dictionary_enrichment_state` and skips while that matches the code's, re-running in place (preserving row ids and study history) when the version advances.
+Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent: CC-CEDICT fills only an empty table (`count() == 0`), applying the set-level import policy (drop an alias row only when its simplified form has a real entry, drop byte-identical duplicates, keep variant-only characters and genuine homographs) before it inserts. HSK enrichment is versioned — it records the version it ran in `dictionary_enrichment_state` and skips while that matches the code's; when the version advances it re-runs in place, applying the same import policy to clean alias and duplicate rows (never a row a study item references) and preserving row ids and study history.
 
 ## Key request flows
 

@@ -301,6 +301,8 @@ Request: `{ "rows": [ { "hanzi": "学习", "pinyin": "xue2 xi2" } ] }` (1-1000 r
 
 `status` is `created | skipped | error`. An `error` row with `candidates` populated means the row was ambiguous or the pinyin did not match exactly; the client can offer those dictionary entries and resolve via `POST /study-items`.
 
+The dictionary is imported under one set-level policy (see [data model](./03-data-model.md#dictionary_entry)): alias rows that only point at another form of the same word are dropped when a real entry exists, and byte-identical duplicates are removed. So a common HSK word whose only collision was such an alias or duplicate — `了`, `吃` — now resolves to a single entry and its row is `created`. A **genuine homograph** — same hanzi and pinyin but a genuinely different word — still returns an `error` row with its candidates for the learner to choose: `下面` "below" vs "to boil noodles", `和` "and" vs the surname `和`, `你` vs the female form `妳`.
+
 ### Reading tokens
 
 `SavedReadingTextResponse` contains `tokens`, each either a word or punctuation:
@@ -376,7 +378,7 @@ The app maps domain exceptions to a consistent problem shape:
 - **Pagination**: list routes return `{ items, total, limit, offset }` (`/reading-texts`, `/study-items`, `/dictionary-entries`); `limit` is `1..100` (default `20`), `offset` is `>= 0`, `total` is the exact filtered count. Item reviews and item history keep their bare arrays (`limit` 1..200 default 50). Clients page explicitly and never re-sort a page.
 - **Ordering**: study items by due date then id unless a filter/sort overrides it (`leech=true` orders worst-first, `sort` selects `created_desc` or `stability_asc`); dictionary search shortest-first; review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
 - **`Location` headers** are set on created resources.
-- **Idempotency**: dictionary autoload and HSK enrichment are idempotent (enrichment is versioned — it re-runs in place when the code's enrichment version advances); adding the same entry twice is a conflict, not a duplicate insert.
+- **Idempotency**: dictionary autoload and HSK enrichment are idempotent (enrichment is versioned — it re-runs in place when the code's enrichment version advances, applying the import policy to clean alias and duplicate rows while keeping rows a study item references); adding the same entry twice is a conflict, not a duplicate insert.
 - **Freshness**: reading history stores token text only and hydrates pinyin, definitions, and `dictionary_entry_id` on read against the current dictionary and study queue, so listed readings reflect the live vocabulary.
 
 ## Suggested additions

@@ -86,8 +86,9 @@ _log = get_logger(__name__)
 # The dictionary's enrichment contract: bump it whenever the pass's output
 # changes, so an existing database re-runs the pass in place instead of keeping
 # stale rows. `DictionaryService.enrich_hsk` skips while the stored marker
-# matches this value.
-DICTIONARY_ENRICHMENT_VERSION = 1
+# matches this value. Version 2 applies the CC-CEDICT import policy to existing
+# tables (dropping alias rows with a real sibling and byte-identical duplicates).
+DICTIONARY_ENRICHMENT_VERSION = 2
 
 
 class Container:
