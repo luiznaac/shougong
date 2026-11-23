@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { StudyItem } from "../api/types.ts";
 import { studyItem } from "../test/studyItemFixture.ts";
 import { StudyItemPage } from "./StudyItemPage.tsx";
 
@@ -11,15 +12,15 @@ function ok(body: unknown) {
   return { ok: true, status: 200, statusText: "OK", json: async () => body };
 }
 
-beforeEach(() => {
+function stubItem(item: StudyItem) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: string) => {
       const url = new URL(input, "http://localhost");
-      if (url.pathname === "/api/study-items/7") return ok(ITEM);
+      if (url.pathname === "/api/study-items/7") return ok(item);
       if (url.pathname === "/api/study-items/7/history") return ok([]);
       if (url.pathname === "/api/study-items")
-        return ok({ items: [ITEM], total: 1, limit: 100, offset: 0 });
+        return ok({ items: [item], total: 1, limit: 100, offset: 0 });
       if (url.pathname === "/api/dictionary-entries/10/related")
         return ok({ items: [], total: 0, limit: 8, offset: 0 });
       if (url.pathname === "/api/reading-texts")
@@ -33,6 +34,10 @@ beforeEach(() => {
       return ok([]);
     }),
   );
+}
+
+beforeEach(() => {
+  stubItem(ITEM);
 });
 
 afterEach(() => {
@@ -109,6 +114,22 @@ describe("StudyItemPage", () => {
     }
     expect(screen.getAllByText("Em revisão").length).toBeGreaterThan(0);
     expect(screen.getByText("30.0 dias")).toBeTruthy();
+    expect(screen.getByText("HSK 1")).toBeTruthy();
+    expect(screen.getByText("escrita HSK 2")).toBeTruthy();
+  });
+
+  it("marks a word outside HSK and without a writing level", async () => {
+    const base = studyItem();
+    stubItem(
+      studyItem({
+        id: 7,
+        entry: { ...base.entry, hsk_level: null, handwriting_level: null },
+      }),
+    );
+    renderPage("/biblioteca/itens/7");
+
+    expect(await screen.findByText("sem HSK")).toBeTruthy();
+    expect(screen.getByText("escrita —")).toBeTruthy();
   });
 
   it("puts the open stroke card first among the mobile study panels", async () => {

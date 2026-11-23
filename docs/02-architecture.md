@@ -15,7 +15,7 @@ flowchart TB
     subgraph Edge["Edge (adapters)"]
         HTTP["httpapi: FastAPI controllers + Pydantic DTOs"]
         PERS["persistence: SQLAlchemy repositories"]
-        GW["gateway: httpx outbound sources (CEDICT, HSK, Hanzi Writer, LiteLLM)"]
+        GW["gateway: httpx outbound sources (CEDICT, HSK words + characters, Hanzi Writer, LiteLLM)"]
         SRS["srs: FSRS adapter"]
         SEG["segmentation: jieba adapter"]
     end
@@ -48,7 +48,7 @@ Rules that keep the architecture honest:
 
 | Slice | Domain | Ports | Adapters |
 | --- | --- | --- | --- |
-| Dictionary | CC-CEDICT entries, HSK metadata | `IDictionaryRepository`, `ICedictSource`, `IHskDatasetSource` | SQLAlchemy repo, MDBG/CC-CEDICT fetcher, HSK dataset fetcher |
+| Dictionary | CC-CEDICT entries, vocabulary level, handwriting level, character writing levels | `IDictionaryRepository`, `ICedictSource`, `IHskDatasetSource`, `IHskCharacterSource` | SQLAlchemy repo, MDBG/CC-CEDICT fetcher, HSK word dataset fetcher, official HSK 3.0 handwriting list fetcher |
 | Study | study items, batch import, review loop | `IStudyItemRepository` | SQLAlchemy repo + history repo |
 | SRS | FSRS card model and rating | `ISrsEngine` | `DayBoundaryEngine` + `FsrsEngine` |
 | Strokes | per-character stroke order | `IStrokeRepository`, `IHanziStrokeSource` | SQLAlchemy cache, Hanzi Writer source |
@@ -69,12 +69,12 @@ sequenceDiagram
     C->>C: Register controllers
     par Startup tasks
         C->>C: Autoload CC-CEDICT if empty
-        C->>C: Enrich HSK + POS if not done
+        C->>C: Enrich levels, POS, handwriting if not done
         C->>C: Warm up jieba
     end
 ```
 
-Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent: CC-CEDICT fills only an empty table (`count() == 0`), and HSK enrichment is versioned — it records the version it ran in `dictionary_enrichment_state` and skips while that matches the code's, re-running in place (preserving row ids and study history) when the version advances.
+Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent: CC-CEDICT fills only an empty table (`count() == 0`), and HSK enrichment is versioned — it records the version it ran in `dictionary_enrichment_state` and skips while that matches the code's, re-running in place (preserving row ids and study history) when the version advances. The pass stamps the word's vocabulary level (`hsk_level`) and POS tags from the community word dataset, fills the character-level `character_writing_level` store from the official HSK 3.0 handwriting list, and derives each word's `handwriting_level` as the max writing level among its characters that have one. Words outside HSK 3.0 keep a null vocabulary level; a word whose characters have no writing level keeps a null handwriting level.
 
 ## Key request flows
 
@@ -139,7 +139,8 @@ flowchart LR
     Uvicorn --> MySQL[External MySQL 8]
     Uvicorn --> LiteLLM[Self-hosted LiteLLM proxy]
     Uvicorn --> CEDICT[CC-CEDICT / MDBG]
-    Uvicorn --> HSK[HSK 3.0 dataset]
+    Uvicorn --> HSK[HSK 3.0 word dataset]
+    Uvicorn --> HSKCHARS[HSK 3.0 handwriting character list]
     Uvicorn --> HZW[Hanzi Writer source]
 ```
 
@@ -159,7 +160,9 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 | `MYSQL__HOST` / `MYSQL__USER` / `MYSQL__PASSWORD` / `MYSQL__DATABASE` | localhost / root / empty / shougong | Database connection |
 | `MYSQL__PORT` | `8132` in dev, `3306` otherwise | MySQL port; deploy/test profiles reach their local MySQL on `3306` without extra config |
 | `DICTIONARY_AUTOLOAD` | `true` | Fill CEDICT on boot if empty |
-| `HSK_ENRICH_AUTOLOAD` | `true` | Stamp HSK/POS on boot if missing |
+| `HSK_ENRICH_AUTOLOAD` | `true` | Stamp vocabulary level, POS and handwriting level on boot if missing |
+| `HSK_DATASET_URL` | the community word list | HSK word dataset source (vocabulary level + POS) |
+| `HSK_CHARACTER_DATASET_URL` | the official `ivankra/hsk30` character CSV | HSK 3.0 handwriting character source |
 | `STUDY_TIMEZONE` | `UTC` | IANA timezone for the SRS day boundary |
 | `GATEWAYS__APP__HOST` | unset — derived from `HTTP_PORT` | Self health-check base URL; an explicit host wins |
 | `GATEWAYS__AI__BASE_URL` | `http://localhost:4000` | LiteLLM proxy |

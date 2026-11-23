@@ -47,6 +47,24 @@ async def test_search_pages_with_offset_and_keeps_the_total(container: Container
     assert empty == {"items": [], "total": 0, "limit": 20, "offset": 0}
 
 
+async def test_an_entry_exposes_its_vocabulary_and_handwriting_levels(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO dictionary_entry (simplified, pinyin, definitions, hsk_level, handwriting_level) "
+                "VALUES (:s, :p, :d, :h, :w)"
+            ),
+            [{"s": "班", "p": "ban1", "d": json.dumps(["class"]), "h": 1, "w": 2}],
+        )
+
+    entry = (await client.get("/dictionary-entries", params={"q": "班"})).json()["items"][0]
+
+    assert entry["hsk_level"] == 1
+    assert entry["handwriting_level"] == 2
+
+
 async def test_get_by_id_returns_entry_and_missing_is_404(container: Container, client: httpx.AsyncClient) -> None:
     await _seed(container)
     listed = (await client.get("/dictionary-entries", params={"q": "shui3"})).json()["items"]
@@ -149,6 +167,18 @@ async def test_related_carries_the_queued_study_item_id(container: Container, cl
     by_simplified = {row["simplified"]: row["study_item_id"] for row in page["items"]}
     assert by_simplified["知"] == study_item_id
     assert by_simplified["道"] is None
+
+
+async def test_related_rows_carry_the_handwriting_level(container: Container, client: httpx.AsyncClient) -> None:
+    ids = await _seed_related(container)
+    async with container.engine.begin() as conn:
+        await conn.execute(text("UPDATE dictionary_entry SET handwriting_level = 2 WHERE simplified = '知识'"))
+
+    page = (await client.get(f"/dictionary-entries/{ids['知道|zhi1 dao4']}/related")).json()
+
+    by_simplified = {row["simplified"]: row["handwriting_level"] for row in page["items"]}
+    assert by_simplified["知识"] == 2
+    assert by_simplified["知"] is None
 
 
 async def test_related_unknown_target_is_404(container: Container, client: httpx.AsyncClient) -> None:

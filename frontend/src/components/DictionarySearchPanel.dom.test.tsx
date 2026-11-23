@@ -35,6 +35,7 @@ function entryAt(index: number): DictionaryEntry {
     definitions: [`definição ${id}`],
     hsk_level: index === 0 ? 1 : null,
     pos_tags: [],
+    handwriting_level: index === 0 ? 2 : null,
   };
 }
 
@@ -132,6 +133,9 @@ describe("dictionary search panel on desktop", () => {
     expect(await screen.findByText("Mostrando 5 de 16")).toBeTruthy();
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(6);
     expect(within(tableRow("學")).getByText("HSK 1")).toBeTruthy();
+    expect(within(tableRow("學")).getByText("escrita HSK 2")).toBeTruthy();
+    expect(within(tableRow("習")).getByText("sem HSK")).toBeTruthy();
+    expect(within(tableRow("習")).getByText("escrita —")).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Paginação" })).toBeTruthy();
   });
 

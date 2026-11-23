@@ -48,6 +48,7 @@ function serve(options: BatchCallOptions = {}) {
                   definitions: ["significado"],
                   hsk_level: null,
                   pos_tags: [],
+                  handwriting_level: null,
                   ...candidate,
                 })),
               },

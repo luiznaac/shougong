@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     # tests to point somewhere unreachable so nothing downloads.
     hsk_dataset_url: str = "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/main/complete.min.json"
 
+    # The official HSK 3.0 handwriting character list (ivankra/hsk30), the
+    # character-level source of the derived handwriting level. Overridden in
+    # tests to point somewhere unreachable so nothing downloads.
+    hsk_character_dataset_url: str = "https://raw.githubusercontent.com/ivankra/hsk30/master/hsk30-chars.csv"
+
     # IANA timezone whose midnight is the SRS "day boundary": a day's cards all
     # become due at once (local midnight) rather than through the day.
     study_timezone: str = "UTC"

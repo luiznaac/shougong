@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { useItemHistory, useStudyItem } from "../api/queries.ts";
 import type { StudyItem, StudyItemHistory } from "../api/types.ts";
 import { Hanzi } from "../components/Hanzi.tsx";
-import { HskChip } from "../components/HskChip.tsx";
+import { WordLevels } from "../components/HskChip.tsx";
 import { ItemBadges } from "../components/ItemBadges.tsx";
 import { ItemPrioritySection } from "../components/ItemPrioritySection.tsx";
 import { ItemReadings } from "../components/ItemReadings.tsx";
@@ -163,7 +163,10 @@ function IdentityHeader({
               </p>
             ) : null}
             <div className={`flex flex-wrap items-center gap-1.5 ${compact ? "mt-1" : "mt-2"}`}>
-              <HskChip level={item.entry.hsk_level} />
+              <WordLevels
+                hskLevel={item.entry.hsk_level}
+                handwritingLevel={item.entry.handwriting_level}
+              />
               <SrsStageChip card={item.card} />
             </div>
           </div>

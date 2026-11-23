@@ -26,7 +26,7 @@ from shougong.acceptance.stroke_cache import CACHED_STROKES, StrokeMedians
 from shougong.application.settings import Settings
 from shougong.persistence.configuration.database import build_session_factory
 from shougong.persistence.configuration.time import naive_utc
-from shougong.persistence.dictionary.entity import DictionaryEntryEntity
+from shougong.persistence.dictionary.entity import CharacterWritingLevelEntity, DictionaryEntryEntity
 from shougong.persistence.reading.entity import ReadingTextEntity
 from shougong.persistence.reading.repository import to_entity
 from shougong.persistence.strokes.entity import CharacterStrokesEntity
@@ -74,6 +74,15 @@ class DictionaryRow:
     definitions: tuple[str, ...]
     hsk_level: int | None
     pos_tags: tuple[str, ...]
+    handwriting_level: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CharacterLevelRow:
+    """One `character_writing_level` row, so the detail family has real levels."""
+
+    character: str
+    writing_level: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +155,7 @@ class AcceptanceFixture:
     dictionary_only: tuple[DictionaryRow, ...]
     readings: tuple[ReadingRow, ...]
     strokes: tuple[StrokesRow, ...]
+    characters: tuple[CharacterLevelRow, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,9 +175,9 @@ class SeedOutcome:
 # 1..9. The first two are the item-detail pair: 知道 is the pinned learning
 # detail word, 知 is its queued shared-character neighbour in review.
 _WORDS: tuple[DictionaryRow, ...] = (
-    DictionaryRow(DETAIL_WORD, "zhi1 dao4", ("to know", "to be aware of"), 1, ("v",)),
-    DictionaryRow(_DETAIL_NEIGHBOUR, "zhi1", ("to know", "knowledge"), 1, ("v", "n")),
-    DictionaryRow("学", "xue2", ("to learn", "to study"), 1, ("v", "n")),
+    DictionaryRow(DETAIL_WORD, "zhi1 dao4", ("to know", "to be aware of"), 1, ("v",), handwriting_level=2),
+    DictionaryRow(_DETAIL_NEIGHBOUR, "zhi1", ("to know", "knowledge"), 1, ("v", "n"), handwriting_level=1),
+    DictionaryRow("学", "xue2", ("to learn", "to study"), 1, ("v", "n"), handwriting_level=1),
     DictionaryRow("学生", "xue2 sheng1", ("student", "pupil"), 1, ("n",)),
     DictionaryRow("老师", "lao3 shi1", ("teacher",), 1, ("n",)),
     DictionaryRow("朋友", "peng2 you3", ("friend",), 2, ("n",)),
@@ -197,6 +207,14 @@ _WORDS: tuple[DictionaryRow, ...] = (
     DictionaryRow("拉面", "la1 mian4", ("ramen", "pulled noodles"), None, ("n",)),
     DictionaryRow("猫咪", "mao1 mi1", ("kitty", "cat"), None, ("n",)),
     DictionaryRow("巷子", "xiang4 zi", ("alley", "lane"), None, ("n",)),
+)
+
+# The character-level store behind the seeded handwriting levels: the detail
+# word's characters plus the 学 family's shared character.
+_CHARACTER_LEVELS: tuple[CharacterLevelRow, ...] = (
+    CharacterLevelRow("知", 1),
+    CharacterLevelRow("道", 2),
+    CharacterLevelRow("学", 1),
 )
 
 # Not queued: the 学 family gives dictionary search extra rows to find,
@@ -493,6 +511,7 @@ def build_fixture(now: datetime) -> AcceptanceFixture:
         dictionary_only=_DICTIONARY_ONLY,
         readings=_build_readings(now),
         strokes=_build_strokes(),
+        characters=_CHARACTER_LEVELS,
     )
 
 
@@ -516,6 +535,7 @@ def _entry_entity(row: DictionaryRow) -> DictionaryEntryEntity:
         definitions=list(row.definitions),
         hsk_level=row.hsk_level,
         pos_tags=list(row.pos_tags),
+        handwriting_level=row.handwriting_level,
     )
 
 
@@ -632,6 +652,10 @@ async def apply_acceptance_fixture(settings: Settings, *, now: datetime | None =
 
             session.add_all(_reading_entity(row) for row in fixture.readings)
             session.add_all(_stroke_entity(row) for row in fixture.strokes)
+            session.add_all(
+                CharacterWritingLevelEntity(character=row.character, writing_level=row.writing_level)
+                for row in fixture.characters
+            )
 
             return SeedOutcome(
                 seeded=True,
