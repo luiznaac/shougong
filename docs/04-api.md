@@ -376,7 +376,7 @@ The app maps domain exceptions to a consistent problem shape:
 - **Pagination**: list routes return `{ items, total, limit, offset }` (`/reading-texts`, `/study-items`, `/dictionary-entries`); `limit` is `1..100` (default `20`), `offset` is `>= 0`, `total` is the exact filtered count. Item reviews and item history keep their bare arrays (`limit` 1..200 default 50). Clients page explicitly and never re-sort a page.
 - **Ordering**: study items by due date then id unless a filter/sort overrides it (`leech=true` orders worst-first, `sort` selects `created_desc` or `stability_asc`); dictionary search shortest-first; review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
 - **`Location` headers** are set on created resources.
-- **Idempotency**: dictionary autoload and HSK enrichment are idempotent; adding the same entry twice is a conflict, not a duplicate insert.
+- **Idempotency**: dictionary autoload and HSK enrichment are idempotent (enrichment is versioned — it re-runs in place when the code's enrichment version advances); adding the same entry twice is a conflict, not a duplicate insert.
 - **Freshness**: reading history stores token text only and hydrates pinyin, definitions, and `dictionary_entry_id` on read against the current dictionary and study queue, so listed readings reflect the live vocabulary.
 
 ## Suggested additions

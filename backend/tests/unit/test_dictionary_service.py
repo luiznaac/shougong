@@ -20,8 +20,12 @@ _RECORDS = [
 ]
 
 
-def _service(repository: FakeDictionaryRepository) -> DictionaryService:
-    return DictionaryService(repository, DictionaryTelemetry(NoOpMeter("test")))
+def _service(repository: FakeDictionaryRepository, *, enrichment_version: int = 1) -> DictionaryService:
+    return DictionaryService(
+        repository,
+        DictionaryTelemetry(NoOpMeter("test")),
+        enrichment_version=enrichment_version,
+    )
 
 
 async def test_get_returns_the_entry() -> None:
@@ -101,15 +105,64 @@ async def test_enrich_hsk_stamps_every_row_that_shares_a_simplified() -> None:
     ]
 
 
-async def test_enrich_hsk_is_a_noop_once_any_row_has_a_level() -> None:
-    repo = FakeDictionaryRepository([make_dictionary_entry(simplified="书", hsk_level=1, pos_tags=("n",))])
-    source = FakeHskDatasetSource({"书": HskDatasetWord("书", 3, ("n",))})
+async def test_enrich_hsk_skips_when_the_stored_version_matches_the_code_version() -> None:
+    repo = FakeDictionaryRepository(
+        [make_dictionary_entry(entry_id=1, simplified="行", hsk_level=2, pos_tags=("v",))],
+        enrichment_version=1,
+    )
+    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n",))})
 
-    applied = await _service(repo).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
 
     assert applied == 0
     assert source.fetch_calls == 0
-    assert repo.entries[0].hsk_level == 1  # not re-stamped
+    assert repo.entries[0].hsk_level == 2  # not re-stamped
+
+
+async def test_advancing_the_version_re_enriches_every_row_in_place_and_persists_it() -> None:
+    repo = FakeDictionaryRepository(
+        [
+            make_dictionary_entry(entry_id=1, simplified="行", pinyin="xing2", hsk_level=2, pos_tags=("v",)),
+            make_dictionary_entry(entry_id=2, simplified="行", pinyin="hang2", hsk_level=2, pos_tags=("v",)),
+            make_dictionary_entry(entry_id=3, simplified="水", pinyin="shui3"),
+        ],
+        enrichment_version=1,
+    )
+    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n", "v"))})
+
+    applied = await _service(repo, enrichment_version=2).enrich_hsk(source)
+
+    assert applied == 1
+    assert source.fetch_calls == 1
+    # ids are preserved and every reading of 行 is re-stamped identically
+    assert [(e.id, e.simplified, e.hsk_level, e.pos_tags) for e in repo.entries] == [
+        (1, "行", 5, ("n", "v")),
+        (2, "行", 5, ("n", "v")),
+        (3, "水", None, ()),
+    ]
+    assert repo.stored_enrichment_version == 2
+
+
+async def test_an_empty_dictionary_leaves_the_version_unset_for_a_later_run() -> None:
+    repo = FakeDictionaryRepository()
+    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ())})
+
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
+
+    assert applied == 0
+    assert source.fetch_calls == 0
+    assert repo.stored_enrichment_version is None
+
+
+async def test_an_empty_dataset_leaves_the_version_unset_for_a_later_run() -> None:
+    repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="行")])
+    source = FakeHskDatasetSource()
+
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
+
+    assert applied == 0
+    assert source.fetch_calls == 1
+    assert repo.stored_enrichment_version is None
 
 
 def _knowing_family() -> list[DictionaryEntry]:

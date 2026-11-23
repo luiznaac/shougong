@@ -137,10 +137,12 @@ class FakeDictionaryRepository(IDictionaryRepository):
         entries: list[DictionaryEntry] | None = None,
         *,
         study_items: Mapping[int, int] | None = None,
+        enrichment_version: int | None = None,
     ) -> None:
         self.entries: list[DictionaryEntry] = list(entries or [])
         # entry id -> the id of the study item queuing it
         self.study_items: dict[int, int] = dict(study_items or {})
+        self.stored_enrichment_version = enrichment_version
         self.hsk_words_calls = 0
         self._ids = count(1)
 
@@ -207,8 +209,11 @@ class FakeDictionaryRepository(IDictionaryRepository):
                 self.entries[i] = replace(entry, hsk_level=word.hsk_level, pos_tags=word.pos_tags)
         return len(dataset)
 
-    async def count_with_hsk(self) -> int:
-        return sum(1 for e in self.entries if e.hsk_level is not None)
+    async def enrichment_version(self) -> int | None:
+        return self.stored_enrichment_version
+
+    async def set_enrichment_version(self, version: int) -> None:
+        self.stored_enrichment_version = version
 
     async def hsk_words(self) -> list[HskDatasetWord]:
         self.hsk_words_calls += 1

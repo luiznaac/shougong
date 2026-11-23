@@ -59,8 +59,13 @@ class IDictionaryRepository(Protocol):
         Returns the number of dataset words applied."""
         ...
 
-    async def count_with_hsk(self) -> int:
-        """How many entries already carry an `hsk_level` — the enrichment gate."""
+    async def enrichment_version(self) -> int | None:
+        """The enrichment version the dictionary was last enriched with, or `None`
+        when the pass has never run."""
+        ...
+
+    async def set_enrichment_version(self, version: int) -> None:
+        """Persist `version` as the single enrichment version."""
         ...
 
     async def hsk_words(self) -> list[HskDatasetWord]:

@@ -74,7 +74,7 @@ sequenceDiagram
     end
 ```
 
-Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent and guarded by table state (`count() == 0` for CEDICT, any row with `hsk_level` for enrichment).
+Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent: CC-CEDICT fills only an empty table (`count() == 0`), and HSK enrichment is versioned — it records the version it ran in `dictionary_enrichment_state` and skips while that matches the code's, re-running in place (preserving row ids and study history) when the version advances.
 
 ## Key request flows
 

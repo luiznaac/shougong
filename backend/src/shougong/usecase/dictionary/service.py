@@ -10,9 +10,16 @@ from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 
 
 class DictionaryService:
-    def __init__(self, repository: IDictionaryRepository, telemetry: DictionaryTelemetry) -> None:
+    def __init__(
+        self,
+        repository: IDictionaryRepository,
+        telemetry: DictionaryTelemetry,
+        *,
+        enrichment_version: int,
+    ) -> None:
         self._repository = repository
         self._telemetry = telemetry
+        self.enrichment_version = enrichment_version
 
     async def search(self, query: str, limit: int = 20, offset: int = 0) -> Page[DictionaryEntry]:
         page = await self._repository.search(query.strip(), limit=limit, offset=offset)
@@ -62,16 +69,29 @@ class DictionaryService:
     async def enrich_hsk(self, source: IHskDatasetSource) -> int:
         """Stamp `hsk_level` and `pos_tags` onto the dictionary from the HSK dataset.
 
-        Idempotent: once any entry carries an `hsk_level`, every later call is a
-        no-op. Runs from the startup hook, after the dictionary is populated.
+        Versioned and idempotent: the pass persists the enrichment version it ran
+        and skips once the stored version matches the code's. Advancing the
+        version re-runs it, updating existing rows in place so row ids and study
+        history survive. Runs from the startup hook, after the dictionary is
+        populated.
         """
-        existing = await self._repository.count_with_hsk()
-        if existing > 0:
-            self._telemetry.record_hsk_enrich_skipped(existing=existing)
+        stored = await self._repository.enrichment_version()
+        if stored == self.enrichment_version:
+            self._telemetry.record_hsk_enrich_skipped(version=stored)
+            return 0
+
+        # An empty table means the CC-CEDICT pass has not filled it yet. Leave
+        # the marker unset so the enrichment runs once there is data to stamp.
+        if await self._repository.count() == 0:
             return 0
 
         dataset = await source.fetch()
         self._telemetry.record_source_downloaded("hsk", len(dataset))
+        # An empty dataset is a failed download, not a version worth recording —
+        # leave the marker unset so the next boot retries.
+        if not dataset:
+            return 0
         applied = await self._repository.apply_hsk(dataset)
+        await self._repository.set_enrichment_version(self.enrichment_version)
         self._telemetry.record_hsk_enriched(records=applied)
         return applied

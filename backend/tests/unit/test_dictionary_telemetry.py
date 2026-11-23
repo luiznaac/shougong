@@ -48,7 +48,7 @@ def telemetry() -> Iterator[Telemetry]:
 
 
 def _service(telemetry: Telemetry, repository: FakeDictionaryRepository) -> DictionaryService:
-    return DictionaryService(repository, DictionaryTelemetry(telemetry.meter))
+    return DictionaryService(repository, DictionaryTelemetry(telemetry.meter), enrichment_version=1)
 
 
 def _bodies(telemetry: Telemetry) -> list[str]:
@@ -130,7 +130,8 @@ async def test_the_bootstrap_outcomes_are_info_events_with_their_exact_attribute
         FakeHskDatasetSource({"书": HskDatasetWord("书", 3, ("n",))})
     )
     await _service(
-        telemetry, FakeDictionaryRepository([make_dictionary_entry(hsk_level=1, pos_tags=("n",))])
+        telemetry,
+        FakeDictionaryRepository([make_dictionary_entry(hsk_level=1, pos_tags=("n",))], enrichment_version=1),
     ).enrich_hsk(FakeHskDatasetSource({"书": HskDatasetWord("书", 3, ("n",))}))
 
     records = [item.log_record for item in log_records(telemetry)]
@@ -141,7 +142,7 @@ async def test_the_bootstrap_outcomes_are_info_events_with_their_exact_attribute
         ("dictionary.populate_skipped", {"dictionary.existing": 1}),
         ("dictionary.source_downloaded", {"dictionary.source": "hsk", "dictionary.records": 1}),
         ("dictionary.hsk_enriched", {"dictionary.records": 1}),
-        ("dictionary.hsk_enrich_skipped", {"dictionary.existing": 1}),
+        ("dictionary.hsk_enrich_skipped", {"dictionary.enrichment_version": 1}),
     ]
     assert not any(body.endswith(".started") or body.endswith(".finished") for body in _bodies(telemetry))
 

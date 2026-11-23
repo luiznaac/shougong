@@ -22,6 +22,10 @@ erDiagram
         int hsk_level
         json pos_tags
     }
+    DICTIONARY_ENRICHMENT_STATE {
+        int id PK
+        int version
+    }
     CHARACTER_STROKES {
         varchar character PK
         bool has_data
@@ -98,8 +102,16 @@ Bundled lexicon, populated from CC-CEDICT and enriched with HSK 3.0 level + POS 
 
 - `simplified` and `pinyin` are indexed for search and exact matching.
 - `pinyin` is normalized at import: lowercase, `ü` written as `v` (`lv4 xing2`).
-- `hsk_level`/`pos_tags` are stamped once; the same values apply to every row sharing a `simplified`.
+- `hsk_level`/`pos_tags` are stamped by the versioned enrichment pass; the same values apply to every row sharing a `simplified`.
 - A hanzi can have several rows (multiple readings); each is a distinct entry.
+
+### `dictionary_enrichment_state`
+
+The single-row marker recording which enrichment version last stamped `dictionary_entry`. `id` is always `1` — the pass upserts the row, so the table holds one version for the whole dictionary.
+
+- The row is absent until the pass first runs; the pass skips while the stored `version` matches the code's.
+- Advancing the version re-runs the pass, updating `dictionary_entry` rows in place so row ids, study items and study history survive and no duplicate rows appear.
+- Created by migration `0007_dictionary_enrich`.
 
 ### `study_item`
 
