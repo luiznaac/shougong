@@ -14,6 +14,7 @@ export function studyItem(
       definitions: ["estudar"],
       hsk_level: 1,
       pos_tags: [],
+      handwriting_level: 2,
     },
     card: {
       state: "review",

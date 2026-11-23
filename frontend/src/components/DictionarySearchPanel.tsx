@@ -7,7 +7,7 @@ import type { Presentation } from "../lib/useMediaQuery.ts";
 import { DataList, type DataListColumn } from "./DataList.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 import { Hanzi } from "./Hanzi.tsx";
-import { HskChip } from "./HskChip.tsx";
+import { WordLevels } from "./HskChip.tsx";
 import { LoadMore } from "./LoadMore.tsx";
 import { Pager } from "./Pager.tsx";
 import { Panel } from "./Panel.tsx";
@@ -212,7 +212,10 @@ export function DictionarySearchPanel({ presentation }: { presentation: Presenta
                   rowKey={(entry) => entry.id}
                   chips={(entry) => (
                     <>
-                      <HskChip level={entry.hsk_level} />
+                      <WordLevels
+                        hskLevel={entry.hsk_level}
+                        handwritingLevel={entry.handwriting_level}
+                      />
                       {enqueueControl(entry)}
                     </>
                   )}

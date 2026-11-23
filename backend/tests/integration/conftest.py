@@ -36,6 +36,7 @@ def settings(mysql: MySqlContainer) -> Settings:
         hsk_enrich_autoload=False,
         hsk_dataset_url="http://localhost:1/hsk.json",
         official_hsk_url="http://localhost:1/hsk30.csv",
+        hsk_character_dataset_url="http://localhost:1/hsk-chars.csv",
         mysql=MySqlConfig(
             host=mysql.get_container_host_ip(),
             port=int(mysql.get_exposed_port(3306)),

@@ -11,11 +11,17 @@ from shougong.usecase.dictionary.gateway import (
     EnrichmentDataset,
     ICedictSource,
     IDictionaryRepository,
+    IHskCharacterSource,
     IHskDatasetSource,
     IOfficialHskSource,
     OfficialLevels,
 )
-from shougong.usecase.dictionary.model import DictionaryEntry, HskDatasetWord, RelatedEntryPage
+from shougong.usecase.dictionary.model import (
+    DictionaryEntry,
+    HskDatasetWord,
+    RelatedEntryPage,
+    derive_handwriting_level,
+)
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 
 
@@ -76,13 +82,21 @@ class DictionaryService:
         self._telemetry.record_populated(records=added)
         return added
 
-    async def enrich_hsk(self, official: IOfficialHskSource, community: IHskDatasetSource) -> int:
-        """Stamp the official vocabulary level and the community POS tags.
+    async def enrich_hsk(
+        self,
+        official: IOfficialHskSource,
+        community: IHskDatasetSource,
+        character_source: IHskCharacterSource,
+    ) -> int:
+        """Stamp the official vocabulary level, community POS tags and handwriting levels.
 
-        The level comes from the official HSK 3.0 word list (1-6, or 7 for the
-        7-9 band); the community dataset supplies only the POS tags the reading
-        engine samples from. A word outside the official list ends with no level,
-        so advancing the pass also clears stale levels.
+        The vocabulary level comes from the official HSK 3.0 word list (1-6, or 7
+        for the 7-9 band); the community dataset supplies only the POS tags the
+        reading engine samples from. A word outside the official list ends with no
+        level, so advancing the pass also clears stale levels. The character
+        writing levels come from the official handwriting list and are stored per
+        character; each word's `handwriting_level` is derived as the max writing
+        level among its characters that have one.
 
         Versioned and idempotent: the pass persists the enrichment version it ran
         and skips once the stored version matches the code's. Advancing the
@@ -104,11 +118,24 @@ class DictionaryService:
         self._telemetry.record_source_downloaded("official-hsk", len(levels))
         community_pos = await community.fetch()
         self._telemetry.record_source_downloaded("community-hsk", len(community_pos))
-        # An empty source is a failed download, not a version worth recording —
-        # leave the marker unset so the next boot retries.
+        # An empty word source is a failed download, not a version worth
+        # recording — leave the marker unset so the next boot retries.
         if not levels or not community_pos:
             return 0
+
+        characters = await character_source.fetch()
+        self._telemetry.record_source_downloaded("hsk_characters", len(characters))
+        # Same rule for the character list: an empty download is not a version.
+        if not characters:
+            return 0
+
         applied = await self._repository.apply_enrichment(_combined(levels, community_pos))
+        character_levels = {character: entry.writing_level for character, entry in characters.items()}
+        await self._repository.apply_character_levels(character_levels)
+        forms = await self._repository.simplified_forms()
+        await self._repository.set_handwriting_levels(
+            {entry_id: derive_handwriting_level(simplified, character_levels) for entry_id, simplified in forms}
+        )
         await self._repository.set_enrichment_version(self.enrichment_version, Counter(levels.values()))
         self._telemetry.record_hsk_enriched(records=applied)
         return applied

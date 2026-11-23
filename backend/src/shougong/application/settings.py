@@ -98,10 +98,11 @@ class Settings(BaseSettings):
     dictionary_autoload: bool = True
 
     # On startup, after the dictionary is populated, download the official HSK
-    # 3.0 word list and the community dataset once, then stamp the official
-    # vocabulary level plus the community POS tags onto `dictionary_entry`.
-    # Versioned — a no-op once the stored enrichment version matches the code's.
-    # Off in tests that don't want the fetch.
+    # 3.0 word list, the community dataset and the handwriting character list
+    # once, then stamp the official vocabulary level, community POS tags,
+    # character writing levels and derived handwriting levels. Versioned — a
+    # no-op once the stored enrichment version matches the code's. Off in tests
+    # that don't want the fetch.
     hsk_enrich_autoload: bool = True
 
     # The official HSK 3.0 word list (ivankra/hsk30) — the vocabulary-level source.
@@ -111,6 +112,11 @@ class Settings(BaseSettings):
     # The community HSK dataset (drkameleon/complete-hsk-vocabulary) — the POS-tag
     # source, joined by simplified form. Overridden in tests to point nowhere.
     hsk_dataset_url: str = "https://raw.githubusercontent.com/drkameleon/complete-hsk-vocabulary/main/complete.min.json"
+
+    # The official HSK 3.0 handwriting character list (ivankra/hsk30), the
+    # character-level source of the derived handwriting level. Overridden in
+    # tests to point somewhere unreachable so nothing downloads.
+    hsk_character_dataset_url: str = "https://raw.githubusercontent.com/ivankra/hsk30/master/hsk30-chars.csv"
 
     # IANA timezone whose midnight is the SRS "day boundary": a day's cards all
     # become due at once (local midnight) rather than through the day.

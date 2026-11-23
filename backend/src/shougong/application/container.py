@@ -27,6 +27,7 @@ from shougong.application.settings import Settings
 from shougong.application.telemetry import Telemetry, build_telemetry
 from shougong.gateway.configuration.http_client import build_http_client
 from shougong.gateway.dictionary.cedict_source import CedictSource
+from shougong.gateway.dictionary.hsk_character_source import HskCharacterSource
 from shougong.gateway.dictionary.hsk_dataset_source import HskDatasetSource
 from shougong.gateway.dictionary.official_hsk_source import OfficialHskSource
 from shougong.gateway.health.app_health_gateway import AppHealthGateway
@@ -87,9 +88,11 @@ _log = get_logger(__name__)
 # The dictionary's enrichment contract: bump it whenever the pass's output
 # changes, so an existing database re-runs the pass in place instead of keeping
 # stale rows. `DictionaryService.enrich_hsk` skips while the stored marker
-# matches this value. Version 2 sourced the vocabulary level from the official
-# HSK 3.0 word list (clearing words outside it) instead of the community dataset.
-DICTIONARY_ENRICHMENT_VERSION = 2
+# matches this value. Version 2 added the character writing levels and the
+# derived word handwriting level; version 3 sources the vocabulary level from the
+# official HSK 3.0 word list (clearing words outside it) and records the official
+# per-level totals.
+DICTIONARY_ENRICHMENT_VERSION = 3
 
 
 class Container:
@@ -135,6 +138,7 @@ class Container:
         self._cedict_source = CedictSource(self.http_client)
         self._official_hsk_source = OfficialHskSource(self.http_client, settings.official_hsk_url)
         self._hsk_dataset_source = HskDatasetSource(self.http_client, settings.hsk_dataset_url)
+        self._hsk_character_source = HskCharacterSource(self.http_client, settings.hsk_character_dataset_url)
 
         # --- strokes slice -------------------------------------------------
         self.strokes_telemetry = StrokesTelemetry(self.telemetry.meter)
@@ -256,7 +260,8 @@ class Container:
 
     async def _autoload_dictionary(self) -> None:
         """Fire-and-forget: fill the dictionary from CC-CEDICT if it is empty,
-        then stamp the official vocabulary level + community POS tags onto it.
+        then stamp the official vocabulary level, community POS tags and the
+        derived handwriting levels onto it.
 
         Runs in the background so the app serves immediately; a download failure
         is logged, never fatal. Both steps are idempotent. The task boundary owns
@@ -270,7 +275,11 @@ class Container:
                     await self._dictionary_service.populate_if_empty(self._cedict_source)
                 if self.settings.hsk_enrich_autoload:
                     stage = "enrich"
-                    await self._dictionary_service.enrich_hsk(self._official_hsk_source, self._hsk_dataset_source)
+                    await self._dictionary_service.enrich_hsk(
+                        self._official_hsk_source,
+                        self._hsk_dataset_source,
+                        self._hsk_character_source,
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception as error:

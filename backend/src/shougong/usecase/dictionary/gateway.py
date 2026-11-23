@@ -9,6 +9,7 @@ from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.model import (
     CedictRecord,
     DictionaryEntry,
+    HskCharacter,
     HskDatasetWord,
     RelatedEntryPage,
 )
@@ -88,6 +89,20 @@ class IDictionaryRepository(Protocol):
         `hsk_level`, for the per-level functional-word sets."""
         ...
 
+    async def apply_character_levels(self, levels: Mapping[str, int]) -> int:
+        """Upsert the character-level writing store from `levels` (character →
+        writing level). Returns the number of characters applied."""
+        ...
+
+    async def simplified_forms(self) -> list[tuple[int, str]]:
+        """Every dictionary entry's `(id, simplified)`, for the handwriting rollup."""
+        ...
+
+    async def set_handwriting_levels(self, levels: Mapping[int, int | None]) -> int:
+        """Set `handwriting_level` on each listed entry id — an explicit `None`
+        clears it. Returns the number of rows written."""
+        ...
+
 
 class ICedictSource(Protocol):
     """Fetches the full CC-CEDICT dataset from its upstream (MDBG)."""
@@ -109,4 +124,12 @@ class IHskDatasetSource(Protocol):
 
     async def fetch(self) -> CommunityPosTags:
         """Every listed word → its POS tags, keyed by simplified form."""
+        ...
+
+
+class IHskCharacterSource(Protocol):
+    """Fetches the official HSK 3.0 handwriting character list from its upstream."""
+
+    async def fetch(self) -> dict[str, HskCharacter]:
+        """Every listed character → its writing level, keyed by character."""
         ...

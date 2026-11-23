@@ -9,9 +9,10 @@ from sqlalchemy import text
 
 from shougong.application.container import Container
 from shougong.persistence.dictionary.repository import DictionaryRepository
+from shougong.usecase.dictionary.model import HskCharacter
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
-from tests.fixtures import FakeHskDatasetSource, FakeOfficialHskSource
+from tests.fixtures import FakeHskCharacterSource, FakeHskDatasetSource, FakeOfficialHskSource
 
 
 async def _seed_known(
@@ -134,7 +135,14 @@ async def test_the_official_level_drives_search_summary_and_proficiency(
             "咖": ("n",),
         }
     )
-    assert await service.enrich_hsk(official, community) == 5
+    assert (
+        await service.enrich_hsk(
+            official,
+            community,
+            FakeHskCharacterSource({"书": HskCharacter("书", 1), "跑": HskCharacter("跑", 2)}),
+        )
+        == 5
+    )
 
     found = (await client.get("/dictionary-entries", params={"q": "坏"})).json()["items"]
     assert found[0]["hsk_level"] == 2

@@ -36,6 +36,14 @@ describe("RecentWords", () => {
     expect(html).toContain("学");
   });
 
+  it("marks a word outside HSK with the outside-HSK vocabulary label", () => {
+    const items = [studyItem({ entry: { ...studyItem().entry, hsk_level: null } })];
+
+    const html = render(items);
+
+    expect(html).toContain("sem HSK");
+  });
+
   it("has its own empty state before anything is queued", () => {
     const html = render([]);
 

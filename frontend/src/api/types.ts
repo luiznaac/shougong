@@ -37,6 +37,7 @@ export interface DictionaryEntry {
   definitions: string[];
   hsk_level: number | null; // official HSK 3.0 vocabulary level; null outside the official list
   pos_tags: string[]; // community ICTCLAS POS tags
+  handwriting_level: number | null; // max character writing level; null when none has one
 }
 
 /** An entry sharing at least one hanzi with the item's word. */

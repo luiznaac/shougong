@@ -13,6 +13,7 @@ function snapshot(createdAt: string, stability: number, difficulty: number): Stu
       definitions: ["estudar"],
       hsk_level: 1,
       pos_tags: [],
+      handwriting_level: 1,
     },
     card: {
       state: "review",

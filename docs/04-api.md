@@ -86,11 +86,12 @@ client presentation. `GET /study-items/{id}/reviews` and
   "pinyin": "xue2 xi2",
   "definitions": ["to study", "to learn"],
   "hsk_level": 1,
-  "pos_tags": ["v", "n"]
+  "pos_tags": ["v", "n"],
+  "handwriting_level": 2
 }
 ```
 
-`hsk_level` is the official HSK 3.0 **vocabulary level** — levels 1-6, or 7 for the single 7-9 band — and `null` when the word is outside the official list (there is no HSK 2.0 fallback). `pos_tags` are the community dataset's POS tags.
+`hsk_level` is the official HSK 3.0 **vocabulary level** — levels 1-6, or 7 for the single 7-9 band — and `null` when the word is outside the official list (there is no HSK 2.0 fallback). `pos_tags` are the community dataset's POS tags. `handwriting_level` is the word's **handwriting** level, derived as the max writing level among its characters that have one, `null` when none does. Clients show "not in HSK" for a null vocabulary level and an unknown marker for a null handwriting level.
 
 ### `RelatedEntryResponse`
 
@@ -105,6 +106,7 @@ is not queued):
   "definitions": ["knowledge"],
   "hsk_level": 1,
   "pos_tags": ["n"],
+  "handwriting_level": 2,
   "study_item_id": null
 }
 ```
@@ -123,7 +125,7 @@ The pagination envelope shared by the redesign's list routes (`{ items, total, l
 ```json
 {
   "id": 42,
-  "entry": { "id": 123, "simplified": "学习", "pinyin": "xue2 xi2", "definitions": [], "hsk_level": 1, "pos_tags": [] },
+  "entry": { "id": 123, "simplified": "学习", "pinyin": "xue2 xi2", "definitions": [], "hsk_level": 1, "pos_tags": [], "handwriting_level": 2 },
   "card": {
     "state": "learning",
     "due": "2026-09-11T00:00:00Z",
