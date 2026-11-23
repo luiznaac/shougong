@@ -50,7 +50,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------------------------
 # Stage 3 — runtime
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm
+FROM python:3.15-slim-bookworm
 WORKDIR /app
 
 RUN apt-get update \
