@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.commons.page import Page
-from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
-from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntryPage
+from shougong.usecase.dictionary.gateway import (
+    ICedictSource,
+    IDictionaryRepository,
+    IHskCharacterSource,
+    IHskDatasetSource,
+)
+from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntryPage, derive_handwriting_level
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 
 
@@ -66,8 +71,13 @@ class DictionaryService:
         self._telemetry.record_populated(records=added)
         return added
 
-    async def enrich_hsk(self, source: IHskDatasetSource) -> int:
-        """Stamp `hsk_level` and `pos_tags` onto the dictionary from the HSK dataset.
+    async def enrich_hsk(self, source: IHskDatasetSource, character_source: IHskCharacterSource) -> int:
+        """Stamp the vocabulary level and POS tags, then derive the handwriting levels.
+
+        The vocabulary level and POS tags come from the word dataset; the
+        character writing levels come from the official handwriting list and are
+        stored per character. Each word's `handwriting_level` is derived as the
+        max writing level among its characters that have one.
 
         Versioned and idempotent: the pass persists the enrichment version it ran
         and skips once the stored version matches the code's. Advancing the
@@ -91,7 +101,20 @@ class DictionaryService:
         # leave the marker unset so the next boot retries.
         if not dataset:
             return 0
+
+        characters = await character_source.fetch()
+        self._telemetry.record_source_downloaded("hsk_characters", len(characters))
+        # Same rule for the character list: an empty download is not a version.
+        if not characters:
+            return 0
+
         applied = await self._repository.apply_hsk(dataset)
+        character_levels = {character: entry.writing_level for character, entry in characters.items()}
+        await self._repository.apply_character_levels(character_levels)
+        forms = await self._repository.simplified_forms()
+        await self._repository.set_handwriting_levels(
+            {entry_id: derive_handwriting_level(simplified, character_levels) for entry_id, simplified in forms}
+        )
         await self._repository.set_enrichment_version(self.enrichment_version)
         self._telemetry.record_hsk_enriched(records=applied)
         return applied

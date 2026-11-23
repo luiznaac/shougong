@@ -16,7 +16,11 @@ from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
 )
-from shougong.persistence.dictionary.entity import DictionaryEnrichmentStateEntity, DictionaryEntryEntity
+from shougong.persistence.dictionary.entity import (
+    CharacterWritingLevelEntity,
+    DictionaryEnrichmentStateEntity,
+    DictionaryEntryEntity,
+)
 from shougong.persistence.study.entity import StudyItemEntity
 from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
@@ -41,6 +45,7 @@ def to_domain(row: DictionaryEntryEntity) -> DictionaryEntry:
         definitions=tuple(row.definitions),
         hsk_level=row.hsk_level,
         pos_tags=tuple(row.pos_tags or ()),
+        handwriting_level=row.handwriting_level,
     )
 
 
@@ -199,6 +204,42 @@ class DictionaryRepository(IDictionaryRepository):
                     [{"s": w.simplified, "l": w.hsk_level, "p": list(w.pos_tags)} for w in batch],
                 )
             return len(words)
+
+        return await self._tx.execute(_run)
+
+    async def apply_character_levels(self, levels: Mapping[str, int]) -> int:
+        async def _run() -> int:
+            session = current_session()
+            stmt = mysql.insert(CharacterWritingLevelEntity).values(
+                character=bindparam("c"), writing_level=bindparam("l")
+            )
+            stmt = stmt.on_duplicate_key_update(writing_level=stmt.inserted.writing_level)
+            rows = list(levels.items())
+            for start in range(0, len(rows), _BULK_BATCH):
+                batch = rows[start : start + _BULK_BATCH]
+                await session.execute(stmt, [{"c": character, "l": level} for character, level in batch])
+            return len(rows)
+
+        return await self._tx.execute(_run)
+
+    async def simplified_forms(self) -> list[tuple[int, str]]:
+        async def _run() -> list[tuple[int, str]]:
+            session = current_session()
+            rows = (await session.execute(select(DictionaryEntryEntity.id, DictionaryEntryEntity.simplified))).all()
+            return [(int(entry_id), simplified) for entry_id, simplified in rows]
+
+        return await self._tx.execute(_run)
+
+    async def set_handwriting_levels(self, levels: Mapping[int, int | None]) -> int:
+        async def _run() -> int:
+            session = current_session()
+            table = cast(Table, DictionaryEntryEntity.__table__)
+            stmt = update(table).where(table.c.id == bindparam("i")).values(handwriting_level=bindparam("l"))
+            rows = list(levels.items())
+            for start in range(0, len(rows), _BULK_BATCH):
+                batch = rows[start : start + _BULK_BATCH]
+                await session.execute(stmt, [{"i": entry_id, "l": level} for entry_id, level in batch])
+            return len(rows)
 
         return await self._tx.execute(_run)
 

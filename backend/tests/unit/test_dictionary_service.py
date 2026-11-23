@@ -4,12 +4,13 @@ import pytest
 from opentelemetry.metrics import NoOpMeter
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
+from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskCharacter, HskDatasetWord
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 from tests.fixtures import (
     FakeCedictSource,
     FakeDictionaryRepository,
+    FakeHskCharacterSource,
     FakeHskDatasetSource,
     make_dictionary_entry,
 )
@@ -26,6 +27,10 @@ def _service(repository: FakeDictionaryRepository, *, enrichment_version: int = 
         DictionaryTelemetry(NoOpMeter("test")),
         enrichment_version=enrichment_version,
     )
+
+
+def _characters(levels: dict[str, int]) -> FakeHskCharacterSource:
+    return FakeHskCharacterSource({c: HskCharacter(c, level) for c, level in levels.items()})
 
 
 async def test_get_returns_the_entry() -> None:
@@ -95,7 +100,7 @@ async def test_enrich_hsk_stamps_every_row_that_shares_a_simplified() -> None:
     repo = FakeDictionaryRepository([walk, firm, other])
     source = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ("v", "n"))})
 
-    applied = await _service(repo).enrich_hsk(source)
+    applied = await _service(repo).enrich_hsk(source, _characters({"行": 2}))
 
     assert applied == 1
     assert [(e.simplified, e.hsk_level, e.pos_tags) for e in repo.entries] == [
@@ -111,11 +116,13 @@ async def test_enrich_hsk_skips_when_the_stored_version_matches_the_code_version
         enrichment_version=1,
     )
     source = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n",))})
+    characters = _characters({"行": 2})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(source, characters)
 
     assert applied == 0
     assert source.fetch_calls == 0
+    assert characters.fetch_calls == 0
     assert repo.entries[0].hsk_level == 2  # not re-stamped
 
 
@@ -130,7 +137,7 @@ async def test_advancing_the_version_re_enriches_every_row_in_place_and_persists
     )
     source = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n", "v"))})
 
-    applied = await _service(repo, enrichment_version=2).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=2).enrich_hsk(source, _characters({"行": 3}))
 
     assert applied == 1
     assert source.fetch_calls == 1
@@ -140,28 +147,72 @@ async def test_advancing_the_version_re_enriches_every_row_in_place_and_persists
         (2, "行", 5, ("n", "v")),
         (3, "水", None, ()),
     ]
+    assert [e.handwriting_level for e in repo.entries] == [3, 3, None]
     assert repo.stored_enrichment_version == 2
 
 
 async def test_an_empty_dictionary_leaves_the_version_unset_for_a_later_run() -> None:
     repo = FakeDictionaryRepository()
     source = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ())})
+    characters = _characters({"行": 2})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(source, characters)
 
     assert applied == 0
     assert source.fetch_calls == 0
+    assert characters.fetch_calls == 0
     assert repo.stored_enrichment_version is None
 
 
 async def test_an_empty_dataset_leaves_the_version_unset_for_a_later_run() -> None:
     repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="行")])
     source = FakeHskDatasetSource()
+    characters = _characters({"行": 2})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(source, characters)
 
     assert applied == 0
     assert source.fetch_calls == 1
+    assert characters.fetch_calls == 0
+    assert repo.stored_enrichment_version is None
+
+
+async def test_enrich_hsk_populates_character_levels_and_derives_the_handwriting_rollup() -> None:
+    repo = FakeDictionaryRepository(
+        [
+            make_dictionary_entry(entry_id=1, simplified="爱人", hsk_level=2),
+            make_dictionary_entry(entry_id=2, simplified="班", hsk_level=1),
+            make_dictionary_entry(entry_id=3, simplified="水"),
+        ]
+    )
+    source = FakeHskDatasetSource(
+        {
+            "爱人": HskDatasetWord("爱人", 2, ("n",)),
+            "班": HskDatasetWord("班", 1, ("n",)),
+        }
+    )
+
+    applied = await _service(repo).enrich_hsk(source, _characters({"爱": 1, "人": 1, "班": 2}))
+
+    assert applied == 2
+    assert repo.character_levels == {"爱": 1, "人": 1, "班": 2}
+    assert [(e.simplified, e.handwriting_level) for e in repo.entries] == [
+        ("爱人", 1),  # max of 爱 (1) and 人 (1)
+        ("班", 2),
+        ("水", None),  # no character has a writing level
+    ]
+
+
+async def test_an_empty_character_dataset_leaves_the_version_unset_for_a_later_run() -> None:
+    repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="班")])
+    source = FakeHskDatasetSource({"班": HskDatasetWord("班", 1, ("n",))})
+    characters = FakeHskCharacterSource()
+
+    applied = await _service(repo).enrich_hsk(source, characters)
+
+    assert applied == 0
+    assert characters.fetch_calls == 1
+    assert repo.entries[0].handwriting_level is None
     assert repo.stored_enrichment_version is None
 
 

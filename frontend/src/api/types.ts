@@ -35,8 +35,9 @@ export interface DictionaryEntry {
   simplified: string;
   pinyin: string; // numbered, space-separated, e.g. "zhi1 dao4"
   definitions: string[];
-  hsk_level: number | null; // stamped from the HSK dataset; null outside HSK
+  hsk_level: number | null; // the word's HSK vocabulary level; null outside HSK 3.0
   pos_tags: string[]; // raw HSK POS tags
+  handwriting_level: number | null; // max character writing level; null when none has one
 }
 
 /** An entry sharing at least one hanzi with the item's word. */

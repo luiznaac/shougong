@@ -85,8 +85,11 @@ class DictionaryEntryResponse(BaseModel):
     simplified: str
     pinyin: str
     definitions: list[str]
+    # The word's HSK vocabulary level; null outside HSK 3.0.
     hsk_level: int | None
     pos_tags: list[str]
+    # Derived from the characters' writing levels; null when none has one.
+    handwriting_level: int | None
 
     @classmethod
     def from_domain(cls, entry: DictionaryEntry) -> DictionaryEntryResponse:
@@ -97,6 +100,7 @@ class DictionaryEntryResponse(BaseModel):
             definitions=list(entry.definitions),
             hsk_level=entry.hsk_level,
             pos_tags=list(entry.pos_tags),
+            handwriting_level=entry.handwriting_level,
         )
 
 
