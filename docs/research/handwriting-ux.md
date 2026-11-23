@@ -52,7 +52,7 @@ The quiz's handwriting step is a single-character, blank-canvas recall exercise.
 
 **Keep the blank attempt, then reveal.** Generation and production beat reading, but feedback after any retrieval attempt — including a failed one — is what makes the attempt productive. Do not loop retries before revealing ([Roediger & Butler 2011](https://bpb-us-e2.wpmucdn.com/sites.wustl.edu/dist/8/805/files/2026/06/Roediger-and-Butler-2011-The-critical-role-of-retrieval-practice-in-long-term-retention.pdf), [Kornell, Hays & Bjork 2009](https://bjorklab.psych.ucla.edu/wp-content/uploads/sites/13/2016/07/Kornell_Hays_Bjork_2009_JEP-LMC.pdf)).
 
-**Grade the character, not the pen path.** Strict stroke-order auto-fail is not supported as a learning target: order effects on recognition and writing are null-to-modest and contested, legitimate order variants exist, and order is invisible on paper ([Hsiung et al. 2017](https://scholar.lib.ntnu.edu.tw/en/publications/effect-of-stroke-order-learning-and-handwriting-exercises-on-reco-2/), [Sun et al. 2024](https://www.tandfonline.com/doi/full/10.1080/09588221.2024.2443769), [Lam 2020](https://repository.um.edu.mo/bitstream/10692/39642/1/2021%20Lyu%2C%20Lai%2C%20Lin%2C%20%26%20Gong%202021.pdf)).
+**Grade the character, not the pen path.** Strict stroke-order auto-fail is not supported as a learning target: order effects on recognition and writing are null-to-modest and contested, legitimate order variants exist, and order is invisible on paper ([Hsiung et al. 2017](https://scholar.lib.ntnu.edu.tw/en/publications/effect-of-stroke-order-learning-and-handwriting-exercises-on-reco-2/), [Sun et al. 2024](https://www.tandfonline.com/doi/full/10.1080/09588221.2024.2443769), [Lam 2020](https://doi.org/10.56040/hoch1744)).
 
 **A three-tier rubric.** Replace the binary zero-mistake threshold with: recognizable minor stroke shape/position deviation = pass; added, missing or altered strokes but still recognizable = partial; different character or illegible = fail ([Taiwan MOE rubric](https://school.tc.edu.tw/open-message/064611/get-file/5ec736fb8aeb013804703550)). This is an official standard, not experimental evidence.
 
@@ -142,7 +142,7 @@ These are decision options, not recommendations already made.
 - https://bjorklab.psych.ucla.edu/wp-content/uploads/sites/13/2016/07/Kornell_Hays_Bjork_2009_JEP-LMC.pdf
 - https://scholar.lib.ntnu.edu.tw/en/publications/effect-of-stroke-order-learning-and-handwriting-exercises-on-reco-2/
 - https://www.tandfonline.com/doi/full/10.1080/09588221.2024.2443769
-- https://repository.um.edu.mo/bitstream/10692/39642/1/2021%20Lyu%2C%20Lai%2C%20Lin%2C%20%26%20Gong%202021.pdf
+- https://doi.org/10.56040/hoch1744
 - https://school.tc.edu.tw/open-message/064611/get-file/5ec736fb8aeb013804703550
 - https://doi.org/10.1080/09541440701326022
 - https://github.com/open-spaced-repetition/fsrs4anki/blob/main/docs/tutorial.md
