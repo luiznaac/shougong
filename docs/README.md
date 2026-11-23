@@ -12,6 +12,7 @@ This folder is the living documentation for the `shougong` (手工) monorepo: a 
 | [06-ui-ux-proposal.md](06-ui-ux-proposal.md) | Desktop-first interface options, information architecture, and interaction patterns |
 | [07-api-gaps.md](07-api-gaps.md) | Proposed new endpoints to support richer web interfaces |
 | [acceptance-runbook.md](acceptance-runbook.md) | Bootstrap-only runbook that boots the dev stack for self-served acceptance |
+| [adr/](adr/) | Architecture decision records — why the data model and data sourcing are shaped this way |
 
 The docs describe the **stack and capabilities** as they exist today. The UI proposal deliberately ignores the current React implementation and designs for the backend API plus the frontend stack (React + Vite + TypeScript + Tailwind + hanzi-writer).
 
