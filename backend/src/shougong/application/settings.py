@@ -98,8 +98,9 @@ class Settings(BaseSettings):
     dictionary_autoload: bool = True
 
     # On startup, after the dictionary is populated, download the HSK dataset once
-    # and stamp `hsk_level` + `pos_tags` onto `dictionary_entry`. Idempotent — a
-    # no-op once done. Off in tests that don't want the fetch.
+    # and stamp `hsk_level` + `pos_tags` onto `dictionary_entry`. Versioned — a
+    # no-op once the stored enrichment version matches the code's. Off in tests
+    # that don't want the fetch.
     hsk_enrich_autoload: bool = True
 
     # The HSK 3.0 word list (drkameleon/complete-hsk-vocabulary). Overridden in

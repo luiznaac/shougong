@@ -10,12 +10,13 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 
 from sqlalchemy import ColumnElement, Table, and_, bindparam, case, func, insert, literal, or_, select, update
+from sqlalchemy.dialects import mysql
 
 from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
 )
-from shougong.persistence.dictionary.entity import DictionaryEntryEntity
+from shougong.persistence.dictionary.entity import DictionaryEnrichmentStateEntity, DictionaryEntryEntity
 from shougong.persistence.study.entity import StudyItemEntity
 from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
@@ -28,6 +29,8 @@ from shougong.usecase.dictionary.model import (
 )
 
 _BULK_BATCH = 1000
+# The enrichment-version marker is a single row with this fixed id.
+_ENRICHMENT_STATE_ID = 1
 
 
 def to_domain(row: DictionaryEntryEntity) -> DictionaryEntry:
@@ -199,17 +202,25 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
-    async def count_with_hsk(self) -> int:
-        async def _run() -> int:
+    async def enrichment_version(self) -> int | None:
+        async def _run() -> int | None:
             session = current_session()
-            total = await session.scalar(
-                select(func.count())
-                .select_from(DictionaryEntryEntity)
-                .where(DictionaryEntryEntity.hsk_level.isnot(None))
-            )
-            return int(total or 0)
+            version = await session.scalar(select(DictionaryEnrichmentStateEntity.version))
+            return int(version) if version is not None else None
 
         return await self._tx.execute(_run)
+
+    async def set_enrichment_version(self, version: int) -> None:
+        async def _run() -> None:
+            session = current_session()
+            stmt = (
+                mysql.insert(DictionaryEnrichmentStateEntity)
+                .values(id=_ENRICHMENT_STATE_ID, version=version)
+                .on_duplicate_key_update(version=version)
+            )
+            await session.execute(stmt)
+
+        await self._tx.execute(_run)
 
     async def hsk_words(self) -> list[HskDatasetWord]:
         async def _run() -> list[HskDatasetWord]:

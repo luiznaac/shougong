@@ -1,9 +1,12 @@
-"""ORM entity for the `dictionary_entry` table.
+"""ORM entities for the dictionary slice.
 
-`definitions` is a JSON array of English glosses; `pos_tags` a JSON array of raw HSK POS tags.
-`hsk_level` and `pos_tags` are filled by the one-off HSK enrichment pass and are the same on
-every row that shares a `simplified`. Add a migration (`uv run poe migrate:generate`) alongside
-any change here — see backend/AGENTS.md.
+`dictionary_entry` is the lexicon: `definitions` is a JSON array of English glosses; `pos_tags` a
+JSON array of raw HSK POS tags. `hsk_level` and `pos_tags` are filled by the versioned HSK
+enrichment pass and are the same on every row that shares a `simplified`.
+
+`dictionary_enrichment_state` is the single-row marker recording which enrichment version last
+stamped the table. Add a migration (`uv run poe migrate:generate`) alongside any change here — see
+backend/AGENTS.md.
 """
 
 from __future__ import annotations
@@ -24,3 +27,16 @@ class DictionaryEntryEntity(Base):
     hsk_level: Mapped[int | None] = mapped_column(Integer, index=True)
     # Empty until the HSK enrichment pass (matches the migration's DEFAULT).
     pos_tags: Mapped[list[str]] = mapped_column(JSON, server_default=text("(JSON_ARRAY())"))
+
+
+class DictionaryEnrichmentStateEntity(Base):
+    """The single enrichment-version marker row.
+
+    `id` is always 1: the pass upserts this row, so the table holds at most one
+    version for the whole dictionary.
+    """
+
+    __tablename__ = "dictionary_enrichment_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    version: Mapped[int] = mapped_column(Integer)

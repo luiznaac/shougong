@@ -71,17 +71,17 @@ async def test_apply_hsk_stamps_all_rows_and_hsk_words_dedupes(container: Contai
         )
 
     repo = DictionaryRepository(container.transaction_template)
-    assert await repo.count_with_hsk() == 0
+    assert await repo.hsk_words() == []
 
     applied = await repo.apply_hsk({"行": HskDatasetWord("行", 2, ("v", "n"))})
     assert applied == 1
-    assert await repo.count_with_hsk() == 2  # both readings of 行
+
+    entries = await repo.find_by_simplified("行")
+    assert len(entries) == 2  # both readings of 行
+    assert all(e.hsk_level == 2 and e.pos_tags == ("v", "n") for e in entries)
 
     words = await repo.hsk_words()
     assert [(w.simplified, w.hsk_level, w.pos_tags) for w in words] == [("行", 2, ("v", "n"))]
-
-    entries = await repo.find_by_simplified("行")
-    assert all(e.hsk_level == 2 and e.pos_tags == ("v", "n") for e in entries)
 
 
 _RELATED_SEED = [

@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from shougong.application import container as container_module
-from shougong.application.container import Container
+from shougong.application.container import DICTIONARY_ENRICHMENT_VERSION, Container
 from shougong.application.telemetry import Telemetry, build_telemetry
 from shougong.usecase.commons.logging import configure_logging
 from tests.fixtures import StubHealthChecker, build_test_settings, log_records, metric
@@ -51,6 +51,14 @@ def _failed_records(telemetry: Telemetry, event: str) -> list[Any]:
 
 def _failure_point(telemetry: Telemetry) -> Any:
     return metric(telemetry, "dictionary.autoload_failed").data.data_points[0]
+
+
+async def test_the_composition_root_supplies_the_current_enrichment_version(
+    containers: Callable[..., Container],
+) -> None:
+    container = containers()
+
+    assert container._dictionary_service.enrichment_version == DICTIONARY_ENRICHMENT_VERSION
 
 
 async def test_a_failed_dictionary_autoload_records_the_populate_stage(

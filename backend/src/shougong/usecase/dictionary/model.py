@@ -16,7 +16,7 @@ class DictionaryEntry:
     simplified: str
     pinyin: str
     definitions: tuple[str, ...]
-    # Filled by the one-off HSK enrichment pass; the same on every entry that
+    # Filled by the versioned HSK enrichment pass; the same on every entry that
     # shares a `simplified`. `hsk_level` is None for words outside the HSK list.
     hsk_level: int | None = None
     pos_tags: tuple[str, ...] = ()

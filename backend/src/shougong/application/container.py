@@ -83,6 +83,12 @@ from shougong.usecase.study_item_history.service import StudyItemHistoryService
 
 _log = get_logger(__name__)
 
+# The dictionary's enrichment contract: bump it whenever the pass's output
+# changes, so an existing database re-runs the pass in place instead of keeping
+# stale rows. `DictionaryService.enrich_hsk` skips while the stored marker
+# matches this value.
+DICTIONARY_ENRICHMENT_VERSION = 1
+
 
 class Container:
     def __init__(
@@ -119,7 +125,11 @@ class Container:
         # --- dictionary slice -------------------------------------------
         self._dictionary_repository = DictionaryRepository(self.transaction_template)
         self.dictionary_telemetry = DictionaryTelemetry(self.telemetry.meter)
-        self._dictionary_service = DictionaryService(self._dictionary_repository, self.dictionary_telemetry)
+        self._dictionary_service = DictionaryService(
+            self._dictionary_repository,
+            self.dictionary_telemetry,
+            enrichment_version=DICTIONARY_ENRICHMENT_VERSION,
+        )
         self._cedict_source = CedictSource(self.http_client)
         self._hsk_dataset_source = HskDatasetSource(self.http_client, settings.hsk_dataset_url)
 
