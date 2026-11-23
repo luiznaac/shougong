@@ -2,7 +2,9 @@
 
 A re-run updates dictionary rows in place: row ids survive, no duplicate rows
 appear, and the study items and their history that reference the rows are
-untouched.
+untouched. The official list supplies the vocabulary level, the community
+dataset the POS tags, and the handwriting list the derived writing levels. A
+word outside the official list ends with no vocabulary level.
 """
 
 from __future__ import annotations
@@ -15,10 +17,10 @@ from sqlalchemy import text
 
 from shougong.application.container import Container
 from shougong.persistence.dictionary.repository import DictionaryRepository
-from shougong.usecase.dictionary.model import HskDatasetWord
+from shougong.usecase.dictionary.model import HskCharacter
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
-from tests.fixtures import FakeHskDatasetSource
+from tests.fixtures import FakeHskCharacterSource, FakeHskDatasetSource, FakeOfficialHskSource
 
 _SEED = [
     {"s": "行", "p": "xing2", "d": ["to walk"]},
@@ -26,7 +28,7 @@ _SEED = [
     {"s": "水", "p": "shui3", "d": ["water"]},
 ]
 
-type _EntryRow = tuple[int, str, str, int | None, str]
+type _EntryRow = tuple[int, str, str, int | None, str, int | None]
 
 
 def _service(container: Container, *, version: int) -> DictionaryService:
@@ -51,14 +53,25 @@ async def _entry_rows(container: Container) -> list[_EntryRow]:
     async with container.engine.connect() as conn:
         rows = (
             await conn.execute(
-                text("SELECT id, simplified, pinyin, hsk_level, pos_tags FROM dictionary_entry ORDER BY id")
+                text(
+                    "SELECT id, simplified, pinyin, hsk_level, pos_tags, handwriting_level "
+                    "FROM dictionary_entry ORDER BY id"
+                )
             )
         ).all()
-    return [(int(row[0]), row[1], row[2], row[3], row[4]) for row in rows]
+    return [(int(row[0]), row[1], row[2], row[3], row[4], row[5]) for row in rows]
 
 
 def _stamped(rows: list[_EntryRow]) -> dict[int, tuple[int | None, object]]:
     return {row[0]: (row[3], json.loads(row[4])) for row in rows if row[1] == "行"}
+
+
+def _levels(rows: list[_EntryRow]) -> dict[int, int | None]:
+    return {row[0]: row[3] for row in rows}
+
+
+def _handwriting(rows: list[_EntryRow]) -> dict[str, int | None]:
+    return {row[1]: row[5] for row in rows}
 
 
 async def _history_rows(container: Container, study_item_id: int) -> list[tuple[object, ...]]:
@@ -86,21 +99,33 @@ async def test_advancing_the_version_updates_rows_in_place_and_keeps_study_histo
     history_before = await _history_rows(container, item["id"])
     repository = DictionaryRepository(container.transaction_template)
 
-    first = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ("v", "n"))})
-    assert await _service(container, version=1).enrich_hsk(first) == 1
+    first = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource({"行": ("v", "n")})
+    characters = FakeHskCharacterSource({"行": HskCharacter("行", 3), "水": HskCharacter("水", 1)})
+    assert await _service(container, version=1).enrich_hsk(first, community, characters) == 1
     assert await repository.enrichment_version() == 1
+    assert await repository.official_level_totals() == {2: 1}
     assert _stamped(await _entry_rows(container)) == {
         ids["行|xing2"]: (2, ["v", "n"]),
         ids["行|hang2"]: (2, ["v", "n"]),
     }
+    # 水 is outside the official list: it has no vocabulary level.
+    assert _levels(await _entry_rows(container))[ids["水|shui3"]] is None
+    assert _handwriting(await _entry_rows(container)) == {"行": 3, "水": 1}
 
-    same_version = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n",))})
-    assert await _service(container, version=1).enrich_hsk(same_version) == 0
+    same_version = FakeOfficialHskSource({"行": 5})
+    same_community = FakeHskDatasetSource({"行": ("n",)})
+    same_characters = FakeHskCharacterSource({"行": HskCharacter("行", 4)})
+    assert await _service(container, version=1).enrich_hsk(same_version, same_community, same_characters) == 0
     assert same_version.fetch_calls == 0
+    assert same_characters.fetch_calls == 0
 
-    advanced = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n",))})
-    assert await _service(container, version=2).enrich_hsk(advanced) == 1
+    advanced = FakeOfficialHskSource({"行": 5})
+    advanced_community = FakeHskDatasetSource({"行": ("n",)})
+    advanced_characters = FakeHskCharacterSource({"行": HskCharacter("行", 4)})
+    assert await _service(container, version=2).enrich_hsk(advanced, advanced_community, advanced_characters) == 1
     assert await repository.enrichment_version() == 2
+    assert await repository.official_level_totals() == {5: 1}
 
     after = await _entry_rows(container)
     assert [row[0] for row in after] == entry_ids_before  # same rows, no duplicates
@@ -108,10 +133,29 @@ async def test_advancing_the_version_updates_rows_in_place_and_keeps_study_histo
         ids["行|xing2"]: (5, ["n"]),
         ids["行|hang2"]: (5, ["n"]),
     }
+    assert _handwriting(after) == {"行": 4, "水": None}
     assert await _history_rows(container, item["id"]) == history_before
 
     stored_item = (await client.get(f"/study-items/{item['id']}")).json()
     assert stored_item["entry"]["id"] == ids["行|xing2"]
+    assert stored_item["entry"]["hsk_level"] == 5
+    assert stored_item["entry"]["handwriting_level"] == 4
+
+    # A later pass that drops 行 from the official list clears its level in place.
+    dropped = FakeOfficialHskSource({"水": 1})
+    dropped_community = FakeHskDatasetSource({"水": ("n",)})
+    dropped_characters = FakeHskCharacterSource({"水": HskCharacter("水", 1)})
+    assert await _service(container, version=3).enrich_hsk(dropped, dropped_community, dropped_characters) == 1
+
+    cleared = await _entry_rows(container)
+    assert [row[0] for row in cleared] == entry_ids_before
+    assert _stamped(cleared) == {
+        ids["行|xing2"]: (None, []),
+        ids["行|hang2"]: (None, []),
+    }
+    assert _levels(cleared)[ids["水|shui3"]] == 1
+    assert _handwriting(cleared) == {"行": None, "水": 1}
+    assert await _history_rows(container, item["id"]) == history_before
 
 
 _CLEANUP_SEED = [
@@ -157,7 +201,9 @@ async def test_the_versioned_pass_cleans_alias_and_duplicate_rows_and_keeps_hist
     history_before = await _history_rows(container, item["id"])
 
     applied = await _service(container, version=1).enrich_hsk(
-        FakeHskDatasetSource({"吃": HskDatasetWord("吃", 1, ("v",))})
+        FakeOfficialHskSource({"吃": 1}),
+        FakeHskDatasetSource({"吃": ("v",)}),
+        FakeHskCharacterSource({"吃": HskCharacter("吃", 1)}),
     )
 
     assert applied == 1

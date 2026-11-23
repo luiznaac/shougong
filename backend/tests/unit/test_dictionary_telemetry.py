@@ -15,13 +15,15 @@ from shougong.application.telemetry import Telemetry, build_telemetry
 from shougong.gateway.dictionary.cedict_source import CedictSource
 from shougong.usecase.commons.logging import configure_logging
 from shougong.usecase.commons.request_context import job_context
-from shougong.usecase.dictionary.model import CedictRecord, HskDatasetWord
+from shougong.usecase.dictionary.model import CedictRecord, HskCharacter
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 from tests.fixtures import (
     FakeCedictSource,
     FakeDictionaryRepository,
+    FakeHskCharacterSource,
     FakeHskDatasetSource,
+    FakeOfficialHskSource,
     build_test_settings,
     log_records,
     make_dictionary_entry,
@@ -126,21 +128,26 @@ async def test_the_bootstrap_outcomes_are_info_events_with_their_exact_attribute
     await _service(telemetry, FakeDictionaryRepository([make_dictionary_entry()])).populate_if_empty(
         FakeCedictSource(_RECORDS)
     )
+    official = FakeOfficialHskSource({"书": 3})
+    community = FakeHskDatasetSource({"书": ("n",)})
+    characters = FakeHskCharacterSource({"书": HskCharacter("书", 2)})
     await _service(telemetry, FakeDictionaryRepository([make_dictionary_entry(simplified="书")])).enrich_hsk(
-        FakeHskDatasetSource({"书": HskDatasetWord("书", 3, ("n",))})
+        official, community, characters
     )
     await _service(
         telemetry,
         FakeDictionaryRepository([make_dictionary_entry(hsk_level=1, pos_tags=("n",))], enrichment_version=1),
-    ).enrich_hsk(FakeHskDatasetSource({"书": HskDatasetWord("书", 3, ("n",))}))
+    ).enrich_hsk(official, community, characters)
 
     records = [item.log_record for item in log_records(telemetry)]
-    assert [record.severity_text for record in records] == ["INFO"] * 6
+    assert [record.severity_text for record in records] == ["INFO"] * 8
     assert [(record.body, dict(record.attributes)) for record in records] == [
         ("dictionary.source_downloaded", {"dictionary.source": "cedict", "dictionary.records": 2}),
         ("dictionary.populated", {"dictionary.records": 2}),
         ("dictionary.populate_skipped", {"dictionary.existing": 1}),
-        ("dictionary.source_downloaded", {"dictionary.source": "hsk", "dictionary.records": 1}),
+        ("dictionary.source_downloaded", {"dictionary.source": "official-hsk", "dictionary.records": 1}),
+        ("dictionary.source_downloaded", {"dictionary.source": "community-hsk", "dictionary.records": 1}),
+        ("dictionary.source_downloaded", {"dictionary.source": "hsk_characters", "dictionary.records": 1}),
         ("dictionary.hsk_enriched", {"dictionary.records": 1}),
         ("dictionary.hsk_enrich_skipped", {"dictionary.enrichment_version": 1}),
     ]
@@ -210,7 +217,11 @@ async def test_the_in_place_cleanup_is_reported_with_its_removed_count(telemetry
     )
     service = DictionaryService(repo, DictionaryTelemetry(telemetry.meter), enrichment_version=2)
 
-    await service.enrich_hsk(FakeHskDatasetSource({"吃": HskDatasetWord("吃", 1, ("v",))}))
+    await service.enrich_hsk(
+        FakeOfficialHskSource({"吃": 1}),
+        FakeHskDatasetSource({"吃": ("v",)}),
+        FakeHskCharacterSource({"吃": HskCharacter("吃", 1)}),
+    )
 
     record = _record(telemetry, "dictionary.import_cleaned")
     assert dict(record.attributes)["dictionary.removed"] == 2

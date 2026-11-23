@@ -40,7 +40,8 @@ class VocabularyOverviewService:
         return [_word_for(entry) for entry in _distinct(await self._study.list_known_entries())]
 
     async def summary(self) -> VocabularySummary:
-        total_by_level = hsk_level_stats(await self._dictionary.hsk_words()).total_by_level
+        stats = hsk_level_stats(await self._dictionary.hsk_words())
+        total_by_level = await self._dictionary.official_level_totals() or stats.total_by_level
         words = [_word_for(entry) for entry in _distinct(await self._study.list_known_entries())]
 
         by_category: Counter[str] = Counter()

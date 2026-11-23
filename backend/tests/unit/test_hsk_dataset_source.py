@@ -1,11 +1,11 @@
-"""Real local HTTP server (pytest-httpserver) standing in for the HSK dataset host."""
+"""Real local HTTP server (pytest-httpserver) standing in for the community dataset host."""
 
 from __future__ import annotations
 
 import httpx
 from pytest_httpserver import HTTPServer
 
-from shougong.gateway.dictionary.hsk_dataset_source import HskDatasetSource, parse_dataset
+from shougong.gateway.dictionary.hsk_dataset_source import HskDatasetSource, parse_pos_tags
 
 _DATASET = [
     {"s": "阿姨", "l": ["t3", "n4", "o3"], "p": ["n"]},
@@ -17,15 +17,13 @@ _DATASET = [
 ]
 
 
-def test_parse_dataset_keeps_simplified_level_and_pos() -> None:
-    parsed = parse_dataset(_DATASET)
+def test_parse_pos_tags_keeps_the_simplified_form_and_pos() -> None:
+    parsed = parse_pos_tags(_DATASET)
 
     assert {"阿姨", "北京", "呵护", "他"} <= set(parsed)
-    assert parsed["阿姨"].hsk_level == 4  # lowest `nN`, ignoring `tN`
-    assert parsed["北京"].hsk_level == 2
-    assert parsed["呵护"].hsk_level == 7  # no `nN` → lowest `oN`
-    assert parsed["呵护"].pos_tags == ("v", "vn")
-    assert parsed["呵护"].simplified == "呵护"
+    assert parsed["阿姨"] == ("n",)
+    assert parsed["北京"] == ("ns",)
+    assert parsed["呵护"] == ("v", "vn")
 
 
 async def test_fetch_downloads_once_and_caches(httpserver: HTTPServer) -> None:
@@ -38,4 +36,4 @@ async def test_fetch_downloads_once_and_caches(httpserver: HTTPServer) -> None:
 
     assert first is second  # cached
     assert len(httpserver.log) == 1  # downloaded only once
-    assert first["北京"].hsk_level == 2
+    assert first["北京"] == ("ns",)

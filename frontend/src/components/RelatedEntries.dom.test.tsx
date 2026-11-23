@@ -17,6 +17,7 @@ function entry(index: number): RelatedEntry {
     definitions: [`sentido ${index + 1}`],
     hsk_level: 1,
     pos_tags: ["v"],
+    handwriting_level: 2,
     study_item_id: queued ? 7 : null,
   };
 }
@@ -81,6 +82,8 @@ describe("RelatedEntries", () => {
     expect(words).toHaveLength(8);
     expect(words[0].textContent).toContain("知道");
     expect(words[1].textContent).toContain("知");
+    expect(words[0].textContent).toContain("HSK 1");
+    expect(words[0].textContent).toContain("escrita HSK 2");
 
     const link = screen.getByRole("link", { name: /知道/ });
     expect(link.getAttribute("href")).toBe("/biblioteca/itens/7");

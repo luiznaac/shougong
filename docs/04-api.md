@@ -86,9 +86,12 @@ client presentation. `GET /study-items/{id}/reviews` and
   "pinyin": "xue2 xi2",
   "definitions": ["to study", "to learn"],
   "hsk_level": 1,
-  "pos_tags": ["v", "n"]
+  "pos_tags": ["v", "n"],
+  "handwriting_level": 2
 }
 ```
+
+`hsk_level` is the official HSK 3.0 **vocabulary level** — levels 1-6, or 7 for the single 7-9 band — and `null` when the word is outside the official list (there is no HSK 2.0 fallback). `pos_tags` are the community dataset's POS tags. `handwriting_level` is the word's **handwriting** level, derived as the max writing level among its characters that have one, `null` when none does. Clients show "not in HSK" for a null vocabulary level and an unknown marker for a null handwriting level.
 
 ### `RelatedEntryResponse`
 
@@ -103,6 +106,7 @@ is not queued):
   "definitions": ["knowledge"],
   "hsk_level": 1,
   "pos_tags": ["n"],
+  "handwriting_level": 2,
   "study_item_id": null
 }
 ```
@@ -121,7 +125,7 @@ The pagination envelope shared by the redesign's list routes (`{ items, total, l
 ```json
 {
   "id": 42,
-  "entry": { "id": 123, "simplified": "学习", "pinyin": "xue2 xi2", "definitions": [], "hsk_level": 1, "pos_tags": [] },
+  "entry": { "id": 123, "simplified": "学习", "pinyin": "xue2 xi2", "definitions": [], "hsk_level": 1, "pos_tags": [], "handwriting_level": 2 },
   "card": {
     "state": "learning",
     "due": "2026-09-11T00:00:00Z",
@@ -355,6 +359,31 @@ For dialogue readings, words carry a `speaker`; `speakers` at the reading level 
 - With `entry_id`, each row also carries `match: { "before", "hit", "after" }` — the first occurrence's token slice, punctuation included, up to 12 tokens each side and clamped to the article edges. Without it, `match` is `null`.
 - `GET /reading-texts/{reading_id}` returns the full `SavedReadingTextResponse` (hydration included) and `404`s for an unknown id.
 - `POST /reading-texts` and `GET /reading-texts/models` return `502` with a bounded gateway code when the AI proxy fails — see the error model below.
+
+### Reading vocabulary
+
+`GET /reading-vocabulary` returns the learner's known words and a summary, derived on read:
+
+```json
+{
+  "profiles": [
+    { "simplified": "学习", "hsk_level": 1, "pos_tags": ["v", "n"], "pos_categories": ["noun", "verb"], "pinyin": "xue2 xi2", "gloss": "to study; to learn" }
+  ],
+  "summary": {
+    "total": 120,
+    "categorised": 118,
+    "by_category": { "noun": 70, "verb": 55, "qualifier": 12 },
+    "by_hsk_level": { "1": 60, "2": 40, "3": 18, "none": 2 },
+    "qualifier_shortage": false,
+    "proficiency": { "coverage_by_level": { "1": 0.12, "2": 0.034 }, "estimated_level": 0 }
+  }
+}
+```
+
+- `hsk_level` is the official HSK 3.0 vocabulary level (levels 1-6, or 7 for 7-9); a word outside the official list is `null` and is counted under the `"none"` bucket.
+- `pos_categories` are derived from the community POS tags; `categorised` counts known words that carry an official level (`by_hsk_level`'s level buckets sum to it, the `"none"` bucket is the rest).
+- `by_category` is a membership count: a word in N categories counts N times, so the values need not sum to `total`.
+- `proficiency.coverage_by_level` is known words / the official list's per-level total (recorded by the enrichment pass), not the dictionary subset; `estimated_level` is the highest level mastered contiguously from 1 (at least half of its words known).
 
 ## Error model
 

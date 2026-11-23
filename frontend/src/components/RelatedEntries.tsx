@@ -7,7 +7,7 @@ import { pageOffset } from "../lib/pagination.ts";
 import type { Presentation } from "../lib/useMediaQuery.ts";
 import { EmptyState } from "./EmptyState.tsx";
 import { Hanzi } from "./Hanzi.tsx";
-import { HskChip } from "./HskChip.tsx";
+import { WordLevels } from "./HskChip.tsx";
 import { LoadMore } from "./LoadMore.tsx";
 import { Pager } from "./Pager.tsx";
 import { Pinyin } from "./Pinyin.tsx";
@@ -167,7 +167,7 @@ function RelatedRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <Pinyin value={entry.pinyin} className="text-xs text-slate-400" />
-          <HskChip level={entry.hsk_level} />
+          <WordLevels hskLevel={entry.hsk_level} handwritingLevel={entry.handwriting_level} />
         </div>
         <p className="truncate text-[11px] text-slate-400">{entry.definitions.join("; ")}</p>
       </div>

@@ -30,7 +30,11 @@ from shougong.persistence.configuration.transaction import (
     SqlAlchemyTransactionTemplate,
     current_session,
 )
-from shougong.persistence.dictionary.entity import DictionaryEnrichmentStateEntity, DictionaryEntryEntity
+from shougong.persistence.dictionary.entity import (
+    CharacterWritingLevelEntity,
+    DictionaryEnrichmentStateEntity,
+    DictionaryEntryEntity,
+)
 from shougong.persistence.study.entity import StudyItemEntity
 from shougong.persistence.study_item_history.entity import StudyItemHistoryEntity
 from shougong.usecase.commons.page import Page
@@ -56,6 +60,7 @@ def to_domain(row: DictionaryEntryEntity) -> DictionaryEntry:
         definitions=tuple(row.definitions),
         hsk_level=row.hsk_level,
         pos_tags=tuple(row.pos_tags or ()),
+        handwriting_level=row.handwriting_level,
     )
 
 
@@ -227,11 +232,13 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
-    async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:
+    async def apply_enrichment(self, dataset: Mapping[str, HskDatasetWord]) -> int:
         async def _run() -> int:
             session = current_session()
-            words = list(dataset.values())
             table = cast(Table, DictionaryEntryEntity.__table__)
+            # Clear first so a word outside the official list loses any stale level.
+            await session.execute(update(table).values(hsk_level=None, pos_tags=[]))
+            words = list(dataset.values())
             stmt = (
                 update(table)
                 .where(table.c.simplified == bindparam("s"))
@@ -247,6 +254,42 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
+    async def apply_character_levels(self, levels: Mapping[str, int]) -> int:
+        async def _run() -> int:
+            session = current_session()
+            stmt = mysql.insert(CharacterWritingLevelEntity).values(
+                character=bindparam("c"), writing_level=bindparam("l")
+            )
+            stmt = stmt.on_duplicate_key_update(writing_level=stmt.inserted.writing_level)
+            rows = list(levels.items())
+            for start in range(0, len(rows), _BULK_BATCH):
+                batch = rows[start : start + _BULK_BATCH]
+                await session.execute(stmt, [{"c": character, "l": level} for character, level in batch])
+            return len(rows)
+
+        return await self._tx.execute(_run)
+
+    async def simplified_forms(self) -> list[tuple[int, str]]:
+        async def _run() -> list[tuple[int, str]]:
+            session = current_session()
+            rows = (await session.execute(select(DictionaryEntryEntity.id, DictionaryEntryEntity.simplified))).all()
+            return [(int(entry_id), simplified) for entry_id, simplified in rows]
+
+        return await self._tx.execute(_run)
+
+    async def set_handwriting_levels(self, levels: Mapping[int, int | None]) -> int:
+        async def _run() -> int:
+            session = current_session()
+            table = cast(Table, DictionaryEntryEntity.__table__)
+            stmt = update(table).where(table.c.id == bindparam("i")).values(handwriting_level=bindparam("l"))
+            rows = list(levels.items())
+            for start in range(0, len(rows), _BULK_BATCH):
+                batch = rows[start : start + _BULK_BATCH]
+                await session.execute(stmt, [{"i": entry_id, "l": level} for entry_id, level in batch])
+            return len(rows)
+
+        return await self._tx.execute(_run)
+
     async def enrichment_version(self) -> int | None:
         async def _run() -> int | None:
             session = current_session()
@@ -255,13 +298,24 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
-    async def set_enrichment_version(self, version: int) -> None:
+    async def official_level_totals(self) -> dict[int, int] | None:
+        async def _run() -> dict[int, int] | None:
+            session = current_session()
+            totals = await session.scalar(select(DictionaryEnrichmentStateEntity.level_totals))
+            if not totals:
+                return None
+            return {int(level): int(count) for level, count in totals.items()}
+
+        return await self._tx.execute(_run)
+
+    async def set_enrichment_version(self, version: int, level_totals: Mapping[int, int]) -> None:
         async def _run() -> None:
             session = current_session()
+            totals = {str(level): count for level, count in level_totals.items()}
             stmt = (
                 mysql.insert(DictionaryEnrichmentStateEntity)
-                .values(id=_ENRICHMENT_STATE_ID, version=version)
-                .on_duplicate_key_update(version=version)
+                .values(id=_ENRICHMENT_STATE_ID, version=version, level_totals=totals)
+                .on_duplicate_key_update(version=version, level_totals=totals)
             )
             await session.execute(stmt)
 

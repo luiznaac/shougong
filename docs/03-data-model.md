@@ -7,6 +7,7 @@ erDiagram
     DICTIONARY_ENTRY ||--o{ STUDY_ITEM : "becomes"
     DICTIONARY_ENTRY ||--o{ STUDY_ITEM_HISTORY : "snapshotted"
     DICTIONARY_ENTRY ||--o{ CHARACTER_STROKES : "per character"
+    DICTIONARY_ENTRY ||--o{ CHARACTER_WRITING_LEVEL : "per character (conceptual)"
     STUDY_ITEM ||--o{ REVIEW_LOG : "has grades"
     STUDY_ITEM ||--o{ STUDY_ITEM_HISTORY : "has trail"
     STUDY_ITEM ||--o| STUDY_ITEM_PRIORITY : "pinned by"
@@ -21,10 +22,16 @@ erDiagram
         json definitions
         int hsk_level
         json pos_tags
+        int handwriting_level
+    }
+    CHARACTER_WRITING_LEVEL {
+        varchar character PK
+        int writing_level
     }
     DICTIONARY_ENRICHMENT_STATE {
         int id PK
         int version
+        json level_totals
     }
     CHARACTER_STROKES {
         varchar character PK
@@ -92,28 +99,40 @@ erDiagram
     }
 ```
 
-> Some edges are conceptual, not foreign keys: `reading_text` references `reading_topic` by topic text, `reading_word_usage` is keyed by simplified word text, and `character_strokes` is keyed by character. The hard FKs are `study_item -> dictionary_entry`, `review_log/study_item_history/study_item_priority -> study_item`, and `study_item_history -> dictionary_entry`.
+> Some edges are conceptual, not foreign keys: `reading_text` references `reading_topic` by topic text, `reading_word_usage` is keyed by simplified word text, and `character_strokes`/`character_writing_level` are keyed by character. The hard FKs are `study_item -> dictionary_entry`, `review_log/study_item_history/study_item_priority -> study_item`, and `study_item_history -> dictionary_entry`.
 
 ## Tables
 
 ### `dictionary_entry`
 
-Bundled lexicon, populated from CC-CEDICT and enriched with HSK 3.0 level + POS tags. Simplified only; traditional forms are dropped.
+Bundled lexicon, populated from CC-CEDICT and enriched with the official HSK 3.0 vocabulary level, community POS tags and the derived handwriting level. Simplified only; traditional forms are dropped.
 
 - `simplified` and `pinyin` are indexed for search and exact matching.
 - `pinyin` is normalized at import: lowercase, `ü` written as `v` (`lv4 xing2`).
 - Import applies one **set-level policy** (not a per-line rule): an alias row whose primary gloss only points at another form of the same word (`old variant of 寇`) is dropped **only** when the same `simplified` has a real entry, so a character that exists only as a variant stays searchable; byte-identical duplicates — same `(simplified, pinyin, definitions)` — are dropped. Genuine homographs (same `simplified` and `pinyin`, different meanings, e.g. `下面` "below" vs "to boil noodles") stay as separate rows.
-- `hsk_level`/`pos_tags` are stamped by the versioned enrichment pass; the same values apply to every row sharing a `simplified`.
+- `hsk_level` (the word's vocabulary level), `pos_tags` and `handwriting_level` are stamped by the versioned enrichment pass; the same values apply to every row sharing a `simplified`.
+- `hsk_level` is the **vocabulary level** from the official HSK 3.0 word list (11,092 words): `1`-`6`, or `7` for the single 7-9 band. A word outside the official list is `NULL` — the old HSK 2.0 fallback is gone.
+- `pos_tags` are the community dataset's ICTCLAS tags, joined by simplified form; the reading engine samples PERSON and PLACE words from them.
+- `handwriting_level` is derived as the maximum writing level among the word's characters that have one, or null when no character does. It is stored so the study filter and related ordering can use it, while the card can still show the per-character levels.
 - A hanzi can have several rows (multiple readings); each is a distinct entry.
+
+### `character_writing_level`
+
+The character-level store of the official HSK 3.0 handwriting list: one row per character expected to be written by hand. `character` is the primary key; `writing_level` is normalized to 1-6 with the single 7-9 band stored as `7`.
+
+- A character outside the table has no writing level; a word's `handwriting_level` ignores those characters.
+- Filled by the versioned enrichment pass and created by migration `0008_handwriting_levels`; the word-level `handwriting_level` is derived from it in the same pass.
 
 ### `dictionary_enrichment_state`
 
 The single-row marker recording which enrichment version last stamped `dictionary_entry`. `id` is always `1` — the pass upserts the row, so the table holds one version for the whole dictionary.
 
 - The row is absent until the pass first runs; the pass skips while the stored `version` matches the code's.
-- Advancing the version re-runs the pass, updating `dictionary_entry` rows in place so row ids, study items and study history survive and no duplicate rows appear.
+- Advancing the version re-runs the pass, updating `dictionary_entry` rows in place so row ids, study items and study history survive and no duplicate rows appear. It also refreshes `character_writing_level` and re-derives every `handwriting_level`.
 - The pass also **cleans existing data in place** with the same import policy a fresh import applies: it deletes alias rows that have a real sibling and byte-identical duplicates, and keeps variant-only rows. A row a `study_item` or `study_item_history` references is never deleted, so a learner's queue and its history survive.
-- Created by migration `0007_dictionary_enrich`; version 2 is the first that applies the import policy.
+- A re-run clears every row's level and tags before stamping the current sources, so a word dropped from the official list loses its level.
+- `level_totals` records the official word counts per level (`"1"`..`"7"`), so proficiency and coverage divide by the official list's totals, not the dictionary subset; it is `NULL` until a pass records it.
+- Created by migration `0007_dictionary_enrich`; `character_writing_level` and `handwriting_level` added by `0008_handwriting_levels`; `level_totals` added by `0009_enrichment_level_totals`. Version 4 is the first that applies the import policy.
 
 ### `study_item`
 

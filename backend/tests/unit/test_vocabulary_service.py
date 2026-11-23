@@ -84,6 +84,17 @@ async def test_summary_reports_hsk_proficiency_against_the_dictionary_totals() -
     assert summary.proficiency.estimated_level == 1
 
 
+async def test_summary_prefers_the_recorded_official_totals_over_the_dictionary_subset() -> None:
+    studied = _entries([("好", 1, ("a",)), ("跑", 2, ("v",))], start=1)
+    study = FakeStudyItemRepository([make_study_item(item_id=e.id, entry=e) for e in studied])
+    dictionary = FakeDictionaryRepository(studied, official_level_totals={1: 10, 2: 4})
+    service = VocabularyOverviewService(study, dictionary, _telemetry())
+
+    summary = await service.summary()
+
+    assert summary.proficiency.coverage_by_level == {1: 1 / 10, 2: 1 / 4}
+
+
 async def test_summary_buckets_words_without_an_hsk_level_under_none() -> None:
     service = _service([("书", 1, ("n",)), ("叽", None, ())])
 

@@ -112,6 +112,16 @@ def _detail_item(fixture: AcceptanceFixture) -> StudyItemRow:
     return next(row for row in fixture.study_items if row.entry.simplified == DETAIL_WORD)
 
 
+def test_the_detail_family_carries_both_hsk_levels(fixture: AcceptanceFixture) -> None:
+    detail = _detail_item(fixture).entry
+    character_levels = {row.character: row.writing_level for row in fixture.characters}
+
+    assert detail.hsk_level == 1
+    assert detail.handwriting_level == 2
+    assert set(detail.simplified) <= set(character_levels)
+    assert max(character_levels[character] for character in detail.simplified) == detail.handwriting_level
+
+
 def _related_entries(fixture: AcceptanceFixture) -> list[str]:
     detail = _detail_item(fixture).entry
     characters = set(detail.simplified)
