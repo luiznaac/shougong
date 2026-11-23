@@ -240,6 +240,13 @@ class FakeDictionaryRepository(IDictionaryRepository):
     async def simplified_forms(self) -> list[tuple[int, str]]:
         return [(entry.id, entry.simplified) for entry in self.entries]
 
+    async def character_writing_levels(self, characters: Sequence[str]) -> Mapping[str, int]:
+        return {
+            character: self.character_levels[character]
+            for character in characters
+            if character in self.character_levels
+        }
+
     async def set_handwriting_levels(self, levels: Mapping[int, int | None]) -> int:
         for index, entry in enumerate(self.entries):
             if entry.id in levels:

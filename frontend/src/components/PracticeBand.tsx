@@ -5,6 +5,7 @@ import type { QuizPhase } from "../lib/quizPractice.ts";
 import { STAGE_HORIZONTAL_PADDING, STAGE_TOP } from "../lib/safeArea.ts";
 import type { Presentation } from "../lib/useMediaQuery.ts";
 import { FlipCards } from "./FlipCards.tsx";
+import { WordLevels } from "./HskChip.tsx";
 import { Pinyin } from "./Pinyin.tsx";
 import { SrsIntactChip } from "./SrsIntactChip.tsx";
 import { StrokePlayer } from "./StrokePlayer.tsx";
@@ -177,8 +178,20 @@ export function PracticeBand({
         {showPlayer ? (
           <StrokePlayer key={item.id} word={item.entry.simplified} sizePx={playerSize} />
         ) : (
-          <FlipCards chars={chars} hidden={phase === "prompt"} available={mobile ? 300 : 430} />
+          <FlipCards
+            chars={chars}
+            writingLevels={item.character_writing_levels}
+            hidden={phase === "prompt"}
+            available={mobile ? 300 : 430}
+          />
         )}
+
+        <div className="flex items-center gap-1.5 rounded-full bg-slate-950/35 px-3 py-1">
+          <WordLevels
+            hskLevel={item.entry.hsk_level}
+            handwritingLevel={item.entry.handwriting_level}
+          />
+        </div>
 
         <p
           className={

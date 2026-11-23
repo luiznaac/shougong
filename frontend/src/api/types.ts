@@ -79,6 +79,9 @@ export interface StudyItem {
   // Derived on read: the item has 3+ `again` grades in its last 10 review-log
   // entries. False wherever the backend does not annotate it (e.g. reviews).
   is_leech: boolean;
+  // Per-character writing level for the word's characters; null for a character
+  // with no level. Populated on the study session, empty elsewhere.
+  character_writing_levels: Record<string, number | null>;
 }
 
 export type PriorityEdge = "front" | "back";

@@ -83,6 +83,17 @@ class IDictionaryRepository(Protocol):
         """Every dictionary entry's `(id, simplified)`, for the handwriting rollup."""
         ...
 
+    async def character_writing_levels(self, characters: Sequence[str]) -> Mapping[str, int]:
+        """The stored writing level of each requested character that has one.
+
+        Args:
+            characters: The characters to look up in the character-level store.
+
+        Returns:
+            Character → writing level, omitting characters with no level.
+        """
+        ...
+
     async def set_handwriting_levels(self, levels: Mapping[int, int | None]) -> int:
         """Set `handwriting_level` on each listed entry id — an explicit `None`
         clears it. Returns the number of rows written."""
