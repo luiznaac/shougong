@@ -35,8 +35,8 @@ export interface DictionaryEntry {
   simplified: string;
   pinyin: string; // numbered, space-separated, e.g. "zhi1 dao4"
   definitions: string[];
-  hsk_level: number | null; // the word's HSK vocabulary level; null outside HSK 3.0
-  pos_tags: string[]; // raw HSK POS tags
+  hsk_level: number | null; // official HSK 3.0 vocabulary level; null outside the official list
+  pos_tags: string[]; // community ICTCLAS POS tags
   handwriting_level: number | null; // max character writing level; null when none has one
 }
 
@@ -281,7 +281,7 @@ export interface VocabularyProfile {
 }
 
 export interface Proficiency {
-  coverage_by_level: Record<string, number>; // known / HSK-dataset total per level, 0..1
+  coverage_by_level: Record<string, number>; // known / official per-level total, 0..1
   estimated_level: number; // highest HSK level mastered contiguously (0 = pure beginner)
 }
 

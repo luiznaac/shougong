@@ -25,6 +25,7 @@ from shougong.usecase.dictionary.gateway import (
     IDictionaryRepository,
     IHskCharacterSource,
     IHskDatasetSource,
+    IOfficialHskSource,
 )
 from shougong.usecase.dictionary.model import (
     CedictRecord,
@@ -146,12 +147,16 @@ class FakeDictionaryRepository(IDictionaryRepository):
         *,
         study_items: Mapping[int, int] | None = None,
         enrichment_version: int | None = None,
+        official_level_totals: Mapping[int, int] | None = None,
         character_levels: Mapping[str, int] | None = None,
     ) -> None:
         self.entries: list[DictionaryEntry] = list(entries or [])
         # entry id -> the id of the study item queuing it
         self.study_items: dict[int, int] = dict(study_items or {})
         self.stored_enrichment_version = enrichment_version
+        self.stored_official_level_totals: dict[int, int] | None = (
+            dict(official_level_totals) if official_level_totals is not None else None
+        )
         self.character_levels: dict[str, int] = dict(character_levels or {})
         self.hsk_words_calls = 0
         self._ids = count(1)
@@ -212,18 +217,24 @@ class FakeDictionaryRepository(IDictionaryRepository):
             )
         return len(records)
 
-    async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:
+    async def apply_enrichment(self, dataset: Mapping[str, HskDatasetWord]) -> int:
         for i, entry in enumerate(self.entries):
             word = dataset.get(entry.simplified)
-            if word is not None:
+            if word is None:
+                self.entries[i] = replace(entry, hsk_level=None, pos_tags=())
+            else:
                 self.entries[i] = replace(entry, hsk_level=word.hsk_level, pos_tags=word.pos_tags)
         return len(dataset)
 
     async def enrichment_version(self) -> int | None:
         return self.stored_enrichment_version
 
-    async def set_enrichment_version(self, version: int) -> None:
+    async def official_level_totals(self) -> dict[int, int] | None:
+        return None if self.stored_official_level_totals is None else dict(self.stored_official_level_totals)
+
+    async def set_enrichment_version(self, version: int, level_totals: Mapping[int, int]) -> None:
         self.stored_enrichment_version = version
+        self.stored_official_level_totals = dict(level_totals)
 
     async def hsk_words(self) -> list[HskDatasetWord]:
         self.hsk_words_calls += 1
@@ -693,14 +704,24 @@ class FakeReadingHistoryRepository(IReadingHistoryRepository):
         return page, len(matched)
 
 
-class FakeHskDatasetSource(IHskDatasetSource):
-    def __init__(self, words: dict[str, HskDatasetWord] | None = None) -> None:
-        self.words: dict[str, HskDatasetWord] = dict(words or {})
+class FakeOfficialHskSource(IOfficialHskSource):
+    def __init__(self, levels: dict[str, int] | None = None) -> None:
+        self.levels: dict[str, int] = dict(levels or {})
         self.fetch_calls = 0
 
-    async def fetch(self) -> dict[str, HskDatasetWord]:
+    async def fetch(self) -> dict[str, int]:
         self.fetch_calls += 1
-        return dict(self.words)
+        return dict(self.levels)
+
+
+class FakeHskDatasetSource(IHskDatasetSource):
+    def __init__(self, pos_tags: dict[str, tuple[str, ...]] | None = None) -> None:
+        self.pos_tags: dict[str, tuple[str, ...]] = dict(pos_tags or {})
+        self.fetch_calls = 0
+
+    async def fetch(self) -> dict[str, tuple[str, ...]]:
+        self.fetch_calls += 1
+        return dict(self.pos_tags)
 
 
 class FakeHskCharacterSource(IHskCharacterSource):

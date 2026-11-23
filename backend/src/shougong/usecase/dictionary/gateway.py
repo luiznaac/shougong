@@ -14,6 +14,13 @@ from shougong.usecase.dictionary.model import (
     RelatedEntryPage,
 )
 
+# Official HSK 3.0 word → its vocabulary level (1-6, or 7 for the 7-9 band).
+type OfficialLevels = dict[str, int]
+# Community HSK word → its ICTCLAS POS tags.
+type CommunityPosTags = dict[str, tuple[str, ...]]
+# A word → the level and POS tags the enrichment pass stamps onto it.
+type EnrichmentDataset = dict[str, HskDatasetWord]
+
 
 class IDictionaryRepository(Protocol):
     async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryEntry]:
@@ -54,10 +61,12 @@ class IDictionaryRepository(Protocol):
 
     async def bulk_add(self, records: Sequence[CedictRecord]) -> int: ...
 
-    async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:
-        """Stamp `hsk_level` and `pos_tags` onto every entry whose simplified form
-        is a key of `dataset` — the same values on every row that shares it.
-        Returns the number of dataset words applied."""
+    async def apply_enrichment(self, dataset: EnrichmentDataset) -> int:
+        """Replace every entry's `hsk_level` and `pos_tags` with the enrichment
+        values: clear both columns, then stamp each entry whose simplified form is
+        a key of `dataset` — the same values on every row that shares it. A word
+        absent from `dataset` therefore ends with no level and no tags. Returns
+        the number of dataset words applied."""
         ...
 
     async def enrichment_version(self) -> int | None:
@@ -65,13 +74,19 @@ class IDictionaryRepository(Protocol):
         when the pass has never run."""
         ...
 
-    async def set_enrichment_version(self, version: int) -> None:
-        """Persist `version` as the single enrichment version."""
+    async def official_level_totals(self) -> dict[int, int] | None:
+        """The official per-level word counts recorded by the last pass, or `None`
+        when no pass has recorded them."""
+        ...
+
+    async def set_enrichment_version(self, version: int, level_totals: Mapping[int, int]) -> None:
+        """Persist `version` and the official per-level `level_totals` as the single
+        enrichment marker."""
         ...
 
     async def hsk_words(self) -> list[HskDatasetWord]:
         """One `HskDatasetWord` per distinct simplified form that has an
-        `hsk_level`, for the per-level statistics."""
+        `hsk_level`, for the per-level functional-word sets."""
         ...
 
     async def apply_character_levels(self, levels: Mapping[str, int]) -> int:
@@ -95,11 +110,20 @@ class ICedictSource(Protocol):
     async def fetch(self) -> list[CedictRecord]: ...
 
 
-class IHskDatasetSource(Protocol):
-    """Fetches the HSK word list from its upstream (a community dataset)."""
+class IOfficialHskSource(Protocol):
+    """Fetches the official HSK 3.0 word list (the vocabulary-level source)."""
 
-    async def fetch(self) -> dict[str, HskDatasetWord]:
-        """Every listed word → its level and POS tags, keyed by simplified form."""
+    async def fetch(self) -> OfficialLevels:
+        """Every listed word → its official vocabulary level, keyed by simplified
+        form. Levels are 1-6, plus 7 for the single 7-9 band."""
+        ...
+
+
+class IHskDatasetSource(Protocol):
+    """Fetches the community HSK dataset (the POS-tag source)."""
+
+    async def fetch(self) -> CommunityPosTags:
+        """Every listed word → its POS tags, keyed by simplified form."""
         ...
 
 

@@ -1,10 +1,10 @@
 """ORM entities for the dictionary slice.
 
 `dictionary_entry` is the lexicon: `definitions` is a JSON array of English glosses; `pos_tags` a
-JSON array of raw HSK POS tags. `hsk_level`, `pos_tags` and the derived `handwriting_level` are
-filled by the versioned HSK enrichment pass and are the same on every row that shares a
-`simplified`. `hsk_level` is the word's vocabulary level; `handwriting_level` is the max writing
-level of its characters.
+JSON array of community POS tags. `hsk_level` (official HSK 3.0 vocabulary level, or NULL outside
+the list), `pos_tags` and the derived `handwriting_level` are filled by the versioned enrichment
+pass and are the same on every row that shares a `simplified`. `handwriting_level` is the max
+writing level of the word's characters.
 
 `character_writing_level` is the character-level store: one row per character in the official HSK
 3.0 handwriting list, keyed by the character itself.
@@ -53,10 +53,13 @@ class DictionaryEnrichmentStateEntity(Base):
     """The single enrichment-version marker row.
 
     `id` is always 1: the pass upserts this row, so the table holds at most one
-    version for the whole dictionary.
+    version for the whole dictionary. `level_totals` records the official
+    per-level word counts the pass saw, keyed by level (``"1"``..``"7"``), so the
+    proficiency denominator is the official list's, not the dictionary subset's.
     """
 
     __tablename__ = "dictionary_enrichment_state"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     version: Mapped[int] = mapped_column(Integer)
+    level_totals: Mapped[dict[str, int] | None] = mapped_column(JSON, nullable=True)
