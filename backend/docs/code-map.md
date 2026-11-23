@@ -84,7 +84,7 @@ Module → key files → seam index for the `backend/` lane, plus the app entry 
 ### `acceptance` — dev-only fixture
 **Purpose**: the committed seed `docs/runbooks/acceptance.md` applies on a clean MySQL so the list- and item-detail-surface walkthroughs need no manual SQL. It is excluded from the production image (`.dockerignore`) and nothing in the service imports it.
 **Files**: `backend/src/shougong/acceptance/fixture.py`, `backend/src/shougong/acceptance/stroke_cache.py`
-**Seam(s)**: **`build_fixture(now)`** is the pure data plan the unit test pins (more than one 24-row page, every SRS state, HSK 1..9 + none, a leech, a pin, the 知道 detail word with a >8-row related family, three readings containing it and cached strokes for both characters); **`apply_acceptance_fixture(settings)`** writes it in one transaction, only when `dictionary_entry` is empty, so re-running the runbook is a no-op; **`_log_outcome(outcome)`** is the CLI's single `acceptance.seed_finished`/`acceptance.seed_skipped` record.
+**Seam(s)**: **`build_fixture(now)`** is the pure data plan the unit test pins (more than one 24-row page, every SRS state, both levels spanning 1-6 + the 7-9 band + none, a leech, a pin, the 知道 detail word with a >8-row related family, three readings containing it and cached strokes for both characters); **`apply_acceptance_fixture(settings)`** writes it in one transaction, only when `dictionary_entry` is empty, so re-running the runbook is a no-op; **`_log_outcome(outcome)`** is the CLI's single `acceptance.seed_finished`/`acceptance.seed_skipped` record.
 
 ### `alembic`, tests and packaging
 **Purpose**: the migration chain and its baseline logic, the unit/integration suites, and the image/CI story.

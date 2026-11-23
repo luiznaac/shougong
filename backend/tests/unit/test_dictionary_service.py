@@ -237,18 +237,18 @@ async def test_related_matches_shared_characters_excluding_target_and_its_readin
     assert [row.entry.simplified for row in rows] == ["知", "道", "知识"]
 
 
-async def test_related_orders_by_shared_characters_then_hsk_then_length() -> None:
+async def test_related_orders_by_shared_characters_then_handwriting_then_length() -> None:
     entries = [
         make_dictionary_entry(entry_id=1, simplified="知道"),
-        make_dictionary_entry(entry_id=2, simplified="知识", hsk_level=1),
+        make_dictionary_entry(entry_id=2, simplified="知识", handwriting_level=1),
         make_dictionary_entry(entry_id=3, simplified="知道路"),
-        make_dictionary_entry(entry_id=4, simplified="知道者", hsk_level=2),
+        make_dictionary_entry(entry_id=4, simplified="知道者", handwriting_level=2),
     ]
     service = _service(FakeDictionaryRepository(entries))
 
     rows, _ = await service.related(1)
 
-    # two shared hanzi first; within them hsk_level ASC NULLS LAST put 知道者 before 知道路
+    # two shared hanzi first; within them handwriting_level ASC NULLS LAST put 知道者 before 知道路
     assert [row.entry.id for row in rows] == [4, 3, 2]
 
 

@@ -84,7 +84,7 @@ export const api = {
     if (opts.due) p.set("due", "true");
     if (opts.leech) p.set("leech", "true");
     for (const state of opts.state ?? []) p.append("state", state);
-    for (const level of opts.hsk_level ?? []) p.append("hsk_level", String(level));
+    for (const level of opts.handwriting_level ?? []) p.append("handwriting_level", String(level));
     for (const tag of opts.pos_tag ?? []) p.append("pos_tag", tag);
     if (opts.search) p.set("search", opts.search);
     if (opts.due_from) p.set("due_from", opts.due_from);

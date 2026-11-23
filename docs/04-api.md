@@ -19,7 +19,7 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | --- | --- | --- |
 | `GET` | `/dictionary-entries?q=&limit=&offset=` | One page of matches (envelope), shortest-first |
 | `GET` | `/dictionary-entries/{entry_id}` | Fetch one entry |
-| `GET` | `/dictionary-entries/{entry_id}/related?limit=&offset=` | Shared-character family, most-shared first |
+| `GET` | `/dictionary-entries/{entry_id}/related?limit=&offset=` | Shared-character family, most-shared first, then handwriting level |
 
 ### Strokes
 
@@ -33,7 +33,7 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | --- | --- | --- |
 | `POST` | `/study-items` | Enqueue one dictionary entry (`201` + `Location`) |
 | `POST` | `/study-items/batch` | Import up to 1000 rows, per-row report |
-| `GET` | `/study-items?due=&leech=&state=&hsk_level=&pos_tag=&search=&due_from=&due_to=&sort=&limit=&offset=` | One page of the filtered queue (envelope); a leech list stays worst-first unless `sort` is given |
+| `GET` | `/study-items?due=&leech=&state=&handwriting_level=&pos_tag=&search=&due_from=&due_to=&sort=&limit=&offset=` | One page of the filtered queue (envelope); a leech list stays worst-first unless `sort` is given |
 | `GET` | `/study-items/{item_id}` | Fetch one study item |
 | `POST` | `/study-items/{item_id}/reviews` | Grade a due card (`201`) |
 | `GET` | `/study-items/{item_id}/reviews` | Grade history, newest first |
@@ -116,6 +116,10 @@ is not queued):
 The pagination envelope shared by the redesign's list routes (`{ items, total, limit, offset }`);
 `total` is the whole filtered set, not the page length.
 
+The page order is: distinct shared hanzi descending, then `handwriting_level` ascending
+NULLS LAST, then `char_length(simplified)` ascending, then `id` ascending. The vocabulary
+level plays no part in the ordering.
+
 ```json
 { "items": [], "total": 5, "limit": 20, "offset": 0 }
 ```
@@ -183,7 +187,7 @@ AND.
 | `due` | bool, default `false` | Shorthand for `due_to = now`; with an explicit `due_to`, the earlier bound wins. |
 | `leech` | bool, default `false` | 3+ `again` in the last ten review logs; keeps worst-first order unless `sort` is given. |
 | `state` | repeatable `learning\|review\|relearning` | Any-of. |
-| `hsk_level` | repeatable `1..9` or `none` | Any-of; `none` = `hsk_level IS NULL`. |
+| `handwriting_level` | repeatable `1..6`, `7` (the 7-9 band) or `none` | Any-of; filters on the derived handwriting level, `none` = `handwriting_level IS NULL`. `8` and `9` are rejected (`422`) — they are not separate handwriting levels. |
 | `pos_tag` | repeatable raw HSK/ICTCLAS tag (`v`, `n`) | Any-of; matches when the entry's `pos_tags` intersects the set. |
 | `search` | trimmed string, min 1 | Case-insensitive substring over `simplified` or `pinyin`. |
 | `due_from` | ISO instant | Inclusive; `card.due >= due_from`. |

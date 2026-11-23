@@ -15,14 +15,14 @@ export type StudyItemSort = "due_asc" | "created_desc" | "stability_asc";
 
 /**
  * Filters for `GET /study-items`. Values within one field OR, different fields
- * AND. `due` is the shorthand for `due_to = now`; `hsk_level: "none"` selects
- * entries outside the HSK list.
+ * AND. `due` is the shorthand for `due_to = now`; `handwriting_level: "none"`
+ * selects words with no derivable handwriting level.
  */
 export interface StudyItemListQuery {
   due?: boolean;
   leech?: boolean;
   state?: SrsState[];
-  hsk_level?: (number | "none")[];
+  handwriting_level?: (number | "none")[];
   pos_tag?: string[];
   search?: string;
   due_from?: string; // ISO instant, inclusive

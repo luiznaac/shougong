@@ -308,13 +308,13 @@ class StudyItemRepository(IStudyItemRepository):
                 predicates.append(StudyItemEntity.card_due < _naive_utc(filters.due_to))
             if filters.states:
                 predicates.append(StudyItemEntity.card_state.in_([int(state) for state in filters.states]))
-            if filters.hsk_levels:
-                levels = [level for level in filters.hsk_levels if level is not None]
+            if filters.handwriting_levels:
+                levels = [level for level in filters.handwriting_levels if level is not None]
                 level_predicates = []
                 if levels:
-                    level_predicates.append(DictionaryEntryEntity.hsk_level.in_(levels))
-                if None in filters.hsk_levels:
-                    level_predicates.append(DictionaryEntryEntity.hsk_level.is_(None))
+                    level_predicates.append(DictionaryEntryEntity.handwriting_level.in_(levels))
+                if None in filters.handwriting_levels:
+                    level_predicates.append(DictionaryEntryEntity.handwriting_level.is_(None))
                 predicates.append(or_(*level_predicates))
             if filters.pos_tags:
                 predicates.append(

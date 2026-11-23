@@ -185,8 +185,8 @@ class FakeDictionaryRepository(IDictionaryRepository):
         related.sort(
             key=lambda entry: (
                 -len(target_chars & set(entry.simplified)),
-                entry.hsk_level is None,
-                entry.hsk_level or 0,
+                entry.handwriting_level is None,
+                entry.handwriting_level or 0,
                 len(entry.simplified),
                 entry.id,
             )
@@ -442,8 +442,8 @@ class FakeStudyItemRepository(IStudyItemRepository):
             rows = [i for i in rows if i.card.due < filters.due_to]
         if filters.states:
             rows = [i for i in rows if i.card.state in filters.states]
-        if filters.hsk_levels:
-            rows = [i for i in rows if i.entry.hsk_level in filters.hsk_levels]
+        if filters.handwriting_levels:
+            rows = [i for i in rows if i.entry.handwriting_level in filters.handwriting_levels]
         if filters.pos_tags:
             wanted = set(filters.pos_tags)
             rows = [i for i in rows if wanted & set(i.entry.pos_tags)]

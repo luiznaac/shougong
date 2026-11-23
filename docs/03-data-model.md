@@ -110,7 +110,7 @@ Bundled lexicon, populated from CC-CEDICT and enriched with HSK 3.0 level + POS 
 - `pinyin` is normalized at import: lowercase, `ü` written as `v` (`lv4 xing2`).
 - `hsk_level` (the word's vocabulary level), `pos_tags` and `handwriting_level` are stamped by the versioned enrichment pass; the same values apply to every row sharing a `simplified`.
 - `hsk_level` is the official HSK 3.0 vocabulary level, or null for a word outside the list.
-- `handwriting_level` is derived as the maximum writing level among the word's characters that have one, or null when no character does. It is stored so the study filter and related ordering can use it, while the card can still show the per-character levels.
+- `handwriting_level` is derived as the maximum writing level among the word's characters that have one, or null when no character does. It is stored so the study-item list can filter on it (`1..6`, the 7-9 band as `7`, or `none` for null) and the related-entries list can order by it (`ASC NULLS LAST` after the shared-hanzi count), while the card can still show the per-character levels.
 - A hanzi can have several rows (multiple readings); each is a distinct entry.
 
 ### `character_writing_level`

@@ -81,12 +81,12 @@ describe("StudyItemPage", () => {
   it("returns to the exact list it came from", async () => {
     renderPage({
       pathname: "/biblioteca/itens/7",
-      state: { from: "/biblioteca?hsk_level=2&page=3" },
+      state: { from: "/biblioteca?handwriting_level=2&page=3" },
     });
 
     const back = await screen.findByRole("link", { name: "← Biblioteca" });
 
-    expect(back.getAttribute("href")).toBe("/biblioteca?hsk_level=2&page=3");
+    expect(back.getAttribute("href")).toBe("/biblioteca?handwriting_level=2&page=3");
     expect(screen.getByText("Journeyman I")).toBeTruthy();
   });
 

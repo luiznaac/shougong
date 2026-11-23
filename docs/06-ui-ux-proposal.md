@@ -380,7 +380,7 @@ Optional query parameters; values within one parameter OR, different parameters 
 | `due` | bool, default `false` | Shorthand for `due_to = now`; with an explicit `due_to`, the earlier bound wins. |
 | `leech` | bool, default `false` | 3+ `again` in the last ten review logs; keeps worst-first order unless `sort` is given. |
 | `state` | repeatable `learning\|review\|relearning` | Any-of. |
-| `hsk_level` | repeatable `1..9` or `none` | Any-of; `none` = `hsk_level IS NULL`. |
+| `handwriting_level` | repeatable `1..6`, `7` (the 7-9 band) or `none` | Any-of on the derived handwriting level; `none` = `handwriting_level IS NULL`. `8`/`9` are rejected. |
 | `pos_tag` | repeatable raw HSK/ICTCLAS tag (`v`, `n`) | Any-of; matches when the entry's `pos_tags` intersects the set. Not the reading `PartOfSpeech` enum. |
 | `search` | trimmed string, min 1 | Case-insensitive substring over `simplified` or `pinyin` (`xue2` matches). |
 | `due_from` | ISO instant | `card.due >= due_from` (inclusive). |
@@ -407,7 +407,7 @@ at least one hanzi with the target's, excluding the target and every entry with 
 `simplified` (alternate readings are not related words). `404` for an unknown target;
 envelope; row = `DictionaryEntryResponse` + `study_item_id: number | null` (the study item
 whose entry is this row, or `null`). Ordering: distinct shared hanzi `DESC`, then
-`hsk_level ASC NULLS LAST`, then `char_length(simplified) ASC`, then `id ASC`. No `relation`
+`handwriting_level ASC NULLS LAST`, then `char_length(simplified) ASC`, then `id ASC`. No `relation`
 field — there is one relation family; semantic neighbours and reading co-occurrence are not
 related.
 
