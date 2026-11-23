@@ -25,6 +25,7 @@ erDiagram
     DICTIONARY_ENRICHMENT_STATE {
         int id PK
         int version
+        json level_totals
     }
     CHARACTER_STROKES {
         varchar character PK
@@ -98,10 +99,12 @@ erDiagram
 
 ### `dictionary_entry`
 
-Bundled lexicon, populated from CC-CEDICT and enriched with HSK 3.0 level + POS tags. Simplified only; traditional forms are dropped.
+Bundled lexicon, populated from CC-CEDICT and enriched with the official HSK 3.0 vocabulary level + community POS tags. Simplified only; traditional forms are dropped.
 
 - `simplified` and `pinyin` are indexed for search and exact matching.
 - `pinyin` is normalized at import: lowercase, `ü` written as `v` (`lv4 xing2`).
+- `hsk_level` is the **vocabulary level** from the official HSK 3.0 word list (11,092 words): `1`-`6`, or `7` for the single 7-9 band. A word outside the official list is `NULL` — the old HSK 2.0 fallback is gone.
+- `pos_tags` are the community dataset's ICTCLAS tags, joined by simplified form; the reading engine samples PERSON and PLACE words from them.
 - `hsk_level`/`pos_tags` are stamped by the versioned enrichment pass; the same values apply to every row sharing a `simplified`.
 - A hanzi can have several rows (multiple readings); each is a distinct entry.
 
@@ -111,7 +114,9 @@ The single-row marker recording which enrichment version last stamped `dictionar
 
 - The row is absent until the pass first runs; the pass skips while the stored `version` matches the code's.
 - Advancing the version re-runs the pass, updating `dictionary_entry` rows in place so row ids, study items and study history survive and no duplicate rows appear.
-- Created by migration `0007_dictionary_enrich`.
+- A re-run clears every row's level and tags before stamping the current sources, so a word dropped from the official list loses its level.
+- `level_totals` records the official word counts per level (`"1"`..`"7"`), so proficiency and coverage divide by the official list's totals, not the dictionary subset; it is `NULL` until a pass records it.
+- Created by migration `0007_dictionary_enrich`; `level_totals` added by `0008_enrichment_level_totals`.
 
 ### `study_item`
 

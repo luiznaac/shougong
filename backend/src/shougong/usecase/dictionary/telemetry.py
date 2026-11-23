@@ -14,7 +14,7 @@ from opentelemetry.metrics import Meter
 from shougong.usecase.commons.logging import get_logger
 
 type AutoloadStage = Literal["populate", "enrich"]
-type DictionarySource = Literal["cedict", "hsk"]
+type DictionarySource = Literal["cedict", "official-hsk", "community-hsk"]
 
 
 class DictionaryTelemetry:

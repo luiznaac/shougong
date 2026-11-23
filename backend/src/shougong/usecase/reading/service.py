@@ -89,12 +89,15 @@ class ReadingService:
         known_index = await self._known_word_index()
         known_words = frozenset(known_index)
         stats = hsk_level_stats(await self._dictionary.hsk_words())
+        # The proficiency denominator is the official list's per-level totals;
+        # fall back to the dictionary's when no enrichment pass recorded them.
+        totals = await self._dictionary.official_level_totals() or stats.total_by_level
         known_by_level = Counter(entry.hsk_level for entry in known_index.values() if entry.hsk_level is not None)
-        proficiency = estimate_proficiency(known_by_level, stats.total_by_level)
+        proficiency = estimate_proficiency(known_by_level, totals)
         working_set = await self._build_working_set(known_index, proficiency.coverage_by_level)
         audience = (
             BudgetAudience.INTERMEDIATE
-            if not stats.total_by_level
+            if not totals
             else budget_audience(known_words, stats, proficiency.estimated_level)
         )
         request = await self._resolve_topic(request)

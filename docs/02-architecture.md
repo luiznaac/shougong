@@ -48,7 +48,7 @@ Rules that keep the architecture honest:
 
 | Slice | Domain | Ports | Adapters |
 | --- | --- | --- | --- |
-| Dictionary | CC-CEDICT entries, HSK metadata | `IDictionaryRepository`, `ICedictSource`, `IHskDatasetSource` | SQLAlchemy repo, MDBG/CC-CEDICT fetcher, HSK dataset fetcher |
+| Dictionary | CC-CEDICT entries, HSK metadata | `IDictionaryRepository`, `ICedictSource`, `IOfficialHskSource`, `IHskDatasetSource` | SQLAlchemy repo, MDBG/CC-CEDICT fetcher, official HSK 3.0 word-list fetcher, community POS fetcher |
 | Study | study items, batch import, review loop | `IStudyItemRepository` | SQLAlchemy repo + history repo |
 | SRS | FSRS card model and rating | `ISrsEngine` | `DayBoundaryEngine` + `FsrsEngine` |
 | Strokes | per-character stroke order | `IStrokeRepository`, `IHanziStrokeSource` | SQLAlchemy cache, Hanzi Writer source |
@@ -69,12 +69,12 @@ sequenceDiagram
     C->>C: Register controllers
     par Startup tasks
         C->>C: Autoload CC-CEDICT if empty
-        C->>C: Enrich HSK + POS if not done
+        C->>C: Enrich official level + community POS if not done
         C->>C: Warm up jieba
     end
 ```
 
-Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent: CC-CEDICT fills only an empty table (`count() == 0`), and HSK enrichment is versioned — it records the version it ran in `dictionary_enrichment_state` and skips while that matches the code's, re-running in place (preserving row ids and study history) when the version advances.
+Dictionary population is fire-and-forget: the API serves immediately and search results appear once the background pass finishes. Both autoload passes are idempotent: CC-CEDICT fills only an empty table (`count() == 0`), and enrichment is versioned — it records the version it ran in `dictionary_enrichment_state` and skips while that matches the code's, re-running in place (preserving row ids and study history) when the version advances. The pass stamps the official HSK 3.0 vocabulary level from `ivankra/hsk30` and the POS tags from the community dataset, and records the official per-level totals so proficiency divides by them; a word outside the official list is cleared to no level.
 
 ## Key request flows
 
@@ -139,7 +139,7 @@ flowchart LR
     Uvicorn --> MySQL[External MySQL 8]
     Uvicorn --> LiteLLM[Self-hosted LiteLLM proxy]
     Uvicorn --> CEDICT[CC-CEDICT / MDBG]
-    Uvicorn --> HSK[HSK 3.0 dataset]
+    Uvicorn --> HSK[Official HSK 3.0 + community dataset]
     Uvicorn --> HZW[Hanzi Writer source]
 ```
 
@@ -159,7 +159,9 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 | `MYSQL__HOST` / `MYSQL__USER` / `MYSQL__PASSWORD` / `MYSQL__DATABASE` | localhost / root / empty / shougong | Database connection |
 | `MYSQL__PORT` | `8132` in dev, `3306` otherwise | MySQL port; deploy/test profiles reach their local MySQL on `3306` without extra config |
 | `DICTIONARY_AUTOLOAD` | `true` | Fill CEDICT on boot if empty |
-| `HSK_ENRICH_AUTOLOAD` | `true` | Stamp HSK/POS on boot if missing |
+| `HSK_ENRICH_AUTOLOAD` | `true` | Stamp the official vocabulary level + community POS on boot if missing |
+| `OFFICIAL_HSK_URL` | `ivankra/hsk30` `hsk30.csv` | Official HSK 3.0 word list — the vocabulary-level source |
+| `HSK_DATASET_URL` | `complete-hsk-vocabulary` `complete.min.json` | Community HSK dataset — the POS-tag source |
 | `STUDY_TIMEZONE` | `UTC` | IANA timezone for the SRS day boundary |
 | `GATEWAYS__APP__HOST` | unset — derived from `HTTP_PORT` | Self health-check base URL; an explicit host wins |
 | `GATEWAYS__AI__BASE_URL` | `http://localhost:4000` | LiteLLM proxy |

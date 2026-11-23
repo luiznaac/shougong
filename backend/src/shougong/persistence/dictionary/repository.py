@@ -182,11 +182,13 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
-    async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:
+    async def apply_enrichment(self, dataset: Mapping[str, HskDatasetWord]) -> int:
         async def _run() -> int:
             session = current_session()
-            words = list(dataset.values())
             table = cast(Table, DictionaryEntryEntity.__table__)
+            # Clear first so a word outside the official list loses any stale level.
+            await session.execute(update(table).values(hsk_level=None, pos_tags=[]))
+            words = list(dataset.values())
             stmt = (
                 update(table)
                 .where(table.c.simplified == bindparam("s"))
@@ -210,13 +212,24 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
-    async def set_enrichment_version(self, version: int) -> None:
+    async def official_level_totals(self) -> dict[int, int] | None:
+        async def _run() -> dict[int, int] | None:
+            session = current_session()
+            totals = await session.scalar(select(DictionaryEnrichmentStateEntity.level_totals))
+            if not totals:
+                return None
+            return {int(level): int(count) for level, count in totals.items()}
+
+        return await self._tx.execute(_run)
+
+    async def set_enrichment_version(self, version: int, level_totals: Mapping[int, int]) -> None:
         async def _run() -> None:
             session = current_session()
+            totals = {str(level): count for level, count in level_totals.items()}
             stmt = (
                 mysql.insert(DictionaryEnrichmentStateEntity)
-                .values(id=_ENRICHMENT_STATE_ID, version=version)
-                .on_duplicate_key_update(version=version)
+                .values(id=_ENRICHMENT_STATE_ID, version=version, level_totals=totals)
+                .on_duplicate_key_update(version=version, level_totals=totals)
             )
             await session.execute(stmt)
 

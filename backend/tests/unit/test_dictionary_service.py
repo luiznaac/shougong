@@ -4,13 +4,14 @@ import pytest
 from opentelemetry.metrics import NoOpMeter
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskDatasetWord
+from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 from tests.fixtures import (
     FakeCedictSource,
     FakeDictionaryRepository,
     FakeHskDatasetSource,
+    FakeOfficialHskSource,
     make_dictionary_entry,
 )
 
@@ -93,16 +94,37 @@ async def test_enrich_hsk_stamps_every_row_that_shares_a_simplified() -> None:
     firm = make_dictionary_entry(entry_id=2, simplified="行", pinyin="hang2", definitions=("firm",))
     other = make_dictionary_entry(entry_id=3, simplified="水", pinyin="shui3", definitions=("water",))
     repo = FakeDictionaryRepository([walk, firm, other])
-    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ("v", "n"))})
+    official = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource({"行": ("v", "n")})
 
-    applied = await _service(repo).enrich_hsk(source)
+    applied = await _service(repo).enrich_hsk(official, community)
 
     assert applied == 1
     assert [(e.simplified, e.hsk_level, e.pos_tags) for e in repo.entries] == [
         ("行", 2, ("v", "n")),
         ("行", 2, ("v", "n")),  # both readings of 行 stamped identically
-        ("水", None, ()),  # untouched
+        ("水", None, ()),  # outside the official list → cleared
     ]
+
+
+async def test_enrich_hsk_uses_the_official_level_and_the_community_pos_tags() -> None:
+    repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="行")])
+    official = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource({"行": ("v", "n")})
+
+    await _service(repo).enrich_hsk(official, community)
+
+    assert (repo.entries[0].hsk_level, repo.entries[0].pos_tags) == (2, ("v", "n"))
+
+
+async def test_enrich_hsk_clears_the_level_for_a_word_outside_the_official_list() -> None:
+    repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="旧", hsk_level=3, pos_tags=("a",))])
+    official = FakeOfficialHskSource({"新": 1})
+    community = FakeHskDatasetSource({"新": ("a",)})
+
+    await _service(repo).enrich_hsk(official, community)
+
+    assert (repo.entries[0].hsk_level, repo.entries[0].pos_tags) == (None, ())
 
 
 async def test_enrich_hsk_skips_when_the_stored_version_matches_the_code_version() -> None:
@@ -110,12 +132,14 @@ async def test_enrich_hsk_skips_when_the_stored_version_matches_the_code_version
         [make_dictionary_entry(entry_id=1, simplified="行", hsk_level=2, pos_tags=("v",))],
         enrichment_version=1,
     )
-    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n",))})
+    official = FakeOfficialHskSource({"行": 5})
+    community = FakeHskDatasetSource({"行": ("n",)})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(official, community)
 
     assert applied == 0
-    assert source.fetch_calls == 0
+    assert official.fetch_calls == 0
+    assert community.fetch_calls == 0
     assert repo.entries[0].hsk_level == 2  # not re-stamped
 
 
@@ -128,12 +152,14 @@ async def test_advancing_the_version_re_enriches_every_row_in_place_and_persists
         ],
         enrichment_version=1,
     )
-    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n", "v"))})
+    official = FakeOfficialHskSource({"行": 5})
+    community = FakeHskDatasetSource({"行": ("n", "v")})
 
-    applied = await _service(repo, enrichment_version=2).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=2).enrich_hsk(official, community)
 
     assert applied == 1
-    assert source.fetch_calls == 1
+    assert official.fetch_calls == 1
+    assert community.fetch_calls == 1
     # ids are preserved and every reading of 行 is re-stamped identically
     assert [(e.id, e.simplified, e.hsk_level, e.pos_tags) for e in repo.entries] == [
         (1, "行", 5, ("n", "v")),
@@ -141,27 +167,43 @@ async def test_advancing_the_version_re_enriches_every_row_in_place_and_persists
         (3, "水", None, ()),
     ]
     assert repo.stored_enrichment_version == 2
+    assert repo.stored_official_level_totals == {5: 1}
 
 
 async def test_an_empty_dictionary_leaves_the_version_unset_for_a_later_run() -> None:
     repo = FakeDictionaryRepository()
-    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ())})
+    official = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource({"行": ()})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(official, community)
 
     assert applied == 0
-    assert source.fetch_calls == 0
+    assert official.fetch_calls == 0
+    assert community.fetch_calls == 0
     assert repo.stored_enrichment_version is None
 
 
-async def test_an_empty_dataset_leaves_the_version_unset_for_a_later_run() -> None:
+async def test_an_empty_official_list_leaves_the_version_unset_for_a_later_run() -> None:
     repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="行")])
-    source = FakeHskDatasetSource()
+    official = FakeOfficialHskSource()
+    community = FakeHskDatasetSource({"行": ("n",)})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(official, community)
 
     assert applied == 0
-    assert source.fetch_calls == 1
+    assert official.fetch_calls == 1
+    assert repo.stored_enrichment_version is None
+
+
+async def test_an_empty_community_dataset_leaves_the_version_unset_for_a_later_run() -> None:
+    repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="行")])
+    official = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource()
+
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(official, community)
+
+    assert applied == 0
+    assert community.fetch_calls == 1
     assert repo.stored_enrichment_version is None
 
 

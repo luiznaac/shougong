@@ -3,9 +3,15 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
+from opentelemetry.metrics import NoOpMeter
 from sqlalchemy import text
 
 from shougong.application.container import Container
+from shougong.persistence.dictionary.repository import DictionaryRepository
+from shougong.usecase.dictionary.service import DictionaryService
+from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
+from tests.fixtures import FakeHskDatasetSource, FakeOfficialHskSource
 
 
 async def _seed_known(
@@ -79,3 +85,71 @@ async def test_overview_is_empty_without_studied_words(container: Container, cli
     assert body["profiles"] == []
     assert body["summary"]["total"] == 0
     assert body["summary"]["proficiency"] == {"coverage_by_level": {"1": 0.0}, "estimated_level": 0}
+
+
+async def _seed_unenriched(container: Container, simplified: str, pinyin: str) -> None:
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO dictionary_entry (simplified, pinyin, definitions) VALUES (:s, :p, :d)"),
+            {"s": simplified, "p": pinyin, "d": json.dumps(["gloss"])},
+        )
+
+
+async def _mark_known(container: Container, simplified: str) -> None:
+    async with container.engine.begin() as conn:
+        entry_id = await conn.scalar(
+            text("SELECT id FROM dictionary_entry WHERE simplified = :s"),
+            {"s": simplified},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO study_item (entry_id, card_state, card_due, created_at) "
+                "VALUES (:e, 0, '2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+            ),
+            {"e": entry_id},
+        )
+
+
+async def test_the_official_level_drives_search_summary_and_proficiency(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    for simplified, pinyin in (("书", "shu1"), ("跑", "pao3"), ("坏", "huai4"), ("旧", "jiu4"), ("咖", "ka1")):
+        await _seed_unenriched(container, simplified, pinyin)
+    await _mark_known(container, "书")
+    await _mark_known(container, "跑")
+    await _mark_known(container, "咖")  # community-only: no official level, POS kept
+
+    service = DictionaryService(
+        DictionaryRepository(container.transaction_template),
+        DictionaryTelemetry(NoOpMeter("test")),
+        enrichment_version=1,
+    )
+    official = FakeOfficialHskSource({"书": 1, "跑": 2, "坏": 2, "旧": 2})
+    community = FakeHskDatasetSource(
+        {
+            "书": ("n",),
+            "跑": ("v",),
+            "坏": ("a",),
+            "旧": ("a",),
+            "咖": ("n",),
+        }
+    )
+    assert await service.enrich_hsk(official, community) == 5
+
+    found = (await client.get("/dictionary-entries", params={"q": "坏"})).json()["items"]
+    assert found[0]["hsk_level"] == 2
+    outside = (await client.get("/dictionary-entries", params={"q": "咖"})).json()["items"]
+    assert outside[0]["hsk_level"] is None
+    assert outside[0]["pos_tags"] == ["n"]  # community POS survives a null level
+
+    body = (await client.get("/reading-vocabulary")).json()
+    assert {p["simplified"]: p["hsk_level"] for p in body["profiles"]} == {"书": 1, "跑": 2, "咖": None}
+    assert body["summary"]["total"] == 3
+    assert body["summary"]["categorised"] == 2
+    assert body["summary"]["by_hsk_level"] == {"1": 1, "2": 1, "none": 1}
+    assert body["summary"]["by_category"] == {"noun": 2, "verb": 1}
+    # official totals: level 1 = 1 word; level 2 = 3 (跑 + 坏/旧)
+    coverage = body["summary"]["proficiency"]["coverage_by_level"]
+    assert coverage["1"] == 1.0
+    assert coverage["2"] == pytest.approx(1 / 3)
+    assert body["summary"]["proficiency"]["estimated_level"] == 1

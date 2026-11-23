@@ -46,8 +46,8 @@ class CedictRecord:
 
 @dataclass(frozen=True, slots=True)
 class HskDatasetWord:
-    """One word from the HSK dataset — its level and raw POS tags. Used only to
-    enrich `dictionary_entry`; not persisted as-is."""
+    """One enriched dictionary word — the official vocabulary level joined to the
+    community POS tags. Used only to stamp `dictionary_entry`; not persisted as-is."""
 
     simplified: str
     hsk_level: int | None

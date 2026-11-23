@@ -15,13 +15,14 @@ from shougong.application.telemetry import Telemetry, build_telemetry
 from shougong.gateway.dictionary.cedict_source import CedictSource
 from shougong.usecase.commons.logging import configure_logging
 from shougong.usecase.commons.request_context import job_context
-from shougong.usecase.dictionary.model import CedictRecord, HskDatasetWord
+from shougong.usecase.dictionary.model import CedictRecord
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 from tests.fixtures import (
     FakeCedictSource,
     FakeDictionaryRepository,
     FakeHskDatasetSource,
+    FakeOfficialHskSource,
     build_test_settings,
     log_records,
     make_dictionary_entry,
@@ -126,21 +127,24 @@ async def test_the_bootstrap_outcomes_are_info_events_with_their_exact_attribute
     await _service(telemetry, FakeDictionaryRepository([make_dictionary_entry()])).populate_if_empty(
         FakeCedictSource(_RECORDS)
     )
+    official = FakeOfficialHskSource({"书": 3})
+    community = FakeHskDatasetSource({"书": ("n",)})
     await _service(telemetry, FakeDictionaryRepository([make_dictionary_entry(simplified="书")])).enrich_hsk(
-        FakeHskDatasetSource({"书": HskDatasetWord("书", 3, ("n",))})
+        official, community
     )
     await _service(
         telemetry,
         FakeDictionaryRepository([make_dictionary_entry(hsk_level=1, pos_tags=("n",))], enrichment_version=1),
-    ).enrich_hsk(FakeHskDatasetSource({"书": HskDatasetWord("书", 3, ("n",))}))
+    ).enrich_hsk(official, community)
 
     records = [item.log_record for item in log_records(telemetry)]
-    assert [record.severity_text for record in records] == ["INFO"] * 6
+    assert [record.severity_text for record in records] == ["INFO"] * 7
     assert [(record.body, dict(record.attributes)) for record in records] == [
         ("dictionary.source_downloaded", {"dictionary.source": "cedict", "dictionary.records": 2}),
         ("dictionary.populated", {"dictionary.records": 2}),
         ("dictionary.populate_skipped", {"dictionary.existing": 1}),
-        ("dictionary.source_downloaded", {"dictionary.source": "hsk", "dictionary.records": 1}),
+        ("dictionary.source_downloaded", {"dictionary.source": "official-hsk", "dictionary.records": 1}),
+        ("dictionary.source_downloaded", {"dictionary.source": "community-hsk", "dictionary.records": 1}),
         ("dictionary.hsk_enriched", {"dictionary.records": 1}),
         ("dictionary.hsk_enrich_skipped", {"dictionary.enrichment_version": 1}),
     ]

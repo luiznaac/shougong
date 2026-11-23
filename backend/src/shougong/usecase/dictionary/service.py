@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+from collections import Counter
+
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
 from shougong.usecase.commons.page import Page
-from shougong.usecase.dictionary.gateway import ICedictSource, IDictionaryRepository, IHskDatasetSource
-from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntryPage
+from shougong.usecase.dictionary.gateway import (
+    CommunityPosTags,
+    EnrichmentDataset,
+    ICedictSource,
+    IDictionaryRepository,
+    IHskDatasetSource,
+    IOfficialHskSource,
+    OfficialLevels,
+)
+from shougong.usecase.dictionary.model import DictionaryEntry, HskDatasetWord, RelatedEntryPage
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 
 
@@ -66,8 +76,13 @@ class DictionaryService:
         self._telemetry.record_populated(records=added)
         return added
 
-    async def enrich_hsk(self, source: IHskDatasetSource) -> int:
-        """Stamp `hsk_level` and `pos_tags` onto the dictionary from the HSK dataset.
+    async def enrich_hsk(self, official: IOfficialHskSource, community: IHskDatasetSource) -> int:
+        """Stamp the official vocabulary level and the community POS tags.
+
+        The level comes from the official HSK 3.0 word list (1-6, or 7 for the
+        7-9 band); the community dataset supplies only the POS tags the reading
+        engine samples from. A word outside the official list ends with no level,
+        so advancing the pass also clears stale levels.
 
         Versioned and idempotent: the pass persists the enrichment version it ran
         and skips once the stored version matches the code's. Advancing the
@@ -85,13 +100,32 @@ class DictionaryService:
         if await self._repository.count() == 0:
             return 0
 
-        dataset = await source.fetch()
-        self._telemetry.record_source_downloaded("hsk", len(dataset))
-        # An empty dataset is a failed download, not a version worth recording —
+        levels = await official.fetch()
+        self._telemetry.record_source_downloaded("official-hsk", len(levels))
+        community_pos = await community.fetch()
+        self._telemetry.record_source_downloaded("community-hsk", len(community_pos))
+        # An empty source is a failed download, not a version worth recording —
         # leave the marker unset so the next boot retries.
-        if not dataset:
+        if not levels or not community_pos:
             return 0
-        applied = await self._repository.apply_hsk(dataset)
-        await self._repository.set_enrichment_version(self.enrichment_version)
+        applied = await self._repository.apply_enrichment(_combined(levels, community_pos))
+        await self._repository.set_enrichment_version(self.enrichment_version, Counter(levels.values()))
         self._telemetry.record_hsk_enriched(records=applied)
         return applied
+
+
+def _combined(levels: OfficialLevels, community_pos: CommunityPosTags) -> EnrichmentDataset:
+    """Join the official levels to the community POS tags by simplified form.
+
+    A word present in only one source still gets an entry: its missing side is
+    cleared (`None` level, empty tags) by the repository's clear-then-stamp.
+    """
+    combined = {word: HskDatasetWord(word, level, ()) for word, level in levels.items()}
+    for word, pos_tags in community_pos.items():
+        existing = combined.get(word)
+        combined[word] = HskDatasetWord(
+            word,
+            existing.hsk_level if existing is not None else None,
+            pos_tags,
+        )
+    return combined
