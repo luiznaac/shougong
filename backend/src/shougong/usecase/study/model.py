@@ -7,6 +7,7 @@ copying its fields.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -23,6 +24,9 @@ class StudyItem:
     created_at: datetime
     # Opaque display-ordering key; `None` when the item is not pinned. Never render raw.
     priority_position: int | None = None
+    # Per-character writing level for the word's characters (None for a character
+    # with no level). Filled by the session read; None when a read didn't annotate it.
+    character_writing_levels: Mapping[str, int | None] | None = None
 
 
 class ItemSource(StrEnum):

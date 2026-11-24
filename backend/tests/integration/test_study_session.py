@@ -142,6 +142,22 @@ async def test_review_session_takes_only_due_non_learning_items(
     assert review_future not in {row["id"] for row in session["items"]}
 
 
+async def test_session_item_exposes_per_character_writing_levels(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    item_id = await _add_item(client, container, simplified="好啊", pinyin="hao3 a5")
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO character_writing_level (`character`, writing_level) VALUES (:c, :l)"),
+            {"c": "好", "l": 2},
+        )
+
+    session = (await client.get("/study/session", params={"kind": "lesson"})).json()
+
+    item = next(row for row in session["items"] if row["id"] == item_id)
+    assert item["character_writing_levels"] == {"好": 2, "啊": None}
+
+
 async def test_empty_session_and_kind_validation(container: Container, client: httpx.AsyncClient) -> None:
     first = await client.get("/study/session", params={"kind": "lesson"})
     second = await client.get("/study/session", params={"kind": "lesson"})

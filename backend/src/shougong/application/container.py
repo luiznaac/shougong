@@ -29,6 +29,7 @@ from shougong.gateway.configuration.http_client import build_http_client
 from shougong.gateway.dictionary.cedict_source import CedictSource
 from shougong.gateway.dictionary.hsk_character_source import HskCharacterSource
 from shougong.gateway.dictionary.hsk_dataset_source import HskDatasetSource
+from shougong.gateway.dictionary.official_hsk_source import OfficialHskSource
 from shougong.gateway.health.app_health_gateway import AppHealthGateway
 from shougong.gateway.health.http_client_health_check import HttpClientHealthCheck
 from shougong.gateway.reading.litellm_reading_gateway import LiteLlmReadingGateway
@@ -87,9 +88,12 @@ _log = get_logger(__name__)
 # The dictionary's enrichment contract: bump it whenever the pass's output
 # changes, so an existing database re-runs the pass in place instead of keeping
 # stale rows. `DictionaryService.enrich_hsk` skips while the stored marker
-# matches this value. Version 2 adds the character writing levels and the
-# derived word handwriting level.
-DICTIONARY_ENRICHMENT_VERSION = 2
+# matches this value. Version 2 added the character writing levels and the
+# derived word handwriting level; version 3 sources the vocabulary level from the
+# official HSK 3.0 word list (clearing words outside it) and records the official
+# per-level totals; version 4 applies the CC-CEDICT import policy to existing
+# tables (dropping alias rows with a real sibling and byte-identical duplicates).
+DICTIONARY_ENRICHMENT_VERSION = 4
 
 
 class Container:
@@ -133,6 +137,7 @@ class Container:
             enrichment_version=DICTIONARY_ENRICHMENT_VERSION,
         )
         self._cedict_source = CedictSource(self.http_client)
+        self._official_hsk_source = OfficialHskSource(self.http_client, settings.official_hsk_url)
         self._hsk_dataset_source = HskDatasetSource(self.http_client, settings.hsk_dataset_url)
         self._hsk_character_source = HskCharacterSource(self.http_client, settings.hsk_character_dataset_url)
 
@@ -256,7 +261,8 @@ class Container:
 
     async def _autoload_dictionary(self) -> None:
         """Fire-and-forget: fill the dictionary from CC-CEDICT if it is empty,
-        then stamp HSK level + POS tags onto it from the HSK dataset.
+        then stamp the official vocabulary level, community POS tags and the
+        derived handwriting levels onto it.
 
         Runs in the background so the app serves immediately; a download failure
         is logged, never fatal. Both steps are idempotent. The task boundary owns
@@ -271,6 +277,7 @@ class Container:
                 if self.settings.hsk_enrich_autoload:
                     stage = "enrich"
                     await self._dictionary_service.enrich_hsk(
+                        self._official_hsk_source,
                         self._hsk_dataset_source,
                         self._hsk_character_source,
                     )

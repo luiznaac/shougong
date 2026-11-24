@@ -91,7 +91,7 @@ client presentation. `GET /study-items/{id}/reviews` and
 }
 ```
 
-`hsk_level` is the word's **vocabulary** level (official HSK 3.0), null outside the list. `handwriting_level` is the word's **handwriting** level, derived as the max writing level among its characters that have one, null when none does. Clients show "not in HSK" for a null vocabulary level and an unknown marker for a null handwriting level.
+`hsk_level` is the official HSK 3.0 **vocabulary level** — levels 1-6, or 7 for the single 7-9 band — and `null` when the word is outside the official list (there is no HSK 2.0 fallback). `pos_tags` are the community dataset's POS tags. `handwriting_level` is the word's **handwriting** level, derived as the max writing level among its characters that have one, `null` when none does. Clients show "not in HSK" for a null vocabulary level and an unknown marker for a null handwriting level.
 
 ### `RelatedEntryResponse`
 
@@ -167,6 +167,7 @@ Priority is learning-only. Graduating an item from `learning` into `review` dele
 
 - **lesson** — every item whose card state is `learning`, with no due predicate. The pinned block leads, ascending by priority position then item id, and keeps that order unshuffled; only the unpinned remainder is shuffled.
 - **review** — every due item that is not `learning` (`relearning` included). The whole block is shuffled, with no priority weighting.
+- Each item carries `character_writing_levels`: one entry per character in the item's word, mapping the character to its stored HSK 3.0 writing level, or `null` when the character has none. It is resolved for the whole session in one read, so the practice card can show which character is holding the word back without a per-character request. Other study-item responses carry an empty map.
 - An empty selection is `200` with `items: []`. There is no pagination, limit or cursor.
 - Nothing is persisted: no session row, seed or expiry. The response order is authoritative and the client must not re-sort. `session_id` is opaque and informational only — never an ordering input or a resume key; every request produces a fresh shuffle.
 
@@ -309,6 +310,8 @@ Request: `{ "rows": [ { "hanzi": "学习", "pinyin": "xue2 xi2" } ] }` (1-1000 r
 
 `status` is `created | skipped | error`. An `error` row with `candidates` populated means the row was ambiguous or the pinyin did not match exactly; the client can offer those dictionary entries and resolve via `POST /study-items`.
 
+The dictionary is imported under one set-level policy (see [data model](./03-data-model.md#dictionary_entry)): alias rows that only point at another form of the same word are dropped when a real entry exists, and byte-identical duplicates are removed. So a common HSK word whose only collision was such an alias or duplicate — `了`, `吃` — now resolves to a single entry and its row is `created`. A **genuine homograph** — same hanzi and pinyin but a genuinely different word — still returns an `error` row with its candidates for the learner to choose: `下面` "below" vs "to boil noodles", `和` "and" vs the surname `和`, `你` vs the female form `妳`.
+
 ### Reading tokens
 
 `SavedReadingTextResponse` contains `tokens`, each either a word or punctuation:
@@ -362,6 +365,31 @@ For dialogue readings, words carry a `speaker`; `speakers` at the reading level 
 - `GET /reading-texts/{reading_id}` returns the full `SavedReadingTextResponse` (hydration included) and `404`s for an unknown id.
 - `POST /reading-texts` and `GET /reading-texts/models` return `502` with a bounded gateway code when the AI proxy fails — see the error model below.
 
+### Reading vocabulary
+
+`GET /reading-vocabulary` returns the learner's known words and a summary, derived on read:
+
+```json
+{
+  "profiles": [
+    { "simplified": "学习", "hsk_level": 1, "pos_tags": ["v", "n"], "pos_categories": ["noun", "verb"], "pinyin": "xue2 xi2", "gloss": "to study; to learn" }
+  ],
+  "summary": {
+    "total": 120,
+    "categorised": 118,
+    "by_category": { "noun": 70, "verb": 55, "qualifier": 12 },
+    "by_hsk_level": { "1": 60, "2": 40, "3": 18, "none": 2 },
+    "qualifier_shortage": false,
+    "proficiency": { "coverage_by_level": { "1": 0.12, "2": 0.034 }, "estimated_level": 0 }
+  }
+}
+```
+
+- `hsk_level` is the official HSK 3.0 vocabulary level (levels 1-6, or 7 for 7-9); a word outside the official list is `null` and is counted under the `"none"` bucket.
+- `pos_categories` are derived from the community POS tags; `categorised` counts known words that carry an official level (`by_hsk_level`'s level buckets sum to it, the `"none"` bucket is the rest).
+- `by_category` is a membership count: a word in N categories counts N times, so the values need not sum to `total`.
+- `proficiency.coverage_by_level` is known words / the official list's per-level total (recorded by the enrichment pass), not the dictionary subset; `estimated_level` is the highest level mastered contiguously from 1 (at least half of its words known).
+
 ## Error model
 
 The app maps domain exceptions to a consistent problem shape:
@@ -384,7 +412,7 @@ The app maps domain exceptions to a consistent problem shape:
 - **Pagination**: list routes return `{ items, total, limit, offset }` (`/reading-texts`, `/study-items`, `/dictionary-entries`); `limit` is `1..100` (default `20`), `offset` is `>= 0`, `total` is the exact filtered count. Item reviews and item history keep their bare arrays (`limit` 1..200 default 50). Clients page explicitly and never re-sort a page.
 - **Ordering**: study items by due date then id unless a filter/sort overrides it (`leech=true` orders worst-first, `sort` selects `created_desc` or `stability_asc`); dictionary search shortest-first; review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
 - **`Location` headers** are set on created resources.
-- **Idempotency**: dictionary autoload and HSK enrichment are idempotent (enrichment is versioned — it re-runs in place when the code's enrichment version advances); adding the same entry twice is a conflict, not a duplicate insert.
+- **Idempotency**: dictionary autoload and HSK enrichment are idempotent (enrichment is versioned — it re-runs in place when the code's enrichment version advances, applying the import policy to clean alias and duplicate rows while keeping rows a study item references); adding the same entry twice is a conflict, not a duplicate insert.
 - **Freshness**: reading history stores token text only and hydrates pinyin, definitions, and `dictionary_entry_id` on read against the current dictionary and study queue, so listed readings reflect the live vocabulary.
 
 ## Suggested additions

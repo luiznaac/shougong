@@ -35,8 +35,8 @@ export interface DictionaryEntry {
   simplified: string;
   pinyin: string; // numbered, space-separated, e.g. "zhi1 dao4"
   definitions: string[];
-  hsk_level: number | null; // the word's HSK vocabulary level; null outside HSK 3.0
-  pos_tags: string[]; // raw HSK POS tags
+  hsk_level: number | null; // official HSK 3.0 vocabulary level; null outside the official list
+  pos_tags: string[]; // community ICTCLAS POS tags
   handwriting_level: number | null; // max character writing level; null when none has one
 }
 
@@ -79,6 +79,9 @@ export interface StudyItem {
   // Derived on read: the item has 3+ `again` grades in its last 10 review-log
   // entries. False wherever the backend does not annotate it (e.g. reviews).
   is_leech: boolean;
+  // Per-character writing level for the word's characters; null for a character
+  // with no level. Populated on the study session, empty elsewhere.
+  character_writing_levels: Record<string, number | null>;
 }
 
 export type PriorityEdge = "front" | "back";
@@ -281,7 +284,7 @@ export interface VocabularyProfile {
 }
 
 export interface Proficiency {
-  coverage_by_level: Record<string, number>; // known / HSK-dataset total per level, 0..1
+  coverage_by_level: Record<string, number>; // known / official per-level total, 0..1
   estimated_level: number; // highest HSK level mastered contiguously (0 = pure beginner)
 }
 

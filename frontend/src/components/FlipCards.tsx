@@ -1,22 +1,27 @@
 import { flipLayout } from "../lib/flipCards.ts";
 import { keyedOccurrences } from "../lib/occurrenceKeys.ts";
+import { levelLabel } from "./HskChip.tsx";
 
 /**
  * One character as a flip tile. The whole row flips together (same `hidden`):
- * the front is the character, the back a dashed "?".
+ * the front is the character, the back a dashed "?". When the character is in
+ * view its writing level sits underneath; a character with no level reads "—"
+ * and is labelled unknown to assistive tech.
  */
 export function FlipTile({
   char,
+  writingLevel,
   hidden,
   sizePx,
 }: {
   char: string;
+  writingLevel: number | null;
   hidden: boolean;
   sizePx: number;
 }) {
   const radius = Math.min(20, Math.max(6, Math.round(sizePx * 0.16)));
   return (
-    <div style={{ perspective: "1200px" }}>
+    <div className="flex flex-col items-center gap-1" style={{ perspective: "1200px" }}>
       <div
         style={{ width: sizePx, height: sizePx }}
         className={`relative transition-transform duration-500 [transform-style:preserve-3d] [will-change:transform] motion-reduce:transition-none ${
@@ -49,6 +54,19 @@ export function FlipTile({
           </span>
         </div>
       </div>
+      {!hidden && (
+        <span
+          aria-label={`Nível de escrita de ${char}: ${writingLevel == null ? "desconhecido" : writingLevel}`}
+          title={
+            writingLevel == null
+              ? "Nível de escrita desconhecido"
+              : `Nível de escrita ${writingLevel}`
+          }
+          className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] leading-none text-slate-200 tabular-nums"
+        >
+          {writingLevel == null ? "—" : levelLabel(writingLevel)}
+        </span>
+      )}
     </div>
   );
 }
@@ -60,11 +78,13 @@ export function FlipTile({
  */
 export function FlipCards({
   chars,
+  writingLevels,
   hidden,
   available,
   min = 56,
 }: {
   chars: string[];
+  writingLevels: Record<string, number | null>;
   hidden: boolean;
   available: number;
   min?: number;
@@ -75,11 +95,14 @@ export function FlipCards({
     <div className="flex flex-col items-center gap-2">
       {keyedOccurrences(rows, (row) => row.join("-")).map(({ key: rowKey, item: row }) => (
         <div key={rowKey} className="flex items-center justify-center" style={{ gap: 10 }}>
-          {keyedOccurrences(
-            row.map((index) => chars[index]),
-            (char) => char,
-          ).map(({ key: charKey, item: char }) => (
-            <FlipTile key={charKey} char={char} hidden={hidden} sizePx={size} />
+          {keyedOccurrences(row, (index) => chars[index]).map(({ key: charKey, item: index }) => (
+            <FlipTile
+              key={charKey}
+              char={chars[index]}
+              writingLevel={writingLevels[chars[index]] ?? null}
+              hidden={hidden}
+              sizePx={size}
+            />
           ))}
         </div>
       ))}

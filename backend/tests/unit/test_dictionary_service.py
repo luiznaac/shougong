@@ -4,7 +4,7 @@ import pytest
 from opentelemetry.metrics import NoOpMeter
 
 from shougong.usecase.commons.exceptions import ResourceNotFoundError
-from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskCharacter, HskDatasetWord
+from shougong.usecase.dictionary.model import CedictRecord, DictionaryEntry, HskCharacter
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.dictionary.telemetry import DictionaryTelemetry
 from tests.fixtures import (
@@ -12,6 +12,7 @@ from tests.fixtures import (
     FakeDictionaryRepository,
     FakeHskCharacterSource,
     FakeHskDatasetSource,
+    FakeOfficialHskSource,
     make_dictionary_entry,
 )
 
@@ -82,6 +83,29 @@ async def test_populate_if_empty_loads_when_table_is_empty() -> None:
     assert len(repo.entries) == 2
 
 
+async def test_populate_if_empty_applies_the_import_policy() -> None:
+    repo = FakeDictionaryRepository()
+    source = FakeCedictSource(
+        [
+            CedictRecord(simplified="吃", pinyin="chi1", definitions=("to eat",)),
+            CedictRecord(simplified="吃", pinyin="chi1", definitions=("variant of 吃[chi1]",)),
+            CedictRecord(simplified="水", pinyin="shui3", definitions=("water",)),
+            CedictRecord(simplified="水", pinyin="shui3", definitions=("water",)),
+            CedictRecord(simplified="㑳", pinyin="zhou4", definitions=("old variant of 媰[zhou4]",)),
+        ]
+    )
+    service = _service(repo)
+
+    added = await service.populate_if_empty(source)
+
+    assert added == 3
+    assert [(e.simplified, e.definitions) for e in repo.entries] == [
+        ("吃", ("to eat",)),
+        ("水", ("water",)),
+        ("㑳", ("old variant of 媰[zhou4]",)),
+    ]
+
+
 async def test_populate_if_empty_is_a_noop_when_already_populated() -> None:
     repo = FakeDictionaryRepository([make_dictionary_entry()])
     source = FakeCedictSource(_RECORDS)
@@ -98,16 +122,37 @@ async def test_enrich_hsk_stamps_every_row_that_shares_a_simplified() -> None:
     firm = make_dictionary_entry(entry_id=2, simplified="行", pinyin="hang2", definitions=("firm",))
     other = make_dictionary_entry(entry_id=3, simplified="水", pinyin="shui3", definitions=("water",))
     repo = FakeDictionaryRepository([walk, firm, other])
-    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ("v", "n"))})
+    official = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource({"行": ("v", "n")})
 
-    applied = await _service(repo).enrich_hsk(source, _characters({"行": 2}))
+    applied = await _service(repo).enrich_hsk(official, community, _characters({"行": 2}))
 
     assert applied == 1
-    assert [(e.simplified, e.hsk_level, e.pos_tags) for e in repo.entries] == [
-        ("行", 2, ("v", "n")),
-        ("行", 2, ("v", "n")),  # both readings of 行 stamped identically
-        ("水", None, ()),  # untouched
+    assert [(e.simplified, e.hsk_level, e.pos_tags, e.handwriting_level) for e in repo.entries] == [
+        ("行", 2, ("v", "n"), 2),
+        ("行", 2, ("v", "n"), 2),  # both readings of 行 stamped identically
+        ("水", None, (), None),  # outside the official list → cleared
     ]
+
+
+async def test_enrich_hsk_uses_the_official_level_and_the_community_pos_tags() -> None:
+    repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="行")])
+    official = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource({"行": ("v", "n")})
+
+    await _service(repo).enrich_hsk(official, community, _characters({"行": 2}))
+
+    assert (repo.entries[0].hsk_level, repo.entries[0].pos_tags) == (2, ("v", "n"))
+
+
+async def test_enrich_hsk_clears_the_level_for_a_word_outside_the_official_list() -> None:
+    repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="旧", hsk_level=3, pos_tags=("a",))])
+    official = FakeOfficialHskSource({"新": 1})
+    community = FakeHskDatasetSource({"新": ("a",)})
+
+    await _service(repo).enrich_hsk(official, community, _characters({"新": 1}))
+
+    assert (repo.entries[0].hsk_level, repo.entries[0].pos_tags) == (None, ())
 
 
 async def test_enrich_hsk_skips_when_the_stored_version_matches_the_code_version() -> None:
@@ -115,13 +160,15 @@ async def test_enrich_hsk_skips_when_the_stored_version_matches_the_code_version
         [make_dictionary_entry(entry_id=1, simplified="行", hsk_level=2, pos_tags=("v",))],
         enrichment_version=1,
     )
-    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n",))})
+    official = FakeOfficialHskSource({"行": 5})
+    community = FakeHskDatasetSource({"行": ("n",)})
     characters = _characters({"行": 2})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source, characters)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(official, community, characters)
 
     assert applied == 0
-    assert source.fetch_calls == 0
+    assert official.fetch_calls == 0
+    assert community.fetch_calls == 0
     assert characters.fetch_calls == 0
     assert repo.entries[0].hsk_level == 2  # not re-stamped
 
@@ -135,44 +182,108 @@ async def test_advancing_the_version_re_enriches_every_row_in_place_and_persists
         ],
         enrichment_version=1,
     )
-    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 5, ("n", "v"))})
+    official = FakeOfficialHskSource({"行": 5})
+    community = FakeHskDatasetSource({"行": ("n", "v")})
 
-    applied = await _service(repo, enrichment_version=2).enrich_hsk(source, _characters({"行": 3}))
+    applied = await _service(repo, enrichment_version=2).enrich_hsk(official, community, _characters({"行": 3}))
 
     assert applied == 1
-    assert source.fetch_calls == 1
+    assert official.fetch_calls == 1
+    assert community.fetch_calls == 1
     # ids are preserved and every reading of 行 is re-stamped identically
-    assert [(e.id, e.simplified, e.hsk_level, e.pos_tags) for e in repo.entries] == [
-        (1, "行", 5, ("n", "v")),
-        (2, "行", 5, ("n", "v")),
-        (3, "水", None, ()),
+    assert [(e.id, e.simplified, e.hsk_level, e.pos_tags, e.handwriting_level) for e in repo.entries] == [
+        (1, "行", 5, ("n", "v"), 3),
+        (2, "行", 5, ("n", "v"), 3),
+        (3, "水", None, (), None),
     ]
-    assert [e.handwriting_level for e in repo.entries] == [3, 3, None]
     assert repo.stored_enrichment_version == 2
+    assert repo.stored_official_level_totals == {5: 1}
+
+
+async def test_advancing_the_version_cleans_alias_and_duplicate_rows_in_place() -> None:
+    repo = FakeDictionaryRepository(
+        [
+            make_dictionary_entry(entry_id=1, simplified="吃", pinyin="chi1", definitions=("to eat",)),
+            make_dictionary_entry(entry_id=2, simplified="吃", pinyin="chi1", definitions=("variant of 吃[chi1]",)),
+            make_dictionary_entry(entry_id=3, simplified="水", pinyin="shui3", definitions=("water",)),
+            make_dictionary_entry(entry_id=4, simplified="水", pinyin="shui3", definitions=("water",)),
+            make_dictionary_entry(
+                entry_id=5, simplified="㑳", pinyin="zhou4", definitions=("old variant of 媰[zhou4]",)
+            ),
+        ],
+        enrichment_version=1,
+        protected={2},  # a study item queued the alias; the cleanup must keep it
+    )
+    source = FakeHskDatasetSource({"吃": ("v",)})
+
+    applied = await _service(repo, enrichment_version=2).enrich_hsk(
+        FakeOfficialHskSource({"吃": 1}), source, _characters({"吃": 1})
+    )
+
+    assert applied == 1
+    # the protected alias survives; the unprotected duplicate and only the
+    # unprotected alias are removed; kept rows keep their ids
+    assert [e.id for e in repo.entries] == [1, 2, 3, 5]
+    assert repo.stored_enrichment_version == 2
+
+
+async def test_a_matching_version_leaves_alias_rows_untouched() -> None:
+    repo = FakeDictionaryRepository(
+        [
+            make_dictionary_entry(entry_id=1, simplified="吃", pinyin="chi1", definitions=("to eat",)),
+            make_dictionary_entry(entry_id=2, simplified="吃", pinyin="chi1", definitions=("variant of 吃[chi1]",)),
+        ],
+        enrichment_version=2,
+    )
+    source = FakeHskDatasetSource({"吃": ("v",)})
+
+    applied = await _service(repo, enrichment_version=2).enrich_hsk(
+        FakeOfficialHskSource({"吃": 1}), source, _characters({"吃": 1})
+    )
+
+    assert applied == 0
+    assert [e.id for e in repo.entries] == [1, 2]
 
 
 async def test_an_empty_dictionary_leaves_the_version_unset_for_a_later_run() -> None:
     repo = FakeDictionaryRepository()
-    source = FakeHskDatasetSource({"行": HskDatasetWord("行", 2, ())})
+    official = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource({"行": ()})
     characters = _characters({"行": 2})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source, characters)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(official, community, characters)
 
     assert applied == 0
-    assert source.fetch_calls == 0
+    assert official.fetch_calls == 0
+    assert community.fetch_calls == 0
     assert characters.fetch_calls == 0
     assert repo.stored_enrichment_version is None
 
 
-async def test_an_empty_dataset_leaves_the_version_unset_for_a_later_run() -> None:
+async def test_an_empty_official_list_leaves_the_version_unset_for_a_later_run() -> None:
     repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="行")])
-    source = FakeHskDatasetSource()
+    official = FakeOfficialHskSource()
+    community = FakeHskDatasetSource({"行": ("n",)})
     characters = _characters({"行": 2})
 
-    applied = await _service(repo, enrichment_version=1).enrich_hsk(source, characters)
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(official, community, characters)
 
     assert applied == 0
-    assert source.fetch_calls == 1
+    assert official.fetch_calls == 1
+    assert characters.fetch_calls == 0  # no character fetch after a failed word source
+    assert repo.stored_enrichment_version is None
+
+
+async def test_an_empty_community_dataset_leaves_the_version_unset_for_a_later_run() -> None:
+    repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="行")])
+    official = FakeOfficialHskSource({"行": 2})
+    community = FakeHskDatasetSource()
+    characters = _characters({"行": 2})
+
+    applied = await _service(repo, enrichment_version=1).enrich_hsk(official, community, characters)
+
+    assert applied == 0
+    assert community.fetch_calls == 1
     assert characters.fetch_calls == 0
     assert repo.stored_enrichment_version is None
 
@@ -185,14 +296,10 @@ async def test_enrich_hsk_populates_character_levels_and_derives_the_handwriting
             make_dictionary_entry(entry_id=3, simplified="水"),
         ]
     )
-    source = FakeHskDatasetSource(
-        {
-            "爱人": HskDatasetWord("爱人", 2, ("n",)),
-            "班": HskDatasetWord("班", 1, ("n",)),
-        }
-    )
+    official = FakeOfficialHskSource({"爱人": 2, "班": 1})
+    community = FakeHskDatasetSource({"爱人": ("n",), "班": ("n",)})
 
-    applied = await _service(repo).enrich_hsk(source, _characters({"爱": 1, "人": 1, "班": 2}))
+    applied = await _service(repo).enrich_hsk(official, community, _characters({"爱": 1, "人": 1, "班": 2}))
 
     assert applied == 2
     assert repo.character_levels == {"爱": 1, "人": 1, "班": 2}
@@ -205,10 +312,11 @@ async def test_enrich_hsk_populates_character_levels_and_derives_the_handwriting
 
 async def test_an_empty_character_dataset_leaves_the_version_unset_for_a_later_run() -> None:
     repo = FakeDictionaryRepository([make_dictionary_entry(entry_id=1, simplified="班")])
-    source = FakeHskDatasetSource({"班": HskDatasetWord("班", 1, ("n",))})
+    official = FakeOfficialHskSource({"班": 1})
+    community = FakeHskDatasetSource({"班": ("n",)})
     characters = FakeHskCharacterSource()
 
-    applied = await _service(repo).enrich_hsk(source, characters)
+    applied = await _service(repo).enrich_hsk(official, community, characters)
 
     assert applied == 0
     assert characters.fetch_calls == 1

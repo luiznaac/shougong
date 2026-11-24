@@ -162,6 +162,9 @@ class StudyItemResponse(BaseModel):
     priority_position: int | None
     # Derived on read by the insights slice; false wherever the caller does not annotate it.
     is_leech: bool = False
+    # Per-character writing level; null for a character with no level. Populated
+    # on the study session, empty elsewhere.
+    character_writing_levels: dict[str, int | None] = Field(default_factory=dict)
 
     @classmethod
     def from_domain(cls, item: StudyItem, *, is_leech: bool = False) -> Self:
@@ -172,6 +175,7 @@ class StudyItemResponse(BaseModel):
             created_at=item.created_at,
             priority_position=item.priority_position,
             is_leech=is_leech,
+            character_writing_levels=dict(item.character_writing_levels or {}),
         )
 
 

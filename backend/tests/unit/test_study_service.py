@@ -442,6 +442,17 @@ async def test_review_session_shuffles_the_whole_due_block() -> None:
     assert sorted(shuffler.calls[0]) == [1, 2]
 
 
+async def test_session_exposes_each_character_writing_level_with_unknown_as_null() -> None:
+    entry = make_dictionary_entry(entry_id=1, simplified="好啊", handwriting_level=2)
+    study = FakeStudyItemRepository([make_study_item(item_id=1, entry=entry)])
+    dictionary = FakeDictionaryRepository([entry], character_levels={"好": 2})
+    service = _service(study=study, dictionary=dictionary)
+
+    session = await service.session(SessionKind.LESSON)
+
+    assert session.items[0].character_writing_levels == {"好": 2, "啊": None}
+
+
 async def test_empty_session_is_a_fresh_id_and_no_items() -> None:
     service = _service(study=FakeStudyItemRepository())
 

@@ -27,6 +27,7 @@ export function studyItem(
     created_at: "2026-10-01T12:00:00Z",
     priority_position: null,
     is_leech: false,
+    character_writing_levels: { 學: 2 },
     ...rest,
   };
 }

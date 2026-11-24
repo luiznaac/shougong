@@ -77,7 +77,7 @@ async def test_get_by_id_returns_entry_and_missing_is_404(container: Container, 
     assert missing.status_code == 404
 
 
-async def test_apply_hsk_stamps_all_rows_and_hsk_words_dedupes(container: Container) -> None:
+async def test_apply_enrichment_stamps_all_rows_and_hsk_words_dedupes(container: Container) -> None:
     async with container.engine.begin() as conn:
         await conn.execute(
             text("INSERT INTO dictionary_entry (simplified, pinyin, definitions) VALUES (:s, :p, :d)"),
@@ -91,7 +91,7 @@ async def test_apply_hsk_stamps_all_rows_and_hsk_words_dedupes(container: Contai
     repo = DictionaryRepository(container.transaction_template)
     assert await repo.hsk_words() == []
 
-    applied = await repo.apply_hsk({"行": HskDatasetWord("行", 2, ("v", "n"))})
+    applied = await repo.apply_enrichment({"行": HskDatasetWord("行", 2, ("v", "n"))})
     assert applied == 1
 
     entries = await repo.find_by_simplified("行")

@@ -317,6 +317,17 @@ _DICTIONARY_ONLY: tuple[DictionaryRow, ...] = (
     DictionaryRow("河道", "he2 dao4", ("river channel",), None, ("n",)),
 )
 
+# Post-import-policy rows the batch-import acceptance exercises: words whose only
+# CC-CEDICT collision was an alias or duplicate now resolve, while the 下面
+# homograph pair still offers its two meanings. Seeded here (the fixture writes raw
+# rows, bypassing the import pass) so the runbook can prove the endpoint outcome.
+_IMPORT_POLICY_WORDS: tuple[DictionaryRow, ...] = (
+    DictionaryRow("了", "le5", ("(completed action marker)",), 1, ("y",)),
+    DictionaryRow("吃", "chi1", ("to eat", "to consume"), 1, ("v",)),
+    DictionaryRow("下面", "xia4 mian4", ("below", "under"), 1, ("f",)),
+    DictionaryRow("下面", "xia4 mian4", ("to boil noodles",), None, ("v",)),
+)
+
 # Two leech windows: four and three `again` grades among the ten most recent,
 # so the leech list has a worst-first order rather than a single row.
 _LEECH_REVIEWS: dict[int, tuple[tuple[SrsRating, int], ...]] = {
@@ -580,7 +591,7 @@ def build_fixture(now: datetime) -> AcceptanceFixture:
     """
     return AcceptanceFixture(
         study_items=_with_detail_rows(now),
-        dictionary_only=_DICTIONARY_ONLY,
+        dictionary_only=_DICTIONARY_ONLY + _IMPORT_POLICY_WORDS,
         readings=_build_readings(now),
         strokes=_build_strokes(),
         characters=tuple(CharacterLevelRow(character, level) for character, level in _CHARACTER_LEVELS.items()),

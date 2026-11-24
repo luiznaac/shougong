@@ -7,9 +7,23 @@ session bound to that transaction via `current_session()`.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import cast
+from typing import Any, cast
 
-from sqlalchemy import ColumnElement, Table, and_, bindparam, case, func, insert, literal, or_, select, update
+from sqlalchemy import (
+    ColumnElement,
+    CursorResult,
+    Table,
+    and_,
+    bindparam,
+    case,
+    delete,
+    func,
+    insert,
+    literal,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects import mysql
 
 from shougong.persistence.configuration.transaction import (
@@ -22,6 +36,7 @@ from shougong.persistence.dictionary.entity import (
     DictionaryEntryEntity,
 )
 from shougong.persistence.study.entity import StudyItemEntity
+from shougong.persistence.study_item_history.entity import StudyItemHistoryEntity
 from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import (
@@ -165,6 +180,36 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
+    async def list_all(self) -> list[DictionaryEntry]:
+        async def _run() -> list[DictionaryEntry]:
+            session = current_session()
+            stmt = select(DictionaryEntryEntity).order_by(DictionaryEntryEntity.id)
+            rows = (await session.execute(stmt)).scalars().all()
+            return [to_domain(row) for row in rows]
+
+        return await self._tx.execute(_run)
+
+    async def protected_entry_ids(self) -> frozenset[int]:
+        async def _run() -> frozenset[int]:
+            session = current_session()
+            queued = (await session.execute(select(StudyItemEntity.entry_id))).scalars().all()
+            historical = (await session.execute(select(StudyItemHistoryEntity.entry_id))).scalars().all()
+            return frozenset(int(entry_id) for entry_id in (*queued, *historical))
+
+        return await self._tx.execute(_run)
+
+    async def delete_entries(self, entry_ids: Sequence[int]) -> int:
+        async def _run() -> int:
+            session = current_session()
+            removed = 0
+            for start in range(0, len(entry_ids), _BULK_BATCH):
+                batch = entry_ids[start : start + _BULK_BATCH]
+                result = await session.execute(delete(DictionaryEntryEntity).where(DictionaryEntryEntity.id.in_(batch)))
+                removed += cast(CursorResult[Any], result).rowcount or 0
+            return removed
+
+        return await self._tx.execute(_run)
+
     async def bulk_add(self, records: Sequence[CedictRecord]) -> int:
         async def _run() -> int:
             session = current_session()
@@ -187,11 +232,13 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
-    async def apply_hsk(self, dataset: Mapping[str, HskDatasetWord]) -> int:
+    async def apply_enrichment(self, dataset: Mapping[str, HskDatasetWord]) -> int:
         async def _run() -> int:
             session = current_session()
-            words = list(dataset.values())
             table = cast(Table, DictionaryEntryEntity.__table__)
+            # Clear first so a word outside the official list loses any stale level.
+            await session.execute(update(table).values(hsk_level=None, pos_tags=[]))
+            words = list(dataset.values())
             stmt = (
                 update(table)
                 .where(table.c.simplified == bindparam("s"))
@@ -230,6 +277,20 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
+    async def character_writing_levels(self, characters: Sequence[str]) -> Mapping[str, int]:
+        async def _run() -> Mapping[str, int]:
+            if not characters:
+                return {}
+            session = current_session()
+            stmt = select(
+                CharacterWritingLevelEntity.character,
+                CharacterWritingLevelEntity.writing_level,
+            ).where(CharacterWritingLevelEntity.character.in_(characters))
+            rows = (await session.execute(stmt)).all()
+            return {character: int(level) for character, level in rows}
+
+        return await self._tx.execute(_run)
+
     async def set_handwriting_levels(self, levels: Mapping[int, int | None]) -> int:
         async def _run() -> int:
             session = current_session()
@@ -251,13 +312,24 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
-    async def set_enrichment_version(self, version: int) -> None:
+    async def official_level_totals(self) -> dict[int, int] | None:
+        async def _run() -> dict[int, int] | None:
+            session = current_session()
+            totals = await session.scalar(select(DictionaryEnrichmentStateEntity.level_totals))
+            if not totals:
+                return None
+            return {int(level): int(count) for level, count in totals.items()}
+
+        return await self._tx.execute(_run)
+
+    async def set_enrichment_version(self, version: int, level_totals: Mapping[int, int]) -> None:
         async def _run() -> None:
             session = current_session()
+            totals = {str(level): count for level, count in level_totals.items()}
             stmt = (
                 mysql.insert(DictionaryEnrichmentStateEntity)
-                .values(id=_ENRICHMENT_STATE_ID, version=version)
-                .on_duplicate_key_update(version=version)
+                .values(id=_ENRICHMENT_STATE_ID, version=version, level_totals=totals)
+                .on_duplicate_key_update(version=version, level_totals=totals)
             )
             await session.execute(stmt)
 

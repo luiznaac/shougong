@@ -19,8 +19,7 @@ The vocabulary of the handwriting trainer. Terms are defined in the product's la
 - **Difficulty** — how hard the scheduler expects the item to be to retain.
 - **Leech** — a study item that keeps being graded again; flagged for attention.
 - **Pin / priority** — a manual ordering that floats a learning item to the front of its next session.
-- **HSK** — the standardized Chinese proficiency scale used to grade vocabulary and estimate the learner's level.
-- **Vocabulary level** — a word's HSK 3.0 level (1–6, or the 7–9 band), the scale the reading/vocabulary surfaces use.
+- **HSK** — the standardized Chinese proficiency scale. A word's **vocabulary level** comes from the official HSK 3.0 word list (levels 1–6 plus the single 7–9 band, stored as 7); a word outside the list has no level. The community dataset supplies the POS tags, not the level.
 - **Handwriting level** — a word's expected writing level: the maximum level among its characters in the official HSK 3.0 handwriting list, or unknown when no character has one. Independent of the vocabulary level; the study queue filters on it.
 - **Stroke** — one pen movement of a character; its order is the sequence a learner reproduces.
 - **Reading** — a generated Mandarin text for reading practice.
