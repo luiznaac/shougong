@@ -50,7 +50,7 @@ async def test_get_unknown_id_raises_not_found() -> None:
 
 
 async def test_search_trims_query_and_respects_limit() -> None:
-    entries = [make_dictionary_entry(entry_id=i, simplified="学习") for i in range(1, 6)]
+    entries = [make_dictionary_entry(entry_id=i, simplified="学习", pinyin=f"xue2 xi{i}") for i in range(1, 6)]
     service = _service(FakeDictionaryRepository(entries))
 
     results = await service.search("  学  ", limit=3)
@@ -58,17 +58,17 @@ async def test_search_trims_query_and_respects_limit() -> None:
     assert len(results.items) == 3
 
 
-async def test_search_pages_matches_with_an_exact_total() -> None:
-    entries = [make_dictionary_entry(entry_id=i, simplified="学习") for i in range(1, 6)]
+async def test_search_pages_groups_with_an_exact_total() -> None:
+    entries = [make_dictionary_entry(entry_id=i, simplified="学习", pinyin=f"xue2 xi{i}") for i in range(1, 6)]
     service = _service(FakeDictionaryRepository(entries))
 
     first = await service.search("学", limit=2, offset=0)
     second = await service.search("学", limit=2, offset=2)
 
-    assert [e.id for e in first.items] == [1, 2]
+    assert [group.meanings[0].entry_id for group in first.items] == [1, 2]
     assert first.total == 5
     assert (first.limit, first.offset) == (2, 0)
-    assert [e.id for e in second.items] == [3, 4]
+    assert [group.meanings[0].entry_id for group in second.items] == [3, 4]
     assert second.total == 5
 
 

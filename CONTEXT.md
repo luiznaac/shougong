@@ -3,7 +3,9 @@
 The vocabulary of the handwriting trainer. Terms are defined in the product's language; the code that implements them lives elsewhere (start at the [code map](docs/code-map.md)).
 
 - **Study item** — a dictionary entry the learner has queued for practice; the unit the scheduler tracks.
-- **Dictionary entry** — a simplified-Chinese word with its pinyin, definitions, vocabulary level, handwriting level and part-of-speech tags. One word can have more than one entry when it has more than one reading.
+- **Dictionary entry** — a simplified-Chinese word with its pinyin, definitions, vocabulary level, handwriting level and part-of-speech tags. One word can have more than one entry when it has more than one reading, and one reading can have several entries.
+- **Meaning** — one entry's sense of a word and reading; a word's meanings share its pinyin and levels, and each is enqueued as its own study item.
+- **Word group** — a dictionary search row: one word and one reading, carrying every meaning that shares them. A different reading of the same hanzi is a different group.
 - **Known vocabulary** — every word the learner currently studies, treated as a whole string: knowing its characters does not make a compound known.
 - **Card** — the scheduling state attached to a study item: its stage, stability, difficulty and next due time.
 - **SRS** — spaced repetition: scheduling each card to come back just before it would be forgotten.

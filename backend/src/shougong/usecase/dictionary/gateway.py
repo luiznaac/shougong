@@ -9,6 +9,7 @@ from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.model import (
     CedictRecord,
     DictionaryEntry,
+    DictionaryWordGroup,
     HskCharacter,
     HskDatasetWord,
     RelatedEntryPage,
@@ -23,8 +24,12 @@ type EnrichmentDataset = dict[str, HskDatasetWord]
 
 
 class IDictionaryRepository(Protocol):
-    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryEntry]:
-        """One page of the substring matches, plus the exact total of all matches."""
+    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryWordGroup]:
+        """One page of the substring matches, grouped by `(simplified, pinyin)`.
+
+        Grouping happens before pagination, so a group never splits across pages
+        and the total counts groups rather than entries.
+        """
         ...
 
     async def find_by_simplified(self, simplified: str) -> list[DictionaryEntry]:

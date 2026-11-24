@@ -40,6 +40,25 @@ export interface DictionaryEntry {
   handwriting_level: number | null; // max character writing level; null when none has one
 }
 
+/** One sense of a dictionary word, enqueueable through its own entry id. */
+export interface DictionaryMeaning {
+  entry_id: number;
+  definitions: string[];
+}
+
+/**
+ * One dictionary search row: a word and one reading, with every meaning that
+ * shares them. Different readings of the same hanzi are separate rows.
+ */
+export interface DictionaryWord {
+  simplified: string;
+  pinyin: string; // numbered, space-separated
+  hsk_level: number | null;
+  pos_tags: string[];
+  handwriting_level: number | null;
+  meanings: DictionaryMeaning[];
+}
+
 /** An entry sharing at least one hanzi with the item's word. */
 export interface RelatedEntry extends DictionaryEntry {
   // The study item queuing this word, or null when it is not queued.

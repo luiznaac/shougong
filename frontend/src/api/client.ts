@@ -3,6 +3,7 @@ import type {
   BatchImportRowRequest,
   CharacterStrokes,
   DictionaryEntry,
+  DictionaryWord,
   ExtraStudy,
   GenerateReadingRequest,
   Page,
@@ -61,7 +62,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   // --- dictionary ---
-  searchDictionary(q: string, limit = 20, offset = 0): Promise<Page<DictionaryEntry>> {
+  searchDictionary(q: string, limit = 20, offset = 0): Promise<Page<DictionaryWord>> {
     const p = new URLSearchParams({ q, limit: String(limit) });
     if (offset) p.set("offset", String(offset));
     return request(`/dictionary-entries?${p}`);

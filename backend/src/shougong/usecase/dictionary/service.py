@@ -19,6 +19,7 @@ from shougong.usecase.dictionary.gateway import (
 from shougong.usecase.dictionary.import_policy import apply_import_policy, select_cleanup_ids
 from shougong.usecase.dictionary.model import (
     DictionaryEntry,
+    DictionaryWordGroup,
     HskDatasetWord,
     RelatedEntryPage,
     derive_handwriting_level,
@@ -38,7 +39,17 @@ class DictionaryService:
         self._telemetry = telemetry
         self.enrichment_version = enrichment_version
 
-    async def search(self, query: str, limit: int = 20, offset: int = 0) -> Page[DictionaryEntry]:
+    async def search(self, query: str, limit: int = 20, offset: int = 0) -> Page[DictionaryWordGroup]:
+        """One page of matches, one item per `(simplified, pinyin)` group.
+
+        Args:
+            query: The trimmed hanzi or numbered-pinyin substring.
+            limit: Page size, in groups.
+            offset: Groups to skip.
+
+        Returns:
+            One page of word groups plus the exact total of matching groups.
+        """
         page = await self._repository.search(query.strip(), limit=limit, offset=offset)
         self._telemetry.record_search(hit=page.total > 0)
         return page

@@ -69,12 +69,62 @@ async def test_get_by_id_returns_entry_and_missing_is_404(container: Container, 
     await _seed(container)
     listed = (await client.get("/dictionary-entries", params={"q": "shui3"})).json()["items"]
 
-    found = await client.get(f"/dictionary-entries/{listed[0]['id']}")
+    found = await client.get(f"/dictionary-entries/{listed[0]['meanings'][0]['entry_id']}")
     assert found.status_code == 200
     assert found.json()["definitions"] == ["water"]
 
     missing = await client.get("/dictionary-entries/999999")
     assert missing.status_code == 404
+
+
+_GROUPED_SEED = [
+    {"s": "和", "p": "he2", "d": ["and", "with"]},
+    {"s": "和", "p": "he2", "d": ["surname He"]},
+    {"s": "和", "p": "he4", "d": ["to join in singing"]},
+    {"s": "学", "p": "xue2", "d": ["to learn"]},
+]
+
+
+async def _seed_grouped(container: Container) -> None:
+    async with container.engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO dictionary_entry (simplified, pinyin, definitions) VALUES (:s, :p, :d)"),
+            [{"s": row["s"], "p": row["p"], "d": json.dumps(row["d"])} for row in _GROUPED_SEED],
+        )
+
+
+async def test_search_returns_one_item_per_word_and_reading_with_its_meanings(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    await _seed_grouped(container)
+
+    body = (await client.get("/dictionary-entries", params={"q": "和"})).json()
+
+    assert body["total"] == 2
+    assert [(word["simplified"], word["pinyin"]) for word in body["items"]] == [
+        ("和", "he2"),
+        ("和", "he4"),
+    ]
+    meanings = body["items"][0]["meanings"]
+    assert [meaning["definitions"] for meaning in meanings] == [["and", "with"], ["surname He"]]
+    assert len({meaning["entry_id"] for meaning in meanings}) == 2
+    assert body["items"][1]["meanings"][0]["definitions"] == ["to join in singing"]
+
+
+async def test_search_groups_before_pagination_so_a_group_never_splits(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    await _seed_grouped(container)
+
+    first = (await client.get("/dictionary-entries", params={"q": "和", "limit": 1})).json()
+    second = (await client.get("/dictionary-entries", params={"q": "和", "limit": 1, "offset": 1})).json()
+
+    assert first["total"] == second["total"] == 2
+    assert [meaning["definitions"][0] for meaning in first["items"][0]["meanings"]] == [
+        "and",
+        "surname He",
+    ]
+    assert second["items"][0]["pinyin"] == "he4"
 
 
 async def test_apply_enrichment_stamps_all_rows_and_hsk_words_dedupes(container: Container) -> None:

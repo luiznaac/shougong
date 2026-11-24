@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../api/client.ts";
 import { useAddStudyItem, useDictionaryPageQueries, useStudyItems } from "../api/queries.ts";
-import type { DictionaryEntry } from "../api/types.ts";
+import type { DictionaryMeaning, DictionaryWord } from "../api/types.ts";
 import { DICTIONARY_PAGE_SIZE, dictionaryPageRequests, dictionaryShown } from "../lib/addImport.ts";
 import type { Presentation } from "../lib/useMediaQuery.ts";
 import { DataList, type DataListColumn } from "./DataList.tsx";
@@ -16,11 +16,16 @@ import { PanelState } from "./QueryState.tsx";
 
 const ADDED_FEEDBACK_MS = 600;
 
+function wordKey(word: DictionaryWord): string {
+  return `${word.simplified}|${word.pinyin}`;
+}
+
 /**
- * Biblioteca's dictionary pane: five server rows per page, the HSK level and a
- * per-row enqueue control whose feedback flips "Adicionado" to "Na fila".
- * Desktop pages with the numbered pager; mobile accumulates behind "Carregar
- * mais". It never invents results — the server's order and total are rendered.
+ * Biblioteca's dictionary pane: five server rows per page, the HSK level and one
+ * enqueue control per meaning — a word shows every meaning of its reading, and
+ * each meaning flips "Adicionado" to "Na fila" on its own entry id. Desktop
+ * pages with the numbered pager; mobile accumulates behind "Carregar mais". It
+ * never invents results — the server's order and total are rendered.
  */
 export function DictionarySearchPanel({ presentation }: { presentation: Presentation }) {
   const [q, setQ] = useState("");
@@ -105,40 +110,50 @@ export function DictionarySearchPanel({ presentation }: { presentation: Presenta
     for (const result of pages) void result.refetch();
   };
 
-  const columns: DataListColumn<DictionaryEntry>[] = [
+  const columns: DataListColumn<DictionaryWord>[] = [
     {
       key: "word",
       label: "Palavra",
-      render: (entry) => (
-        <Hanzi text={entry.simplified} singleCharPx={26} boxPx={84} className="text-slate-100" />
+      render: (word) => (
+        <Hanzi text={word.simplified} singleCharPx={26} boxPx={84} className="text-slate-100" />
       ),
     },
-    { key: "pinyin", label: "Pinyin", render: (entry) => <Pinyin value={entry.pinyin} /> },
+    { key: "pinyin", label: "Pinyin", render: (word) => <Pinyin value={word.pinyin} /> },
     {
-      key: "meaning",
-      label: "Significado",
-      render: (entry) => (
-        <div className="min-w-0">
-          <p className="truncate">{entry.definitions.join("; ") || "—"}</p>
-          {rowErrors[entry.id] ? (
-            <p className="text-xs text-rose-400">{rowErrors[entry.id]}</p>
-          ) : null}
-        </div>
+      key: "meanings",
+      label: "Significados",
+      render: (word) => (
+        <ul className="min-w-0 space-y-1.5">
+          {word.meanings.map((meaning) => (
+            <li key={meaning.entry_id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 text-left">
+                <span className="block break-words">{meaning.definitions.join("; ") || "—"}</span>
+                {rowErrors[meaning.entry_id] ? (
+                  <span className="block text-xs text-rose-400">{rowErrors[meaning.entry_id]}</span>
+                ) : null}
+              </span>
+              {enqueueControl(meaning)}
+            </li>
+          ))}
+        </ul>
       ),
     },
   ];
 
-  const enqueueControl = (entry: DictionaryEntry) => {
-    const feedbackStatus = feedback[entry.id];
-    const enqueued = queuedIds.has(entry.id) || feedbackStatus !== undefined;
+  const enqueueControl = (meaning: DictionaryMeaning) => {
+    const feedbackStatus = feedback[meaning.entry_id];
+    const enqueued = queuedIds.has(meaning.entry_id) || feedbackStatus !== undefined;
     const justAdded = feedbackStatus === "added";
     const label = justAdded ? "Adicionado" : enqueued ? "Na fila" : "Adicionar";
+    // A word can have several meanings with identical control text, so the
+    // accessible name carries the meaning that the button acts on.
+    const name = `${label} · ${meaning.definitions[0] ?? "significado"}`;
     return (
       <button
         type="button"
         disabled={enqueued || addMutation.isPending}
-        aria-label={label}
-        onClick={() => void add(entry.id)}
+        aria-label={name}
+        onClick={() => void add(meaning.entry_id)}
         className={`inline-flex min-h-8 items-center rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
           justAdded
             ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
@@ -158,7 +173,9 @@ export function DictionarySearchPanel({ presentation }: { presentation: Presenta
     <Panel
       title="Buscar no dicionário"
       action={
-        term ? <span className="text-xs tabular-nums text-slate-500">{total} entradas</span> : null
+        term ? (
+          <span className="text-xs tabular-nums text-slate-500">{total} resultados</span>
+        ) : null
       }
     >
       <div className="space-y-4">
@@ -209,15 +226,12 @@ export function DictionarySearchPanel({ presentation }: { presentation: Presenta
                 <DataList
                   rows={results}
                   columns={columns}
-                  rowKey={(entry) => entry.id}
-                  chips={(entry) => (
-                    <>
-                      <WordLevels
-                        hskLevel={entry.hsk_level}
-                        handwritingLevel={entry.handwriting_level}
-                      />
-                      {enqueueControl(entry)}
-                    </>
+                  rowKey={wordKey}
+                  chips={(word) => (
+                    <WordLevels
+                      hskLevel={word.hsk_level}
+                      handwritingLevel={word.handwriting_level}
+                    />
                   )}
                   label="Resultados do dicionário"
                 />

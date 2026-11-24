@@ -17,7 +17,7 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/dictionary-entries?q=&limit=&offset=` | One page of matches (envelope), shortest-first |
+| `GET` | `/dictionary-entries?q=&limit=&offset=` | One page of `(simplified, pinyin)` groups (envelope), shortest-first |
 | `GET` | `/dictionary-entries/{entry_id}` | Fetch one entry |
 | `GET` | `/dictionary-entries/{entry_id}/related?limit=&offset=` | Shared-character family, most-shared first, then handwriting level |
 
@@ -77,7 +77,36 @@ The page's order is authoritative and the server has no "load more" mode — tha
 client presentation. `GET /study-items/{id}/reviews` and
 `GET /study-items/{id}/history` stay bare arrays.
 
+### `DictionaryWordResponse`
+
+`GET /dictionary-entries?q=` returns one row per `(simplified, pinyin)` group,
+not per CC-CEDICT record. The envelope's `total` counts groups and grouping
+happens before pagination, so a group never splits across pages. A different
+reading of the same hanzi is a separate row.
+
+```json
+{
+  "simplified": "和",
+  "pinyin": "he2",
+  "hsk_level": 1,
+  "pos_tags": ["c", "n"],
+  "handwriting_level": 1,
+  "meanings": [
+    { "entry_id": 123, "definitions": ["and", "with"] },
+    { "entry_id": 124, "definitions": ["surname He"] }
+  ]
+}
+```
+
+The word-level fields (HSK level, POS tags, handwriting level) are shared by
+every meaning in the group, since the enrichment pass stamps them by simplified
+form. Each meaning carries its own `entry_id` — the id `POST /study-items`
+takes to queue that meaning.
+
 ### `DictionaryEntryResponse`
+
+The single-entry shape returned by `GET /dictionary-entries/{entry_id}`, the
+related-entries rows and the batch-import candidates:
 
 ```json
 {
@@ -201,9 +230,10 @@ without `sort` orders by `again` count descending, then most recent failure
 descending, then item id ascending; an explicit `sort` overrides the leech ordering
 but not the leech filter. `priority_position` is never an ordering input.
 
-`GET /dictionary-entries?q=` applies the same envelope and window, keeping its
-`char_length(simplified) ASC, id ASC` order; `total` counts every entry matching
-`q`.
+`GET /dictionary-entries?q=` applies the same envelope and window over
+`(simplified, pinyin)` groups, keeping its `char_length(simplified) ASC` order
+(ties by the group's first entry id); `total` counts every matching group, and
+pagination never splits one.
 
 ### Extra Study
 
@@ -410,7 +440,7 @@ The app maps domain exceptions to a consistent problem shape:
 ## Conventions
 
 - **Pagination**: list routes return `{ items, total, limit, offset }` (`/reading-texts`, `/study-items`, `/dictionary-entries`); `limit` is `1..100` (default `20`), `offset` is `>= 0`, `total` is the exact filtered count. Item reviews and item history keep their bare arrays (`limit` 1..200 default 50). Clients page explicitly and never re-sort a page.
-- **Ordering**: study items by due date then id unless a filter/sort overrides it (`leech=true` orders worst-first, `sort` selects `created_desc` or `stability_asc`); dictionary search shortest-first; review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
+- **Ordering**: study items by due date then id unless a filter/sort overrides it (`leech=true` orders worst-first, `sort` selects `created_desc` or `stability_asc`); dictionary search shortest word first, one row per `(simplified, pinyin)`; review/history newest first; readings newest first; a session response is authoritative to the client (pinned then shuffled for lessons, fully shuffled for reviews).
 - **`Location` headers** are set on created resources.
 - **Idempotency**: dictionary autoload and HSK enrichment are idempotent (enrichment is versioned — it re-runs in place when the code's enrichment version advances, applying the import policy to clean alias and duplicate rows while keeping rows a study item references); adding the same entry twice is a conflict, not a duplicate insert.
 - **Freshness**: reading history stores token text only and hydrates pinyin, definitions, and `dictionary_entry_id` on read against the current dictionary and study queue, so listed readings reflect the live vocabulary.
