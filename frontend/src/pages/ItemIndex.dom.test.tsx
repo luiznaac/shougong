@@ -120,10 +120,37 @@ describe("desktop item index", () => {
 
     await user.click(screen.getByRole("button", { name: "HSK 1" }));
 
-    expect(router.state.location.search).toContain("hsk_level=1");
+    expect(router.state.location.search).toContain("handwriting_level=1");
     expect(router.state.location.search).not.toContain("page=3");
-    await waitFor(() => expect(lastFetch().searchParams.get("hsk_level")).toBe("1"));
+    await waitFor(() => expect(lastFetch().searchParams.get("handwriting_level")).toBe("1"));
     expect(lastFetch().searchParams.get("offset") ?? "0").toBe("0");
+  });
+
+  it("shows handwriting chips 1-6, the 7-9 band and outside HSK, with no 8 or 9", async () => {
+    const user = userEvent.setup();
+    const router = renderIndex();
+    await screen.findByText("Mostrando 24 de 137");
+
+    for (const level of [1, 2, 3, 4, 5, 6]) {
+      expect(screen.getByRole("button", { name: `HSK ${level}` })).toBeTruthy();
+    }
+    expect(screen.getByRole("button", { name: "HSK 7-9" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sem HSK" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "HSK 8" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "HSK 9" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "HSK 7-9" }));
+
+    expect(router.state.location.search).toContain("handwriting_level=7");
+    await waitFor(() => expect(lastFetch().searchParams.get("handwriting_level")).toBe("7"));
+  });
+
+  it("shows both the vocabulary and the handwriting level on each row", async () => {
+    renderIndex();
+
+    const table = await screen.findByRole("table");
+    expect(within(table).getAllByText("HSK 1").length).toBeGreaterThan(0);
+    expect(within(table).getAllByText("escrita HSK 2").length).toBeGreaterThan(0);
   });
 
   it("sends the state, part-of-speech and text filters to the server", async () => {
@@ -194,16 +221,18 @@ describe("desktop item index", () => {
 
   it("returns to the same list position after a detail detour", async () => {
     const user = userEvent.setup();
-    const router = renderIndex("/biblioteca?hsk_level=1&sort=created_desc", true);
+    const router = renderIndex("/biblioteca?handwriting_level=1&sort=created_desc", true);
     await screen.findByRole("table");
 
     await user.click(screen.getAllByRole("link", { name: /學/ })[0]);
     expect(router.state.location.pathname).toBe("/biblioteca/itens/1");
-    expect(screen.getByText(/Detalhe \/biblioteca\?hsk_level=1&sort=created_desc/)).toBeTruthy();
+    expect(
+      screen.getByText(/Detalhe \/biblioteca\?handwriting_level=1&sort=created_desc/),
+    ).toBeTruthy();
 
     await router.navigate(-1);
 
-    expect(router.state.location.search).toBe("?hsk_level=1&sort=created_desc");
+    expect(router.state.location.search).toBe("?handwriting_level=1&sort=created_desc");
     expect(await screen.findByRole("table")).toBeTruthy();
   });
 

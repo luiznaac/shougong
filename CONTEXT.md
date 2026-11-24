@@ -3,7 +3,7 @@
 The vocabulary of the handwriting trainer. Terms are defined in the product's language; the code that implements them lives elsewhere (start at the [code map](docs/code-map.md)).
 
 - **Study item** — a dictionary entry the learner has queued for practice; the unit the scheduler tracks.
-- **Dictionary entry** — a simplified-Chinese word with its pinyin, definitions, HSK level and part-of-speech tags. One word can have more than one entry when it has more than one reading, and one reading can have several entries.
+- **Dictionary entry** — a simplified-Chinese word with its pinyin, definitions, vocabulary level, handwriting level and part-of-speech tags. One word can have more than one entry when it has more than one reading, and one reading can have several entries.
 - **Meaning** — one entry's sense of a word and reading; a word's meanings share its pinyin and levels, and each is enqueued as its own study item.
 - **Word group** — a dictionary search row: one word and one reading, carrying every meaning that shares them. A different reading of the same hanzi is a different group.
 - **Known vocabulary** — every word the learner currently studies, treated as a whole string: knowing its characters does not make a compound known.
@@ -22,6 +22,7 @@ The vocabulary of the handwriting trainer. Terms are defined in the product's la
 - **Leech** — a study item that keeps being graded again; flagged for attention.
 - **Pin / priority** — a manual ordering that floats a learning item to the front of its next session.
 - **HSK** — the standardized Chinese proficiency scale. A word's **vocabulary level** comes from the official HSK 3.0 word list (levels 1–6 plus the single 7–9 band, stored as 7); a word outside the list has no level. The community dataset supplies the POS tags, not the level.
+- **Handwriting level** — a word's expected writing level: the maximum level among its characters in the official HSK 3.0 handwriting list, or unknown when no character has one. Independent of the vocabulary level; the study queue filters on it.
 - **Stroke** — one pen movement of a character; its order is the sequence a learner reproduces.
 - **Reading** — a generated Mandarin text for reading practice.
 - **Reading generation** — the pipeline that asks a language model for a text constrained to the learner's known vocabulary.

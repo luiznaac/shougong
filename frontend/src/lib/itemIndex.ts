@@ -12,13 +12,13 @@ export const ITEM_PAGE_SIZE = 24;
 
 export const SRS_STATES: SrsState[] = ["learning", "review", "relearning"];
 
-export const HSK_LEVELS: (number | "none")[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, "none"];
+export const HANDWRITING_LEVELS: (number | "none")[] = [1, 2, 3, 4, 5, 6, 7, "none"];
 
 export const ITEM_SORTS: StudyItemSort[] = ["due_asc", "created_desc", "stability_asc"];
 
 export interface ItemIndexState {
   states: SrsState[];
-  hskLevels: (number | "none")[];
+  handwritingLevels: (number | "none")[];
   posTags: string[];
   search: string;
   /** The range is typed as local calendar days and sent as local-midnight instants. */
@@ -33,7 +33,7 @@ export interface ItemIndexState {
 
 export const DEFAULT_ITEM_INDEX: ItemIndexState = {
   states: [],
-  hskLevels: [],
+  handwritingLevels: [],
   posTags: [],
   search: "",
   sort: "due_asc",
@@ -49,10 +49,10 @@ function isSrsState(value: string): value is SrsState {
   return (SRS_STATES as string[]).includes(value);
 }
 
-function isHskLevel(value: string): value is `${number}` | "none" {
+function isHandwritingLevel(value: string): value is `${number}` | "none" {
   if (value === "none") return true;
   const level = Number(value);
-  return Number.isInteger(level) && level >= 1 && level <= 9;
+  return Number.isInteger(level) && level >= 1 && level <= 7;
 }
 
 function isSort(value: string): value is StudyItemSort {
@@ -76,17 +76,17 @@ function shownCount(value: string | null): number {
 
 export function parseItemIndex(search: URLSearchParams): ItemIndexState {
   const states = unique(search.getAll("state").filter(isSrsState));
-  const hskLevels = unique(
+  const handwritingLevels = unique(
     search
-      .getAll("hsk_level")
-      .filter(isHskLevel)
+      .getAll("handwriting_level")
+      .filter(isHandwritingLevel)
       .map((value) => (value === "none" ? "none" : Number(value))),
   );
   const sort = search.get("sort");
 
   return {
     states,
-    hskLevels,
+    handwritingLevels,
     posTags: unique(search.getAll("pos_tag").filter(Boolean)),
     search: (search.get("search") ?? "").trim(),
     dueFrom: isDay(search.get("due_from")) ? (search.get("due_from") as Day) : undefined,
@@ -100,7 +100,7 @@ export function parseItemIndex(search: URLSearchParams): ItemIndexState {
 export function serializeItemIndex(state: ItemIndexState): URLSearchParams {
   const params = new URLSearchParams();
   for (const value of state.states) params.append("state", value);
-  for (const value of state.hskLevels) params.append("hsk_level", String(value));
+  for (const value of state.handwritingLevels) params.append("handwriting_level", String(value));
   for (const value of state.posTags) params.append("pos_tag", value);
   if (state.search) params.set("search", state.search);
   if (state.dueFrom) params.set("due_from", state.dueFrom);
@@ -119,7 +119,7 @@ export function toggleValue<T>(values: T[], value: T): T[] {
 export function hasFilters(state: ItemIndexState): boolean {
   return (
     state.states.length > 0 ||
-    state.hskLevels.length > 0 ||
+    state.handwritingLevels.length > 0 ||
     state.posTags.length > 0 ||
     state.search.length > 0 ||
     Boolean(state.dueFrom) ||
@@ -164,7 +164,7 @@ export function itemIndexQuery(state: ItemIndexState): StudyItemListQuery {
   const { due_from, due_to } = dueRangeInstants(state);
   return {
     state: state.states.length ? state.states : undefined,
-    hsk_level: state.hskLevels.length ? state.hskLevels : undefined,
+    handwriting_level: state.handwritingLevels.length ? state.handwritingLevels : undefined,
     pos_tag: state.posTags.length ? state.posTags : undefined,
     search: state.search || undefined,
     due_from,

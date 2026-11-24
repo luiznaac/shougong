@@ -4,6 +4,7 @@ import { useStudyItemPageQueries } from "../api/queries.ts";
 import type { StudyItem } from "../api/types.ts";
 import { DataList, type DataListColumn } from "../components/DataList.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
+import { WordLevels } from "../components/HskChip.tsx";
 import { ItemBadges } from "../components/ItemBadges.tsx";
 import { ItemFilters } from "../components/ItemFilters.tsx";
 import { LoadMore } from "../components/LoadMore.tsx";
@@ -55,10 +56,17 @@ const ITEM_COLUMNS: DataListColumn<StudyItem>[] = [
     render: (item) => srsStateLabel(item.card.state),
   },
   {
-    key: "hsk",
-    label: "HSK",
+    key: "levels",
+    label: "Níveis",
     secondary: true,
-    render: (item) => item.entry.hsk_level ?? "—",
+    render: (item) => (
+      <span className="inline-flex items-center gap-1">
+        <WordLevels
+          hskLevel={item.entry.hsk_level}
+          handwritingLevel={item.entry.handwriting_level}
+        />
+      </span>
+    ),
   },
   {
     key: "due",
@@ -115,7 +123,7 @@ export function ItemIndex() {
     setFiltersReset((token) => token + 1);
     narrow({
       states: [],
-      hskLevels: [],
+      handwritingLevels: [],
       posTags: [],
       search: "",
       dueFrom: undefined,
