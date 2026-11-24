@@ -287,8 +287,31 @@ class StudyService:
             pinned = [item for item in items if item.priority_position is not None]
             remainder = [item for item in items if item.priority_position is None]
             ordered = [*pinned, *self._shuffler.shuffle(remainder)]
-        self._telemetry.session_created(kind=kind, size=len(ordered))
-        return StudySession(session_id=uuid.uuid4().hex, kind=kind, items=tuple(ordered))
+        annotated = await self._with_character_writing_levels(ordered)
+        self._telemetry.session_created(kind=kind, size=len(annotated))
+        return StudySession(session_id=uuid.uuid4().hex, kind=kind, items=annotated)
+
+    async def _with_character_writing_levels(self, items: Sequence[StudyItem]) -> tuple[StudyItem, ...]:
+        """Annotate each item with the writing level of every character in its word.
+
+        One lookup serves the whole session, so the card never needs a per-character
+        request; a character outside the writing store is marked `None`.
+        """
+        characters: set[str] = set()
+        for item in items:
+            characters.update(item.entry.simplified)
+        if not characters:
+            return tuple(items)
+        levels = await self._dictionary.character_writing_levels(sorted(characters))
+        return tuple(
+            replace(
+                item,
+                character_writing_levels={
+                    character: levels.get(character) for character in dict.fromkeys(item.entry.simplified)
+                },
+            )
+            for item in items
+        )
 
     async def review_item(self, item_id: int, rating: SrsRating) -> ReviewResult:
         async def _run() -> ReviewResult:

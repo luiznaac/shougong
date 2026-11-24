@@ -163,6 +163,7 @@ Priority is learning-only. Graduating an item from `learning` into `review` dele
 
 - **lesson** — every item whose card state is `learning`, with no due predicate. The pinned block leads, ascending by priority position then item id, and keeps that order unshuffled; only the unpinned remainder is shuffled.
 - **review** — every due item that is not `learning` (`relearning` included). The whole block is shuffled, with no priority weighting.
+- Each item carries `character_writing_levels`: one entry per character in the item's word, mapping the character to its stored HSK 3.0 writing level, or `null` when the character has none. It is resolved for the whole session in one read, so the practice card can show which character is holding the word back without a per-character request. Other study-item responses carry an empty map.
 - An empty selection is `200` with `items: []`. There is no pagination, limit or cursor.
 - Nothing is persisted: no session row, seed or expiry. The response order is authoritative and the client must not re-sort. `session_id` is opaque and informational only — never an ordering input or a resume key; every request produces a fresh shuffle.
 

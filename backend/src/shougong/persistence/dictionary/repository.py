@@ -277,6 +277,20 @@ class DictionaryRepository(IDictionaryRepository):
 
         return await self._tx.execute(_run)
 
+    async def character_writing_levels(self, characters: Sequence[str]) -> Mapping[str, int]:
+        async def _run() -> Mapping[str, int]:
+            if not characters:
+                return {}
+            session = current_session()
+            stmt = select(
+                CharacterWritingLevelEntity.character,
+                CharacterWritingLevelEntity.writing_level,
+            ).where(CharacterWritingLevelEntity.character.in_(characters))
+            rows = (await session.execute(stmt)).all()
+            return {character: int(level) for character, level in rows}
+
+        return await self._tx.execute(_run)
+
     async def set_handwriting_levels(self, levels: Mapping[int, int | None]) -> int:
         async def _run() -> int:
             session = current_session()

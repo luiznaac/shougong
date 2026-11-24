@@ -169,6 +169,29 @@ describe("Quiz interaction", () => {
     expect(screen.getAllByText("?")).toHaveLength(2);
   });
 
+  it("shows each character's writing level and marks a missing one unknown", async () => {
+    const user = userEvent.setup();
+    const item = studyItem({
+      entry: {
+        ...studyItem().entry,
+        simplified: "好啊吗",
+        pinyin: "hao3 a5 ma5",
+        hsk_level: 1,
+        handwriting_level: 3,
+      },
+      character_writing_levels: { 好: 2, 啊: 3, 吗: null },
+    });
+    renderQuiz({ item });
+
+    await user.click(screen.getByRole("button", { name: /Revelar/ }));
+
+    expect(screen.getByLabelText("Nível de escrita de 好: 2")).toBeTruthy();
+    expect(screen.getByLabelText("Nível de escrita de 啊: 3")).toBeTruthy();
+    expect(screen.getByLabelText("Nível de escrita de 吗: desconhecido")).toBeTruthy();
+    expect(screen.getByText("HSK 1")).toBeTruthy();
+    expect(screen.getByText("escrita HSK 3")).toBeTruthy();
+  });
+
   it("keeps rollback reachable from the mobile top bar", () => {
     renderQuiz();
 
