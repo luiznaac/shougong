@@ -36,12 +36,12 @@ leech ordering) are in [04-api.md](04-api.md#study-item-list).
 Before this change the endpoint supported only `due`, `limit`, and `offset`. The Library and Board views needed:
 
 ```text
-GET /study-items?state=learning,review&hsk_level=1,2&pos_tag=verb
+GET /study-items?state=learning,review&handwriting_level=1,2&pos_tag=verb
                  &search=学&due_from=2026-09-11&due_to=2026-09-18
                  &sort=due_asc&limit=100&offset=0
 ```
 
-Recommended fields: `state` (repeatable or comma-separated), `hsk_level` (repeatable), `pos_tag`, `search` (simplified or pinyin substring), `due_from`, `due_to`, `sort` (`due_asc` default, `created_desc`, `stability_asc`).
+Recommended fields: `state` (repeatable or comma-separated), `handwriting_level` (repeatable), `pos_tag`, `search` (simplified or pinyin substring), `due_from`, `due_to`, `sort` (`due_asc` default, `created_desc`, `stability_asc`).
 
 ## 3. `DELETE /study-items/{id}`
 
@@ -80,7 +80,7 @@ Quiz sessions and multi-character words need stroke data for several characters 
 Shipped as `GET /dictionary-entries/{entry_id}/related?limit=&offset=` (see
 [04-api.md](04-api.md)): related = an entry whose `simplified` shares at least one hanzi
 with the target's, excluding the target and every entry with the same `simplified`.
-Ordered by distinct shared hanzi `DESC`, then `hsk_level ASC NULLS LAST`, then
+Ordered by distinct shared hanzi `DESC`, then `handwriting_level ASC NULLS LAST`, then
 `char_length(simplified) ASC`, then `id ASC`; paginated with `{ items, total, limit,
 offset }` and each row carrying the study item's id (`study_item_id`, or `null`).
 

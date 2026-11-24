@@ -26,6 +26,7 @@ from shougong.acceptance.fixture import (
 )
 from shougong.application.telemetry import Telemetry, build_telemetry
 from shougong.usecase.commons.logging import configure_logging
+from shougong.usecase.dictionary.model import derive_handwriting_level
 from shougong.usecase.insights.model import GradeWindow, ReviewGrade
 from shougong.usecase.insights.policy import WINDOW_SIZE, is_leech
 from shougong.usecase.reading.model import ReadingFormat, ReadingWord
@@ -35,7 +36,8 @@ from tests.fixtures import build_test_settings, log_records
 _NOW = datetime(2026, 6, 1, 12, tzinfo=UTC)
 _ITEM_PAGE_SIZE = 24
 _RELATED_PAGE_SIZE = 8
-_HSK_BUCKETS: set[int | None] = {*range(1, 10), None}
+# Both levels stay within 1-6 plus the 7-9 band (stored as 7) and the unknown bucket.
+_LEVEL_BUCKETS: set[int | None] = {*range(1, 8), None}
 
 
 @pytest.fixture(scope="module")
@@ -55,8 +57,22 @@ def test_fixture_exceeds_one_item_page(fixture: AcceptanceFixture) -> None:
     assert len(fixture.study_items) > _ITEM_PAGE_SIZE
 
 
-def test_fixture_covers_every_hsk_bucket(fixture: AcceptanceFixture) -> None:
-    assert {row.entry.hsk_level for row in fixture.study_items} == _HSK_BUCKETS
+def test_fixture_covers_every_vocabulary_bucket(fixture: AcceptanceFixture) -> None:
+    assert {row.entry.hsk_level for row in fixture.study_items} == _LEVEL_BUCKETS
+
+
+def test_fixture_covers_every_handwriting_bucket(fixture: AcceptanceFixture) -> None:
+    assert {row.entry.handwriting_level for row in fixture.study_items} == _LEVEL_BUCKETS
+
+
+def test_fixture_includes_words_whose_two_levels_differ(fixture: AcceptanceFixture) -> None:
+    assert any(row.entry.hsk_level != row.entry.handwriting_level for row in fixture.study_items)
+
+
+def test_every_study_item_handwriting_level_is_derived_from_its_characters(fixture: AcceptanceFixture) -> None:
+    character_levels = {row.character: row.writing_level for row in fixture.characters}
+    for row in fixture.study_items:
+        assert derive_handwriting_level(row.entry.simplified, character_levels) == row.entry.handwriting_level
 
 
 def test_fixture_covers_every_srs_state(fixture: AcceptanceFixture) -> None:

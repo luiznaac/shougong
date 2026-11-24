@@ -3,7 +3,8 @@
 `docs/runbooks/acceptance.md` boots MySQL empty, so the walkthroughs need a seed
 the runbook itself can apply. `build_fixture` is the deterministic data plan —
 dictionary entries and study items covering more than one 24-row page, every SRS
-state, every HSK bucket (1..9 and none), a leech and a pinned item — plus the
+state, every vocabulary and handwriting bucket (1..6, the 7-9 band and none), a
+leech and a pinned item — plus the
 item-detail rows: the 知道 detail word, its shared-character family, three
 readings that contain it and cached strokes for both of its characters.
 `apply_acceptance_fixture` writes it in one transaction, only when the
@@ -33,6 +34,7 @@ from shougong.persistence.strokes.entity import CharacterStrokesEntity
 from shougong.persistence.study.entity import ReviewLogEntity, StudyItemEntity, StudyItemPriorityEntity
 from shougong.persistence.study_item_history.entity import StudyItemHistoryEntity
 from shougong.usecase.commons.logging import get_logger
+from shougong.usecase.dictionary.model import derive_handwriting_level
 from shougong.usecase.reading.model import (
     GeneratedReading,
     GenerationAttempt,
@@ -170,51 +172,121 @@ class SeedOutcome:
     strokes: int
 
 
-# At least three words per HSK bucket, so every filter chip the item index
-# renders has a match; a word in the `none` bucket is deliberately outside HSK
-# 1..9. The first two are the item-detail pair: 知道 is the pinned learning
-# detail word, 知 is its queued shared-character neighbour in review.
-_WORDS: tuple[DictionaryRow, ...] = (
-    DictionaryRow(DETAIL_WORD, "zhi1 dao4", ("to know", "to be aware of"), 1, ("v",), handwriting_level=2),
-    DictionaryRow(_DETAIL_NEIGHBOUR, "zhi1", ("to know", "knowledge"), 1, ("v", "n"), handwriting_level=1),
-    DictionaryRow("学", "xue2", ("to learn", "to study"), 1, ("v", "n"), handwriting_level=1),
-    DictionaryRow("学生", "xue2 sheng1", ("student", "pupil"), 1, ("n",)),
-    DictionaryRow("老师", "lao3 shi1", ("teacher",), 1, ("n",)),
-    DictionaryRow("朋友", "peng2 you3", ("friend",), 2, ("n",)),
-    DictionaryRow("时间", "shi2 jian1", ("time", "period"), 2, ("n",)),
-    DictionaryRow("工作", "gong1 zuo4", ("work", "job"), 2, ("n", "v")),
-    DictionaryRow("学校", "xue2 xiao4", ("school",), 3, ("n",)),
-    DictionaryRow("城市", "cheng2 shi4", ("city", "town"), 3, ("n",)),
-    DictionaryRow("环境", "huan2 jing4", ("environment", "surroundings"), 3, ("n",)),
-    DictionaryRow("经验", "jing1 yan4", ("experience",), 4, ("n",)),
-    DictionaryRow("支持", "zhi1 chi2", ("to support", "support"), 4, ("v", "n")),
-    DictionaryRow("讨论", "tao3 lun4", ("to discuss", "discussion"), 4, ("v", "n")),
-    DictionaryRow("影响", "ying3 xiang3", ("influence", "to affect"), 5, ("n", "v")),
-    DictionaryRow("挑战", "tiao3 zhan4", ("challenge", "to challenge"), 5, ("n", "v")),
-    DictionaryRow("沟通", "gou1 tong1", ("to communicate", "communication"), 5, ("v", "n")),
-    DictionaryRow("目标", "mu4 biao1", ("goal", "target"), 6, ("n",)),
-    DictionaryRow("趋势", "qu1 shi4", ("trend", "tendency"), 6, ("n",)),
-    DictionaryRow("变化", "bian4 hua4", ("change", "variation"), 6, ("n", "v")),
-    DictionaryRow("微妙", "wei1 miao4", ("subtle", "delicate"), 7, ("a",)),
-    DictionaryRow("沉淀", "chen2 dian4", ("sediment", "to settle"), 7, ("n", "v")),
-    DictionaryRow("蕴含", "yun4 han2", ("to contain", "to embody"), 7, ("v",)),
-    DictionaryRow("职场", "zhi2 chang3", ("workplace",), 8, ("n",)),
-    DictionaryRow("洞察", "dong4 cha2", ("insight", "to discern"), 8, ("n", "v")),
-    DictionaryRow("严谨", "yan2 jun4", ("rigorous", "strict"), 8, ("a",)),
-    DictionaryRow("弊端", "bi4 duan1", ("drawback", "malpractice"), 9, ("n",)),
-    DictionaryRow("契机", "qi4 ji1", ("opportunity", "turning point"), 9, ("n",)),
-    DictionaryRow("彰显", "zhang1 xian3", ("to manifest", "to highlight"), 9, ("v",)),
-    DictionaryRow("拉面", "la1 mian4", ("ramen", "pulled noodles"), None, ("n",)),
-    DictionaryRow("猫咪", "mao1 mi1", ("kitty", "cat"), None, ("n",)),
-    DictionaryRow("巷子", "xiang4 zi", ("alley", "lane"), None, ("n",)),
-)
+# The character-level store behind every seeded handwriting level: a study
+# item's level is the max of its characters' levels, the way the enrichment pass
+# derives it, so each card's stored level matches its seeded characters. A word
+# whose characters are all absent here has no handwriting level (the unknown
+# bucket).
+_CHARACTER_LEVELS: dict[str, int] = {
+    "知": 1,
+    "道": 2,
+    "学": 1,
+    "生": 2,
+    "老": 3,
+    "师": 1,
+    "朋": 2,
+    "友": 1,
+    "时": 3,
+    "间": 2,
+    "工": 4,
+    "作": 3,
+    "校": 3,
+    "城": 4,
+    "市": 3,
+    "环": 5,
+    "境": 4,
+    "经": 4,
+    "验": 3,
+    "支": 5,
+    "持": 4,
+    "讨": 6,
+    "论": 5,
+    "影": 5,
+    "响": 4,
+    "挑": 6,
+    "战": 5,
+    "沟": 4,
+    "通": 3,
+    "目": 7,
+    "标": 6,
+    "趋": 6,
+    "势": 5,
+    "微": 7,
+    "妙": 6,
+    "沉": 6,
+    "淀": 5,
+    "职": 5,
+    "场": 4,
+    "严": 7,
+    "谨": 6,
+    "弊": 6,
+    "端": 5,
+    "彰": 5,
+    "显": 4,
+    "巷": 1,
+}
 
-# The character-level store behind the seeded handwriting levels: the detail
-# word's characters plus the 学 family's shared character.
-_CHARACTER_LEVELS: tuple[CharacterLevelRow, ...] = (
-    CharacterLevelRow("知", 1),
-    CharacterLevelRow("道", 2),
-    CharacterLevelRow("学", 1),
+
+def _handwriting_level(simplified: str) -> int | None:
+    return derive_handwriting_level(simplified, _CHARACTER_LEVELS)
+
+
+def _study_word(
+    simplified: str,
+    pinyin: str,
+    definitions: tuple[str, ...],
+    hsk_level: int | None,
+    pos_tags: tuple[str, ...],
+) -> DictionaryRow:
+    return DictionaryRow(
+        simplified,
+        pinyin,
+        definitions,
+        hsk_level,
+        pos_tags,
+        handwriting_level=_handwriting_level(simplified),
+    )
+
+
+# At least three words per vocabulary and handwriting bucket, so every filter
+# chip the item index renders has a match; a word in the `none` bucket is
+# deliberately outside HSK 3.0. Both axes stay within 1-6 plus the 7-9 band
+# stored as 7 — no 8 or 9. Several words carry a different vocabulary and
+# handwriting level. The first two are the item-detail pair: 知道 is the pinned
+# learning detail word, 知 is its queued shared-character neighbour in review.
+_WORDS: tuple[DictionaryRow, ...] = (
+    _study_word(DETAIL_WORD, "zhi1 dao4", ("to know", "to be aware of"), 1, ("v",)),
+    _study_word(_DETAIL_NEIGHBOUR, "zhi1", ("to know", "knowledge"), 1, ("v", "n")),
+    _study_word("学", "xue2", ("to learn", "to study"), 1, ("v", "n")),
+    _study_word("学生", "xue2 sheng1", ("student", "pupil"), 1, ("n",)),
+    _study_word("老师", "lao3 shi1", ("teacher",), 1, ("n",)),
+    _study_word("朋友", "peng2 you3", ("friend",), 2, ("n",)),
+    _study_word("时间", "shi2 jian1", ("time", "period"), 2, ("n",)),
+    _study_word("工作", "gong1 zuo4", ("work", "job"), 2, ("n", "v")),
+    _study_word("学校", "xue2 xiao4", ("school",), 3, ("n",)),
+    _study_word("城市", "cheng2 shi4", ("city", "town"), 3, ("n",)),
+    _study_word("环境", "huan2 jing4", ("environment", "surroundings"), 3, ("n",)),
+    _study_word("经验", "jing1 yan4", ("experience",), 4, ("n",)),
+    _study_word("支持", "zhi1 chi2", ("to support", "support"), 4, ("v", "n")),
+    _study_word("讨论", "tao3 lun4", ("to discuss", "discussion"), 4, ("v", "n")),
+    _study_word("影响", "ying3 xiang3", ("influence", "to affect"), 5, ("n", "v")),
+    _study_word("挑战", "tiao3 zhan4", ("challenge", "to challenge"), 5, ("n", "v")),
+    _study_word("沟通", "gou1 tong1", ("to communicate", "communication"), 5, ("v", "n")),
+    _study_word("目标", "mu4 biao1", ("goal", "target"), 6, ("n",)),
+    _study_word("趋势", "qu1 shi4", ("trend", "tendency"), 6, ("n",)),
+    _study_word("变化", "bian4 hua4", ("change", "variation"), 6, ("n", "v")),
+    _study_word("微妙", "wei1 miao4", ("subtle", "delicate"), 7, ("a",)),
+    _study_word("沉淀", "chen2 dian4", ("sediment", "to settle"), 7, ("n", "v")),
+    _study_word("蕴含", "yun4 han2", ("to contain", "to embody"), 7, ("v",)),
+    _study_word("职场", "zhi2 chang3", ("workplace",), 7, ("n",)),
+    _study_word("洞察", "dong4 cha2", ("insight", "to discern"), 7, ("n", "v")),
+    _study_word("严谨", "yan2 jun4", ("rigorous", "strict"), 7, ("a",)),
+    _study_word("弊端", "bi4 duan1", ("drawback", "malpractice"), 7, ("n",)),
+    _study_word("契机", "qi4 ji1", ("opportunity", "turning point"), 7, ("n",)),
+    _study_word("彰显", "zhang1 xian3", ("to manifest", "to highlight"), 7, ("v",)),
+    _study_word("拉面", "la1 mian4", ("ramen", "pulled noodles"), None, ("n",)),
+    _study_word("猫咪", "mao1 mi1", ("kitty", "cat"), None, ("n",)),
+    _study_word("巷子", "xiang4 zi", ("alley", "lane"), None, ("n",)),
 )
 
 # Not queued: the 学 family gives dictionary search extra rows to find,
@@ -522,7 +594,7 @@ def build_fixture(now: datetime) -> AcceptanceFixture:
         dictionary_only=_DICTIONARY_ONLY + _IMPORT_POLICY_WORDS,
         readings=_build_readings(now),
         strokes=_build_strokes(),
-        characters=_CHARACTER_LEVELS,
+        characters=tuple(CharacterLevelRow(character, level) for character, level in _CHARACTER_LEVELS.items()),
     )
 
 

@@ -66,9 +66,9 @@ async def test_item_index_pages_and_filters_reach_the_seeded_rows(
     leeches = (await client.get("/study-items", params={"leech": "true"})).json()
     assert leeches["total"] >= 1
 
-    for bucket in (*range(1, 10), "none"):
-        page = (await client.get("/study-items", params={"hsk_level": bucket, "limit": 1})).json()
-        assert page["total"] >= 1, f"no item for HSK {bucket}"
+    for bucket in (*range(1, 8), "none"):
+        page = (await client.get("/study-items", params={"handwriting_level": bucket, "limit": 1})).json()
+        assert page["total"] >= 1, f"no item for handwriting level {bucket}"
 
     for state in ("learning", "review", "relearning"):
         page = (await client.get("/study-items", params={"state": state, "limit": 1})).json()

@@ -60,13 +60,14 @@ class StudyItemFilters:
 
     `due` is the shorthand for `due_to = now`; the service resolves it against the
     clock before the adapter sees the filters, so an adapter only honours the
-    instant bounds. `hsk_levels` holds `None` for the `none` (outside HSK) bucket.
+    instant bounds. `handwriting_levels` holds `None` for the unknown (no levelled
+    character) bucket.
     """
 
     due: bool = False
     leech: bool = False
     states: tuple[SrsState, ...] = ()
-    hsk_levels: tuple[int | None, ...] = ()
+    handwriting_levels: tuple[int | None, ...] = ()
     pos_tags: tuple[str, ...] = ()
     search: str | None = None
     due_from: datetime | None = None

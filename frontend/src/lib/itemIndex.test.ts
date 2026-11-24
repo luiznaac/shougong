@@ -16,7 +16,7 @@ describe("item index URL state", () => {
     const state = parseItemIndex(
       new URLSearchParams({
         state: "review",
-        hsk_level: "2",
+        handwriting_level: "2",
         pos_tag: "v",
         search: " xue ",
         due_from: "2026-10-01",
@@ -29,7 +29,7 @@ describe("item index URL state", () => {
 
     expect(state).toEqual({
       states: ["review"],
-      hskLevels: [2],
+      handwritingLevels: [2],
       posTags: ["v"],
       search: "xue",
       dueFrom: "2026-10-01",
@@ -48,7 +48,7 @@ describe("item index URL state", () => {
     const state = parseItemIndex(
       new URLSearchParams({
         state: "burned",
-        hsk_level: "12",
+        handwriting_level: "12",
         sort: "newest",
         page: "0",
         shown: "25",
@@ -56,28 +56,28 @@ describe("item index URL state", () => {
     );
 
     expect(state.states).toEqual([]);
-    expect(state.hskLevels).toEqual([]);
+    expect(state.handwritingLevels).toEqual([]);
     expect(state.sort).toBe("due_asc");
     expect(state.page).toBe(1);
     expect(state.shown).toBe(24);
   });
 
-  it("keeps repeated values, deduplicated, and understands the none HSK bucket", () => {
+  it("keeps repeated values, deduplicated, and understands the none handwriting bucket", () => {
     const params = new URLSearchParams();
     for (const value of ["learning", "learning", "relearning"]) params.append("state", value);
-    for (const value of ["1", "9", "none"]) params.append("hsk_level", value);
+    for (const value of ["1", "7", "9", "none"]) params.append("handwriting_level", value);
 
     const state = parseItemIndex(params);
 
     expect(state.states).toEqual(["learning", "relearning"]);
-    expect(state.hskLevels).toEqual([1, 9, "none"]);
+    expect(state.handwritingLevels).toEqual([1, 7, "none"]);
   });
 
   it("round-trips a non-default state through the URL", () => {
     const state = {
       ...DEFAULT_ITEM_INDEX,
       states: ["learning" as const],
-      hskLevels: [3 as const, "none" as const],
+      handwritingLevels: [3 as const, "none" as const],
       posTags: ["n", "v"],
       search: "xue",
       dueFrom: "2026-10-01",
@@ -122,7 +122,7 @@ describe("item index request mapping", () => {
     const query = itemIndexQuery({
       ...DEFAULT_ITEM_INDEX,
       states: ["review"],
-      hskLevels: [2, "none"],
+      handwritingLevels: [2, "none"],
       posTags: ["v"],
       search: "xue",
       sort: "created_desc",
@@ -130,7 +130,7 @@ describe("item index request mapping", () => {
 
     expect(query).toEqual({
       state: ["review"],
-      hsk_level: [2, "none"],
+      handwriting_level: [2, "none"],
       pos_tag: ["v"],
       search: "xue",
       due_from: undefined,

@@ -155,8 +155,8 @@ class DictionaryRepository(IDictionaryRepository):
                 .where(predicate)
                 .order_by(
                     shared_count.desc(),
-                    DictionaryEntryEntity.hsk_level.is_(None),
-                    DictionaryEntryEntity.hsk_level,
+                    DictionaryEntryEntity.handwriting_level.is_(None),
+                    DictionaryEntryEntity.handwriting_level,
                     func.char_length(DictionaryEntryEntity.simplified),
                     DictionaryEntryEntity.id,
                 )

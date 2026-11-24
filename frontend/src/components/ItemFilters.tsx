@@ -4,13 +4,14 @@ import { POS_TAG_OPTIONS } from "../i18n/posTag.ts";
 import { SORT_ORDER, sortOrderLabel } from "../i18n/sortOrder.ts";
 import { srsStateLabel } from "../i18n/srsState.ts";
 import {
-  HSK_LEVELS,
+  HANDWRITING_LEVELS,
   type ItemIndexState,
   SRS_STATES,
   dueRangePatch,
   hasFilters,
   toggleValue,
 } from "../lib/itemIndex.ts";
+import { levelLabel } from "./HskChip.tsx";
 import { Panel } from "./Panel.tsx";
 
 const chipClass = (pressed: boolean) =>
@@ -134,13 +135,15 @@ export function ItemFilters({
             onToggle={(value) => onNarrow({ states: toggleValue(state.states, value) })}
           />
           <FilterGroup
-            legend="HSK"
-            options={HSK_LEVELS.map((value) => ({
+            legend="Escrita"
+            options={HANDWRITING_LEVELS.map((value) => ({
               value,
-              label: value === "none" ? "Sem HSK" : `HSK ${value}`,
+              label: value === "none" ? "Sem HSK" : levelLabel(value),
             }))}
-            selected={state.hskLevels}
-            onToggle={(value) => onNarrow({ hskLevels: toggleValue(state.hskLevels, value) })}
+            selected={state.handwritingLevels}
+            onToggle={(value) =>
+              onNarrow({ handwritingLevels: toggleValue(state.handwritingLevels, value) })
+            }
           />
           <FilterGroup
             legend="Classe gramatical"

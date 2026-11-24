@@ -177,19 +177,19 @@ async def test_list_items_state_filter_is_any_of() -> None:
     assert [i.id for i in page.items] == [1, 2]
 
 
-async def test_list_items_hsk_filter_accepts_levels_and_none() -> None:
+async def test_list_items_handwriting_filter_accepts_levels_and_none() -> None:
     items = [
-        make_study_item(item_id=1, entry=make_dictionary_entry(entry_id=1, hsk_level=1)),
-        make_study_item(item_id=2, entry=make_dictionary_entry(entry_id=2, hsk_level=3)),
-        make_study_item(item_id=3, entry=make_dictionary_entry(entry_id=3, hsk_level=None)),
+        make_study_item(item_id=1, entry=make_dictionary_entry(entry_id=1, handwriting_level=1)),
+        make_study_item(item_id=2, entry=make_dictionary_entry(entry_id=2, handwriting_level=3)),
+        make_study_item(item_id=3, entry=make_dictionary_entry(entry_id=3, handwriting_level=None)),
     ]
     service = _service(study=FakeStudyItemRepository(items))
 
-    level_three = await service.list_items(StudyItemFilters(hsk_levels=(3,)))
-    outside_hsk = await service.list_items(StudyItemFilters(hsk_levels=(None,)))
+    level_three = await service.list_items(StudyItemFilters(handwriting_levels=(3,)))
+    unknown = await service.list_items(StudyItemFilters(handwriting_levels=(None,)))
 
     assert [i.id for i in level_three.items] == [2]
-    assert [i.id for i in outside_hsk.items] == [3]
+    assert [i.id for i in unknown.items] == [3]
 
 
 async def test_list_items_pos_tag_filter_intersects_the_entry_tags() -> None:
@@ -228,16 +228,16 @@ async def test_list_items_filters_combine_with_and() -> None:
     items = [
         make_study_item(
             item_id=1,
-            entry=make_dictionary_entry(entry_id=1, simplified="学习", hsk_level=1),
+            entry=make_dictionary_entry(entry_id=1, simplified="学习", handwriting_level=1),
         ),
         make_study_item(
             item_id=2,
-            entry=make_dictionary_entry(entry_id=2, simplified="学", hsk_level=2),
+            entry=make_dictionary_entry(entry_id=2, simplified="学", handwriting_level=2),
         ),
     ]
     service = _service(study=FakeStudyItemRepository(items))
 
-    page = await service.list_items(StudyItemFilters(search="学", hsk_levels=(1,)))
+    page = await service.list_items(StudyItemFilters(search="学", handwriting_levels=(1,)))
 
     assert [i.id for i in page.items] == [1]
 

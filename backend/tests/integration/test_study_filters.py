@@ -28,6 +28,7 @@ async def _seed(
     simplified: str,
     pinyin: str = "xue2",
     hsk_level: int | None = None,
+    handwriting_level: int | None = None,
     pos_tags: tuple[str, ...] = (),
     state: SrsState = SrsState.LEARNING,
     due: datetime = _AT,
@@ -37,14 +38,15 @@ async def _seed(
     async with container.engine.begin() as conn:
         entry = await conn.execute(
             text(
-                "INSERT INTO dictionary_entry (simplified, pinyin, definitions, hsk_level, pos_tags)"
-                " VALUES (:s, :p, :d, :hsk, :tags)"
+                "INSERT INTO dictionary_entry (simplified, pinyin, definitions, hsk_level, handwriting_level, pos_tags)"
+                " VALUES (:s, :p, :d, :hsk, :hw, :tags)"
             ),
             {
                 "s": simplified,
                 "p": pinyin,
                 "d": json.dumps(["to learn"]),
                 "hsk": hsk_level,
+                "hw": handwriting_level,
                 "tags": json.dumps(list(pos_tags)),
             },
         )
@@ -100,20 +102,34 @@ async def test_list_returns_an_envelope_with_an_exact_stable_total(
     assert empty == {"items": [], "total": 0, "limit": 20, "offset": 0}
 
 
-async def test_hsk_level_filter_accepts_levels_none_and_repeats(
+async def test_handwriting_level_filter_accepts_levels_none_and_repeats(
     container: Container, client: httpx.AsyncClient
 ) -> None:
-    levelled, _ = await _seed(container, simplified="学", hsk_level=1)
-    outside, _ = await _seed(container, simplified="习", hsk_level=None)
+    levelled, _ = await _seed(container, simplified="学", handwriting_level=1)
+    outside, _ = await _seed(container, simplified="习", handwriting_level=None)
 
-    by_level = (await client.get("/study-items", params={"hsk_level": "1"})).json()
-    by_none = (await client.get("/study-items", params={"hsk_level": "none"})).json()
-    both = (await client.get("/study-items", params=[("hsk_level", "1"), ("hsk_level", "none")])).json()
+    by_level = (await client.get("/study-items", params={"handwriting_level": "1"})).json()
+    by_none = (await client.get("/study-items", params={"handwriting_level": "none"})).json()
+    both = (await client.get("/study-items", params=[("handwriting_level", "1"), ("handwriting_level", "none")])).json()
 
     assert [row["id"] for row in by_level["items"]] == [levelled]
     assert [row["id"] for row in by_none["items"]] == [outside]
     assert {row["id"] for row in both["items"]} == {levelled, outside}
     assert both["total"] == 2
+
+
+async def test_handwriting_level_filter_ignores_the_vocabulary_level(
+    container: Container, client: httpx.AsyncClient
+) -> None:
+    # A word can be vocabulary level 6 while its characters are handwriting level 2;
+    # the filter must bucket it by the handwriting level, not the vocabulary level.
+    differing, _ = await _seed(container, simplified="学", hsk_level=6, handwriting_level=2)
+
+    by_handwriting = (await client.get("/study-items", params={"handwriting_level": "2"})).json()
+    by_vocabulary = (await client.get("/study-items", params={"handwriting_level": "6"})).json()
+
+    assert [row["id"] for row in by_handwriting["items"]] == [differing]
+    assert by_vocabulary["items"] == []
 
 
 async def test_pos_tag_filter_matches_any_shared_tag(container: Container, client: httpx.AsyncClient) -> None:
@@ -191,7 +207,8 @@ async def test_invalid_filters_are_422(container: Container, client: httpx.Async
         params={"due_from": _AT.isoformat(), "due_to": _AT.isoformat()},
     )
     bad_state = await client.get("/study-items", params={"state": "graduated"})
-    bad_hsk = await client.get("/study-items", params={"hsk_level": "10"})
+    bad_level_8 = await client.get("/study-items", params={"handwriting_level": "8"})
+    bad_level_9 = await client.get("/study-items", params={"handwriting_level": "9"})
     bad_sort = await client.get("/study-items", params={"sort": "alphabetical"})
     bad_limit = await client.get("/study-items", params={"limit": 101})
     blank_search = await client.get("/study-items", params={"search": "   "})
@@ -199,7 +216,8 @@ async def test_invalid_filters_are_422(container: Container, client: httpx.Async
 
     assert inverted.status_code == 422
     assert bad_state.status_code == 422
-    assert bad_hsk.status_code == 422
+    assert bad_level_8.status_code == 422
+    assert bad_level_9.status_code == 422
     assert bad_sort.status_code == 422
     assert bad_limit.status_code == 422
     assert blank_search.status_code == 422

@@ -103,22 +103,28 @@ async def test_apply_enrichment_stamps_all_rows_and_hsk_words_dedupes(container:
 
 
 _RELATED_SEED = [
-    {"s": "知道", "p": "zhi1 dao4", "d": ["to know"], "hsk": 1},
-    {"s": "知识", "p": "zhi1 shi5", "d": ["knowledge"], "hsk": 1},
-    {"s": "知", "p": "zhi1", "d": ["to know"], "hsk": None},
-    {"s": "道", "p": "dao4", "d": ["way"], "hsk": None},
-    {"s": "知道路", "p": "zhi1 dao4 lu4", "d": ["to know the way"], "hsk": 2},
-    {"s": "知道者", "p": "zhi1 dao4 zhe3", "d": ["knower"], "hsk": None},
-    {"s": "认识", "p": "ren4 shi5", "d": ["to recognise"], "hsk": 1},
-    {"s": "知道", "p": "zhi1 dao5", "d": ["alt reading"], "hsk": 1},
+    {"s": "知道", "p": "zhi1 dao4", "d": ["to know"], "hsk": 1, "hw": 2},
+    {"s": "知识", "p": "zhi1 shi5", "d": ["knowledge"], "hsk": 1, "hw": 3},
+    {"s": "知", "p": "zhi1", "d": ["to know"], "hsk": None, "hw": 1},
+    {"s": "道", "p": "dao4", "d": ["way"], "hsk": 2, "hw": None},
+    {"s": "知道路", "p": "zhi1 dao4 lu4", "d": ["to know the way"], "hsk": 1, "hw": 5},
+    {"s": "知道者", "p": "zhi1 dao4 zhe3", "d": ["knower"], "hsk": None, "hw": 2},
+    {"s": "认识", "p": "ren4 shi5", "d": ["to recognise"], "hsk": 1, "hw": 1},
+    {"s": "知道", "p": "zhi1 dao5", "d": ["alt reading"], "hsk": 1, "hw": 2},
 ]
 
 
 async def _seed_related(container: Container) -> dict[str, int]:
     async with container.engine.begin() as conn:
         await conn.execute(
-            text("INSERT INTO dictionary_entry (simplified, pinyin, definitions, hsk_level) VALUES (:s, :p, :d, :hsk)"),
-            [{"s": row["s"], "p": row["p"], "d": json.dumps(row["d"]), "hsk": row["hsk"]} for row in _RELATED_SEED],
+            text(
+                "INSERT INTO dictionary_entry (simplified, pinyin, definitions, hsk_level, handwriting_level)"
+                " VALUES (:s, :p, :d, :hsk, :hw)"
+            ),
+            [
+                {"s": row["s"], "p": row["p"], "d": json.dumps(row["d"]), "hsk": row["hsk"], "hw": row["hw"]}
+                for row in _RELATED_SEED
+            ],
         )
         rows = (await conn.execute(text("SELECT id, simplified, pinyin FROM dictionary_entry"))).all()
     return {f"{simplified}|{pinyin}": entry_id for entry_id, simplified, pinyin in rows}
@@ -135,10 +141,10 @@ async def test_related_lists_the_shared_character_family(container: Container, c
     assert page["total"] == 5
     assert page["limit"] == 20
     assert page["offset"] == 0
-    # distinct shared hanzi DESC, then hsk_level ASC NULLS LAST, length ASC, id ASC
-    assert [row["simplified"] for row in page["items"]] == ["知道路", "知道者", "知识", "知", "道"]
+    # distinct shared hanzi DESC, then handwriting_level ASC NULLS LAST, length ASC, id ASC
+    assert [row["simplified"] for row in page["items"]] == ["知道者", "知道路", "知", "知识", "道"]
     assert all(row["study_item_id"] is None for row in page["items"])
-    assert page["items"][0]["definitions"] == ["to know the way"]
+    assert page["items"][0]["definitions"] == ["knower"]
 
 
 async def test_related_pages_and_total_is_the_whole_family(container: Container, client: httpx.AsyncClient) -> None:
@@ -151,7 +157,7 @@ async def test_related_pages_and_total_is_the_whole_family(container: Container,
     assert page["total"] == 5
     assert page["limit"] == 2
     assert page["offset"] == 1
-    assert [row["simplified"] for row in page["items"]] == ["知道者", "知识"]
+    assert [row["simplified"] for row in page["items"]] == ["知道路", "知"]
 
 
 async def test_related_carries_the_queued_study_item_id(container: Container, client: httpx.AsyncClient) -> None:
@@ -171,14 +177,13 @@ async def test_related_carries_the_queued_study_item_id(container: Container, cl
 
 async def test_related_rows_carry_the_handwriting_level(container: Container, client: httpx.AsyncClient) -> None:
     ids = await _seed_related(container)
-    async with container.engine.begin() as conn:
-        await conn.execute(text("UPDATE dictionary_entry SET handwriting_level = 2 WHERE simplified = '知识'"))
 
     page = (await client.get(f"/dictionary-entries/{ids['知道|zhi1 dao4']}/related")).json()
 
     by_simplified = {row["simplified"]: row["handwriting_level"] for row in page["items"]}
-    assert by_simplified["知识"] == 2
-    assert by_simplified["知"] is None
+    assert by_simplified["知识"] == 3
+    assert by_simplified["知"] == 1
+    assert by_simplified["道"] is None
 
 
 async def test_related_unknown_target_is_404(container: Container, client: httpx.AsyncClient) -> None:

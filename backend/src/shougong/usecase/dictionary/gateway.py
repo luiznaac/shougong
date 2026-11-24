@@ -44,8 +44,8 @@ class IDictionaryRepository(Protocol):
         An entry is related when its `simplified` shares at least one hanzi with
         `target.simplified`, excluding the target itself and every entry with the
         same `simplified` (alternate readings of the same word are not related
-        words). Ordered by distinct shared hanzi DESC, `hsk_level` ASC NULLS
-        LAST, `char_length(simplified)` ASC, `id` ASC.
+        words). Ordered by distinct shared hanzi DESC, `handwriting_level` ASC
+        NULLS LAST, `char_length(simplified)` ASC, `id` ASC.
 
         Args:
             target: The entry whose shared-character family is listed.

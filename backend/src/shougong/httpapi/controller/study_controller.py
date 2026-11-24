@@ -43,7 +43,7 @@ from shougong.usecase.srs.model import SrsState
 from shougong.usecase.study.model import BatchImportRow, StudyItemFilters, StudyItemSort
 from shougong.usecase.study.service import StudyService
 
-type HskLevelParam = Literal["1", "2", "3", "4", "5", "6", "7", "8", "9", "none"]
+type HandwritingLevelParam = Literal["1", "2", "3", "4", "5", "6", "7", "none"]
 type StateParam = Literal["learning", "review", "relearning"]
 
 
@@ -63,7 +63,7 @@ def _aware_instant(value: datetime) -> datetime:
     return value
 
 
-def _hsk_level(value: HskLevelParam) -> int | None:
+def _handwriting_level(value: HandwritingLevelParam) -> int | None:
     return None if value == "none" else int(value)
 
 
@@ -93,7 +93,7 @@ class StudyController(IController):
             due: bool = False,
             leech: bool = False,
             state: Annotated[list[StateParam] | None, Query()] = None,
-            hsk_level: Annotated[list[HskLevelParam] | None, Query()] = None,
+            handwriting_level: Annotated[list[HandwritingLevelParam] | None, Query()] = None,
             pos_tag: Annotated[list[str] | None, Query()] = None,
             search: Annotated[str, AfterValidator(_trimmed_search)] | None = None,
             due_from: Annotated[datetime, AfterValidator(_aware_instant)] | None = None,
@@ -106,7 +106,7 @@ class StudyController(IController):
                 due=due,
                 leech=leech,
                 states=tuple(SrsState[value.upper()] for value in state or ()),
-                hsk_levels=tuple(_hsk_level(value) for value in hsk_level or ()),
+                handwriting_levels=tuple(_handwriting_level(value) for value in handwriting_level or ()),
                 pos_tags=tuple(pos_tag or ()),
                 search=search,
                 due_from=due_from,
