@@ -22,6 +22,7 @@ from sqlalchemy import (
     literal,
     or_,
     select,
+    tuple_,
     update,
 )
 from sqlalchemy.dialects import mysql
@@ -42,9 +43,12 @@ from shougong.usecase.dictionary.gateway import IDictionaryRepository
 from shougong.usecase.dictionary.model import (
     CedictRecord,
     DictionaryEntry,
+    DictionaryWordGroup,
     HskDatasetWord,
     RelatedEntry,
     RelatedEntryPage,
+    WordReading,
+    group_entries,
 )
 
 _BULK_BATCH = 1000
@@ -68,28 +72,47 @@ class DictionaryRepository(IDictionaryRepository):
     def __init__(self, transaction_template: SqlAlchemyTransactionTemplate) -> None:
         self._tx = transaction_template
 
-    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryEntry]:
-        async def _run() -> Page[DictionaryEntry]:
+    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryWordGroup]:
+        async def _run() -> Page[DictionaryWordGroup]:
             session = current_session()
             pattern = f"%{query}%"
             predicate = or_(
                 DictionaryEntryEntity.simplified.like(pattern),
                 DictionaryEntryEntity.pinyin.like(pattern),
             )
-            stmt = (
-                select(DictionaryEntryEntity)
-                .where(predicate)
-                .order_by(
-                    func.char_length(DictionaryEntryEntity.simplified),
-                    DictionaryEntryEntity.id,
+            # Group before paging, so a word-and-reading group is never split
+            # across pages and the total counts groups.
+            grouped = (
+                select(
+                    DictionaryEntryEntity.simplified,
+                    DictionaryEntryEntity.pinyin,
                 )
-                .limit(limit)
-                .offset(offset)
+                .where(predicate)
+                .group_by(DictionaryEntryEntity.simplified, DictionaryEntryEntity.pinyin)
             )
-            rows = (await session.execute(stmt)).scalars().all()
-            total = await session.scalar(select(func.count()).select_from(DictionaryEntryEntity).where(predicate))
+            total = await session.scalar(select(func.count()).select_from(grouped.subquery()))
+            keys = (
+                await session.execute(
+                    grouped.order_by(
+                        func.char_length(DictionaryEntryEntity.simplified),
+                        func.min(DictionaryEntryEntity.id),
+                    )
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).all()
+            if not keys:
+                return Page(items=(), total=int(total or 0), limit=limit, offset=offset)
+            pairs: list[WordReading] = [(row.simplified, row.pinyin) for row in keys]
+            rows = (
+                await session.execute(
+                    select(DictionaryEntryEntity)
+                    .where(tuple_(DictionaryEntryEntity.simplified, DictionaryEntryEntity.pinyin).in_(pairs))
+                    .order_by(DictionaryEntryEntity.id)
+                )
+            ).scalars()
             return Page(
-                items=tuple(to_domain(row) for row in rows),
+                items=tuple(group_entries([to_domain(row) for row in rows])),
                 total=int(total or 0),
                 limit=limit,
                 offset=offset,

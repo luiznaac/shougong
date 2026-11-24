@@ -1,7 +1,7 @@
 """`DictionaryController` — read-only access to the CC-CEDICT dictionary.
 
-`GET /dictionary-entries?q=&limit=&offset=`  one page of matches (envelope), ordered
-                                             shortest-first.
+`GET /dictionary-entries?q=&limit=&offset=`  one page of `(simplified, pinyin)` groups
+                                             (envelope), ordered shortest-first.
 `GET /dictionary-entries/{id}`               fetches a single entry.
 """
 
@@ -14,6 +14,7 @@ from fastapi import APIRouter, Query
 from shougong.httpapi.controller.base import IController
 from shougong.httpapi.schema import (
     DictionaryEntryResponse,
+    DictionaryWordResponse,
     PageResponse,
     RelatedEntriesResponse,
     RelatedEntryResponse,
@@ -36,9 +37,9 @@ class DictionaryController(IController):
             q: Annotated[str, Query(min_length=1)],
             limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 20,
             offset: Annotated[int, Query(ge=0)] = 0,
-        ) -> PageResponse[DictionaryEntryResponse]:
+        ) -> PageResponse[DictionaryWordResponse]:
             page = await self._service.search(q, limit=limit, offset=offset)
-            return page_response(page, DictionaryEntryResponse.from_domain)
+            return page_response(page, DictionaryWordResponse.from_domain)
 
         @router.get("/dictionary-entries/{entry_id}")
         async def get(entry_id: int) -> DictionaryEntryResponse:

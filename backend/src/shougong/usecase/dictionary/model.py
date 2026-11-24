@@ -7,9 +7,13 @@ deliberately dropped — this trainer only drills simplified handwriting.
 
 from __future__ import annotations
 
+import collections
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+
+# The grouping key of a dictionary search row: one word and one of its readings.
+type WordReading = tuple[str, str]
 
 # The marker a variant gloss carries. Only the primary (first) gloss is checked:
 # CC-CEDICT lists the primary sense first, so a real entry that merely notes a
@@ -35,6 +39,70 @@ class DictionaryEntry:
     hsk_level: int | None = None
     pos_tags: tuple[str, ...] = ()
     handwriting_level: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DictionaryMeaning:
+    """One CC-CEDICT record's sense of a word, addressed by its own entry id."""
+
+    entry_id: int
+    definitions: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DictionaryWordGroup:
+    """One search result: a word and one of its readings, with every meaning.
+
+    A different reading of the same hanzi is a different group. The word-level
+    fields are shared by every entry in the group, since the enrichment pass
+    stamps them by simplified form.
+    """
+
+    simplified: str
+    pinyin: str
+    hsk_level: int | None
+    pos_tags: tuple[str, ...]
+    handwriting_level: int | None
+    meanings: tuple[DictionaryMeaning, ...]
+
+
+def group_entries(entries: Sequence[DictionaryEntry]) -> list[DictionaryWordGroup]:
+    """Group entries by `(simplified, pinyin)`, one group per word and reading.
+
+    The result keeps the search order — shortest word first, then the group's
+    first entry id — mirroring `DictionaryRepository.search`'s SQL ordering, so a
+    repository can assemble a page it already ordered.
+
+    Args:
+        entries: The matching entries, in any order.
+
+    Returns:
+        One group per `(simplified, pinyin)`, its meanings ordered by entry id.
+    """
+    grouped: dict[WordReading, list[DictionaryEntry]] = collections.defaultdict(list)
+    for entry in entries:
+        grouped[(entry.simplified, entry.pinyin)].append(entry)
+
+    def order(key: WordReading) -> tuple[int, int]:
+        return len(key[0]), min(entry.id for entry in grouped[key])
+
+    groups: list[DictionaryWordGroup] = []
+    for key in sorted(grouped, key=order):
+        members = sorted(grouped[key], key=lambda entry: entry.id)
+        first = members[0]
+        groups.append(
+            DictionaryWordGroup(
+                simplified=first.simplified,
+                pinyin=first.pinyin,
+                hsk_level=first.hsk_level,
+                pos_tags=first.pos_tags,
+                handwriting_level=first.handwriting_level,
+                meanings=tuple(
+                    DictionaryMeaning(entry_id=entry.id, definitions=entry.definitions) for entry in members
+                ),
+            )
+        )
+    return groups
 
 
 @dataclass(frozen=True, slots=True)

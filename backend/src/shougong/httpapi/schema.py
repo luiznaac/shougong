@@ -9,7 +9,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field
 
 from shougong.usecase.commons.page import Page
-from shougong.usecase.dictionary.model import DictionaryEntry, RelatedEntry
+from shougong.usecase.dictionary.model import DictionaryEntry, DictionaryMeaning, DictionaryWordGroup, RelatedEntry
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket, StudyOverview
 from shougong.usecase.reading.model import (
@@ -101,6 +101,39 @@ class DictionaryEntryResponse(BaseModel):
             hsk_level=entry.hsk_level,
             pos_tags=list(entry.pos_tags),
             handwriting_level=entry.handwriting_level,
+        )
+
+
+class DictionaryMeaningResponse(BaseModel):
+    """One sense of a word, enqueueable through its own dictionary entry id."""
+
+    entry_id: int
+    definitions: list[str]
+
+    @classmethod
+    def from_domain(cls, meaning: DictionaryMeaning) -> Self:
+        return cls(entry_id=meaning.entry_id, definitions=list(meaning.definitions))
+
+
+class DictionaryWordResponse(BaseModel):
+    """One dictionary search result: a word and reading with every meaning."""
+
+    simplified: str
+    pinyin: str
+    hsk_level: int | None
+    pos_tags: list[str]
+    handwriting_level: int | None
+    meanings: list[DictionaryMeaningResponse]
+
+    @classmethod
+    def from_domain(cls, word: DictionaryWordGroup) -> Self:
+        return cls(
+            simplified=word.simplified,
+            pinyin=word.pinyin,
+            hsk_level=word.hsk_level,
+            pos_tags=list(word.pos_tags),
+            handwriting_level=word.handwriting_level,
+            meanings=[DictionaryMeaningResponse.from_domain(meaning) for meaning in word.meanings],
         )
 
 

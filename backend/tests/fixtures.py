@@ -30,10 +30,12 @@ from shougong.usecase.dictionary.gateway import (
 from shougong.usecase.dictionary.model import (
     CedictRecord,
     DictionaryEntry,
+    DictionaryWordGroup,
     HskCharacter,
     HskDatasetWord,
     RelatedEntry,
     RelatedEntryPage,
+    group_entries,
 )
 from shougong.usecase.health.checker import HealthCheckResult, IHealthChecker
 from shougong.usecase.insights.gateway import IInsightRepository
@@ -164,11 +166,12 @@ class FakeDictionaryRepository(IDictionaryRepository):
         self.hsk_words_calls = 0
         self._ids = count(1)
 
-    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryEntry]:
+    async def search(self, query: str, *, limit: int, offset: int) -> Page[DictionaryWordGroup]:
         matches = [e for e in self.entries if query in e.simplified or query in e.pinyin]
+        groups = group_entries(matches)
         return Page(
-            items=tuple(matches[offset : offset + limit]),
-            total=len(matches),
+            items=tuple(groups[offset : offset + limit]),
+            total=len(groups),
             limit=limit,
             offset=offset,
         )

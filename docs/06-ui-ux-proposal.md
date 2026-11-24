@@ -397,8 +397,10 @@ Rows stay `StudyItemResponse`; `is_leech` remains annotated on every row.
 ### `GET /dictionary-entries`
 
 `q` stays required (min 1); `limit` 1..100 default 20; **`offset` added**. Envelope over
-`DictionaryEntryResponse`, ordering unchanged (`char_length(simplified) ASC, id ASC`),
-`total` = all entries matching `q`.
+`DictionaryWordResponse` — one row per `(simplified, pinyin)` group, grouped before
+pagination — ordered shortest word first (ties by the group's first entry id), `total` =
+all matching groups. Each row carries its meanings with a per-meaning `entry_id`. See
+[the API reference](./04-api.md#dictionarywordresponse).
 
 ### `GET /dictionary-entries/{id}/related` — new
 
