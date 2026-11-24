@@ -57,5 +57,8 @@ class DictionaryTelemetry:
     def record_hsk_enriched(self, records: int) -> None:
         self._log.info("dictionary.hsk_enriched", **{"dictionary.records": records})
 
+    def record_import_cleaned(self, removed: int) -> None:
+        self._log.info("dictionary.import_cleaned", **{"dictionary.removed": removed})
+
     def record_hsk_enrich_skipped(self, version: int) -> None:
         self._log.info("dictionary.hsk_enrich_skipped", **{"dictionary.enrichment_version": version})

@@ -83,6 +83,29 @@ async def test_populate_if_empty_loads_when_table_is_empty() -> None:
     assert len(repo.entries) == 2
 
 
+async def test_populate_if_empty_applies_the_import_policy() -> None:
+    repo = FakeDictionaryRepository()
+    source = FakeCedictSource(
+        [
+            CedictRecord(simplified="吃", pinyin="chi1", definitions=("to eat",)),
+            CedictRecord(simplified="吃", pinyin="chi1", definitions=("variant of 吃[chi1]",)),
+            CedictRecord(simplified="水", pinyin="shui3", definitions=("water",)),
+            CedictRecord(simplified="水", pinyin="shui3", definitions=("water",)),
+            CedictRecord(simplified="㑳", pinyin="zhou4", definitions=("old variant of 媰[zhou4]",)),
+        ]
+    )
+    service = _service(repo)
+
+    added = await service.populate_if_empty(source)
+
+    assert added == 3
+    assert [(e.simplified, e.definitions) for e in repo.entries] == [
+        ("吃", ("to eat",)),
+        ("水", ("water",)),
+        ("㑳", ("old variant of 媰[zhou4]",)),
+    ]
+
+
 async def test_populate_if_empty_is_a_noop_when_already_populated() -> None:
     repo = FakeDictionaryRepository([make_dictionary_entry()])
     source = FakeCedictSource(_RECORDS)
@@ -175,6 +198,51 @@ async def test_advancing_the_version_re_enriches_every_row_in_place_and_persists
     ]
     assert repo.stored_enrichment_version == 2
     assert repo.stored_official_level_totals == {5: 1}
+
+
+async def test_advancing_the_version_cleans_alias_and_duplicate_rows_in_place() -> None:
+    repo = FakeDictionaryRepository(
+        [
+            make_dictionary_entry(entry_id=1, simplified="吃", pinyin="chi1", definitions=("to eat",)),
+            make_dictionary_entry(entry_id=2, simplified="吃", pinyin="chi1", definitions=("variant of 吃[chi1]",)),
+            make_dictionary_entry(entry_id=3, simplified="水", pinyin="shui3", definitions=("water",)),
+            make_dictionary_entry(entry_id=4, simplified="水", pinyin="shui3", definitions=("water",)),
+            make_dictionary_entry(
+                entry_id=5, simplified="㑳", pinyin="zhou4", definitions=("old variant of 媰[zhou4]",)
+            ),
+        ],
+        enrichment_version=1,
+        protected={2},  # a study item queued the alias; the cleanup must keep it
+    )
+    source = FakeHskDatasetSource({"吃": ("v",)})
+
+    applied = await _service(repo, enrichment_version=2).enrich_hsk(
+        FakeOfficialHskSource({"吃": 1}), source, _characters({"吃": 1})
+    )
+
+    assert applied == 1
+    # the protected alias survives; the unprotected duplicate and only the
+    # unprotected alias are removed; kept rows keep their ids
+    assert [e.id for e in repo.entries] == [1, 2, 3, 5]
+    assert repo.stored_enrichment_version == 2
+
+
+async def test_a_matching_version_leaves_alias_rows_untouched() -> None:
+    repo = FakeDictionaryRepository(
+        [
+            make_dictionary_entry(entry_id=1, simplified="吃", pinyin="chi1", definitions=("to eat",)),
+            make_dictionary_entry(entry_id=2, simplified="吃", pinyin="chi1", definitions=("variant of 吃[chi1]",)),
+        ],
+        enrichment_version=2,
+    )
+    source = FakeHskDatasetSource({"吃": ("v",)})
+
+    applied = await _service(repo, enrichment_version=2).enrich_hsk(
+        FakeOfficialHskSource({"吃": 1}), source, _characters({"吃": 1})
+    )
+
+    assert applied == 0
+    assert [e.id for e in repo.entries] == [1, 2]
 
 
 async def test_an_empty_dictionary_leaves_the_version_unset_for_a_later_run() -> None:

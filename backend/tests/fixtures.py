@@ -147,12 +147,15 @@ class FakeDictionaryRepository(IDictionaryRepository):
         *,
         study_items: Mapping[int, int] | None = None,
         enrichment_version: int | None = None,
+        protected: set[int] | None = None,
         official_level_totals: Mapping[int, int] | None = None,
         character_levels: Mapping[str, int] | None = None,
     ) -> None:
         self.entries: list[DictionaryEntry] = list(entries or [])
         # entry id -> the id of the study item queuing it
         self.study_items: dict[int, int] = dict(study_items or {})
+        # entry ids a study item or its history references; never cleaned up
+        self.protected: set[int] = set(protected or ()) | set(self.study_items)
         self.stored_enrichment_version = enrichment_version
         self.stored_official_level_totals: dict[int, int] | None = (
             dict(official_level_totals) if official_level_totals is not None else None
@@ -204,6 +207,18 @@ class FakeDictionaryRepository(IDictionaryRepository):
 
     async def count(self) -> int:
         return len(self.entries)
+
+    async def list_all(self) -> list[DictionaryEntry]:
+        return sorted(self.entries, key=lambda e: e.id)
+
+    async def protected_entry_ids(self) -> frozenset[int]:
+        return frozenset(self.protected)
+
+    async def delete_entries(self, entry_ids: Sequence[int]) -> int:
+        wanted = set(entry_ids)
+        before = len(self.entries)
+        self.entries = [e for e in self.entries if e.id not in wanted]
+        return before - len(self.entries)
 
     async def bulk_add(self, records: Sequence[CedictRecord]) -> int:
         for record in records:

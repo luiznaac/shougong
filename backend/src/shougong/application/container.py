@@ -91,8 +91,9 @@ _log = get_logger(__name__)
 # matches this value. Version 2 added the character writing levels and the
 # derived word handwriting level; version 3 sources the vocabulary level from the
 # official HSK 3.0 word list (clearing words outside it) and records the official
-# per-level totals.
-DICTIONARY_ENRICHMENT_VERSION = 3
+# per-level totals; version 4 applies the CC-CEDICT import policy to existing
+# tables (dropping alias rows with a real sibling and byte-identical duplicates).
+DICTIONARY_ENRICHMENT_VERSION = 4
 
 
 class Container:

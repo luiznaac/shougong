@@ -203,3 +203,25 @@ async def test_the_dictionary_meter_scope_is_the_service_name(telemetry: Telemet
     assert len(scopes) == 1
     assert scopes[0].name == "shougong"
     assert scopes[0].version == telemetry.resource.attributes["service.version"]
+
+
+async def test_the_in_place_cleanup_is_reported_with_its_removed_count(telemetry: Telemetry) -> None:
+    repo = FakeDictionaryRepository(
+        [
+            make_dictionary_entry(entry_id=1, simplified="吃", pinyin="chi1", definitions=("to eat",)),
+            make_dictionary_entry(entry_id=2, simplified="吃", pinyin="chi1", definitions=("variant of 吃[chi1]",)),
+            make_dictionary_entry(entry_id=3, simplified="水", pinyin="shui3", definitions=("water",)),
+            make_dictionary_entry(entry_id=4, simplified="水", pinyin="shui3", definitions=("water",)),
+        ],
+        enrichment_version=1,
+    )
+    service = DictionaryService(repo, DictionaryTelemetry(telemetry.meter), enrichment_version=2)
+
+    await service.enrich_hsk(
+        FakeOfficialHskSource({"吃": 1}),
+        FakeHskDatasetSource({"吃": ("v",)}),
+        FakeHskCharacterSource({"吃": HskCharacter("吃", 1)}),
+    )
+
+    record = _record(telemetry, "dictionary.import_cleaned")
+    assert dict(record.attributes)["dictionary.removed"] == 2
