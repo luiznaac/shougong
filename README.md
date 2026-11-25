@@ -84,6 +84,8 @@ npm run be:check && npm run be:test && npm run fe:check
 - [Reading Engine](docs/05-reading-engine.md) — open it before changing reading generation or its prompt.
 - [UI / UX Spec — Responsive Redesign](docs/06-ui-ux-proposal.md) — open it for the responsive information architecture and interaction patterns.
 - [Proposed API Additions](docs/07-api-gaps.md) — open it before assuming a missing endpoint has no plan.
+- [ADR 0001 — two HSK levels](docs/adr/0001-two-hsk-levels.md) — open it for why vocabulary and handwriting levels are separate.
+- [ADR 0002 — HSK and dictionary sourcing](docs/adr/0002-hsk-and-dictionary-sourcing.md) — open it for the data sources, import policy and in-place re-enrichment.
 - [Acceptance runbook — shougong](docs/runbooks/acceptance.md) — open it to boot the stack for self-served acceptance.
 - [Deploy runbook — shougong](docs/runbooks/deploy.md) — open it to run or publish the combined image.
 
