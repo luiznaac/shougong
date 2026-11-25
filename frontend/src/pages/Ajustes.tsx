@@ -6,6 +6,7 @@ import {
   useHandwritingEnabled,
   useHandwritingTolerance,
 } from "../lib/localSettings.ts";
+import { HanziHeroSyncPrototype } from "./prototype/hanzihero/HanziHeroSyncPrototype.tsx";
 
 const SAMPLE_STROKES = 6;
 
@@ -88,6 +89,9 @@ export function Ajustes() {
           </p>
         </div>
       </Panel>
+
+      {/* PROTOTYPE (#197): the HanziHero sync panel, three layouts, dev-only. */}
+      {import.meta.env.DEV ? <HanziHeroSyncPrototype /> : null}
     </div>
   );
 }
