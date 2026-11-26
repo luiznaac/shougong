@@ -17,8 +17,9 @@ import httpx
 import pytest
 
 from shougong.acceptance import hanzihero_stub
+from shougong.gateway.hanzihero.export_gateway import HanziHeroExportGateway
 from shougong.gateway.hanzihero.login_gateway import HanziHeroLoginGateway
-from shougong.usecase.hanzihero.model import HanziHeroAuthenticationError
+from shougong.usecase.hanzihero.model import HanziHeroAuthenticationError, HanziHeroSessionExpiredError
 
 
 @pytest.fixture
@@ -59,3 +60,10 @@ async def test_the_login_page_serves_a_csrf_token_and_pre_login_cookie(stub_url:
     assert response.status_code == 200
     assert 'name="_csrf_token"' in response.text
     assert response.cookies["_hanzi_hero_key"] == "pre-login"
+
+
+async def test_the_export_routes_drive_the_expired_session_path(stub_url: str) -> None:
+    async with httpx.AsyncClient() as client:
+        gateway = HanziHeroExportGateway(client, stub_url)
+        with pytest.raises(HanziHeroSessionExpiredError):
+            await gateway.fetch_exports(hanzihero_stub.SESSION_COOKIE)
