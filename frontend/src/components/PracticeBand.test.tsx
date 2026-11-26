@@ -28,8 +28,6 @@ function markup(presentation: "mobile" | "desktop"): string {
       onExit={vi.fn()}
       handwritingEnabled={false}
       onHandwritingEnabledChange={vi.fn()}
-      tolerancePercent={10}
-      onToleranceChange={vi.fn()}
     />,
   );
 }

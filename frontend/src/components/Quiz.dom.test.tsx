@@ -5,10 +5,22 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudyItem } from "../api/types.ts";
 import { studyItem } from "../test/studyItemFixture.ts";
+import type { HandwritingStepProps } from "./HandwritingQuiz.tsx";
 import { Quiz } from "./Quiz.tsx";
+
+const ENABLED_KEY = "shougong.handwriting.enabled";
 
 function word(simplified: string, pinyin: string): StudyItem {
   return studyItem({ entry: { ...studyItem().entry, simplified, pinyin } });
+}
+
+/** The handwriting child double: a button that fires completion on demand. */
+function CompletionDouble({ character, onComplete }: HandwritingStepProps) {
+  return (
+    <button type="button" onClick={onComplete}>
+      Concluir {character}
+    </button>
+  );
 }
 
 function renderQuiz({
@@ -16,12 +28,17 @@ function renderQuiz({
   record = false,
   item = studyItem(),
   desktop = false,
+  handwriting = false,
 }: {
   mode?: "lesson" | "review";
   record?: boolean;
   item?: StudyItem;
   desktop?: boolean;
+  handwriting?: boolean;
 } = {}) {
+  if (handwriting) localStorage.setItem(ENABLED_KEY, "true");
+  else localStorage.removeItem(ENABLED_KEY);
+
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({
@@ -45,27 +62,30 @@ function renderQuiz({
           mode={mode}
           emptyMessage="Nada para praticar neste período."
           record={record}
+          HandwritingStep={CompletionDouble}
         />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
+let fetchMock: ReturnType<typeof vi.fn>;
+
 function stubStrokes() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input.toString();
-      const character = decodeURIComponent(
-        url.split("/characters/")[1]?.split("/strokes")[0] ?? "",
-      );
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ character, strokes: ["M0 0 L10 10", "M10 0 L0 10"], medians: [] }),
-      } as Response;
-    }),
-  );
+  fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    const character = decodeURIComponent(url.split("/characters/")[1]?.split("/strokes")[0] ?? "");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ character, strokes: ["M0 0 L10 10", "M10 0 L0 10"], medians: [] }),
+    } as Response;
+  });
+  vi.stubGlobal("fetch", fetchMock);
+}
+
+function reviewCalls(): number {
+  return fetchMock.mock.calls.filter(([input]) => String(input).includes("/reviews")).length;
 }
 
 /** The nearest element that contains both nodes — the region they share. */
@@ -78,7 +98,10 @@ function sharedAncestor(a: Element, b: Element): Element {
   throw new Error("the two elements share no ancestor");
 }
 
-beforeEach(stubStrokes);
+beforeEach(() => {
+  localStorage.clear();
+  stubStrokes();
+});
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -214,5 +237,72 @@ describe("Quiz interaction", () => {
 
     expect(screen.getByRole("button", { name: "Rollback" })).toBeTruthy();
     expect(screen.getByText(/desfazer/)).toBeTruthy();
+  });
+
+  it("completes a single character into the reveal with no grade pre-selected", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    for (const label of ["Errei", "Difícil", "Bom", "Fácil"]) {
+      const key = screen.getByRole("button", { name: new RegExp(`^${label}`) });
+      expect(key.getAttribute("aria-pressed")).toBe("false");
+    }
+    expect((screen.getByRole("button", { name: /Próximo/ }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Bom/ }));
+    expect((screen.getByRole("button", { name: /Próximo/ }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  it("advances character by character through a multi-character word", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+
+    expect(screen.getByRole("button", { name: "Concluir 习" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Próximo/ })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Concluir 习" }));
+
+    expect(screen.getByRole("button", { name: /Próximo/ })).toBeTruthy();
+  });
+
+  it("does not record a review merely by finishing a drawing", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, record: true, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    expect(reviewCalls()).toBe(0);
+  });
+
+  it("runs the same self-check in a lesson after studying the strokes", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ mode: "lesson", handwriting: true, record: true, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: /Continuar/ }));
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    expect((screen.getByRole("button", { name: /Próximo/ }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("records no grade in practice even after choosing a note and advancing", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, record: false, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+    await user.click(screen.getByRole("button", { name: /^Bom/ }));
+    await user.click(screen.getByRole("button", { name: /Próximo/ }));
+
+    expect(await screen.findByText(/Prática concluída/)).toBeTruthy();
+    expect(reviewCalls()).toBe(0);
   });
 });

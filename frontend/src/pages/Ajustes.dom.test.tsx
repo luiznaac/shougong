@@ -17,7 +17,6 @@ vi.mock("../api/client.ts", async (importOriginal) => {
 });
 
 const ENABLED_KEY = "shougong.handwriting.enabled";
-const TOLERANCE_KEY = "shougong.handwriting.tolerancePercent";
 
 function renderAjustes() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -45,38 +44,22 @@ describe("Ajustes", () => {
     expect(await screen.findByLabelText("E-mail ou usuário")).toBeTruthy();
   });
 
-  it("exposes the handwriting toggle and its tolerance preset, off by default", () => {
+  it("exposes the handwriting toggle, off by default, and no tolerance control", () => {
     renderAjustes();
 
     const toggle = screen.getByRole("checkbox", { name: "Checagem de escrita à mão" });
-    const tolerance = screen.getByLabelText("Tolerância de erros") as HTMLSelectElement;
 
     expect((toggle as HTMLInputElement).checked).toBe(false);
-    expect(tolerance.disabled).toBe(true);
-    expect(tolerance.value).toBe("0");
+    expect(screen.queryByLabelText("Tolerância de erros")).toBeNull();
   });
 
-  it("enables the tolerance preset with the toggle and shows the allowed mistake count", async () => {
-    const user = userEvent.setup();
-    renderAjustes();
-
-    await user.click(screen.getByRole("checkbox", { name: "Checagem de escrita à mão" }));
-    const tolerance = screen.getByLabelText("Tolerância de erros") as HTMLSelectElement;
-    expect(tolerance.disabled).toBe(false);
-
-    await user.selectOptions(tolerance, "30");
-    expect(screen.getByText(/1 erro permitido em um caractere de 6 traços/)).toBeTruthy();
-  });
-
-  it("persists both settings across a reload and reads them back", async () => {
+  it("persists the handwriting toggle across a reload and reads it back", async () => {
     const user = userEvent.setup();
     const first = renderAjustes();
 
     await user.click(screen.getByRole("checkbox", { name: "Checagem de escrita à mão" }));
-    await user.selectOptions(screen.getByLabelText("Tolerância de erros"), "40");
 
     expect(localStorage.getItem(ENABLED_KEY)).toBe("true");
-    expect(localStorage.getItem(TOLERANCE_KEY)).toBe("40");
 
     first.unmount();
     renderAjustes();
@@ -85,20 +68,17 @@ describe("Ajustes", () => {
       (screen.getByRole("checkbox", { name: "Checagem de escrita à mão" }) as HTMLInputElement)
         .checked,
     ).toBe(true);
-    expect((screen.getByLabelText("Tolerância de erros") as HTMLSelectElement).value).toBe("40");
   });
 
-  it("keeps the stored tolerance when the check is turned off", async () => {
+  it("turns the check back off and stores the choice", async () => {
     const user = userEvent.setup();
     renderAjustes();
 
     const toggle = screen.getByRole("checkbox", { name: "Checagem de escrita à mão" });
     await user.click(toggle);
-    await user.selectOptions(screen.getByLabelText("Tolerância de erros"), "20");
     await user.click(toggle);
 
     expect(localStorage.getItem(ENABLED_KEY)).toBe("false");
-    expect(localStorage.getItem(TOLERANCE_KEY)).toBe("20");
-    expect((screen.getByLabelText("Tolerância de erros") as HTMLSelectElement).disabled).toBe(true);
+    expect((toggle as HTMLInputElement).checked).toBe(false);
   });
 });
