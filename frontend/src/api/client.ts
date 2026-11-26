@@ -6,6 +6,8 @@ import type {
   DictionaryWord,
   ExtraStudy,
   GenerateReadingRequest,
+  HanziHeroConnectRequest,
+  HanziHeroStatus,
   Page,
   PriorityEdge,
   ReadingSummaryPage,
@@ -172,6 +174,17 @@ export const api = {
   },
   listReadingModels(): Promise<string[]> {
     return request("/reading-texts/models");
+  },
+
+  // --- hanzihero connection ---
+  getHanziHeroStatus(): Promise<HanziHeroStatus> {
+    return request("/hanzihero/connection");
+  },
+  connectHanziHero(req: HanziHeroConnectRequest): Promise<HanziHeroStatus> {
+    return request("/hanzihero/connection", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
   },
 
   // --- reading vocabulary overview ---
