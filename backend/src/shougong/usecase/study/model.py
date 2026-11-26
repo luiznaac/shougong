@@ -30,10 +30,11 @@ class StudyItem:
 
 
 class ItemSource(StrEnum):
-    """Where a study item came from: a single add or a CSV batch row."""
+    """Where a study item came from: a single add, a CSV batch row or a HanziHero sync."""
 
     API = "api"
     IMPORT = "import"
+    HANZIHERO = "hanzihero"
 
 
 class PriorityEdge(StrEnum):

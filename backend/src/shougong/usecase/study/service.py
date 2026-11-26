@@ -125,13 +125,27 @@ class StudyService:
         for char in set(word):
             fire_and_forget(self._strokes.warm(char))
 
-    async def import_batch(self, rows: Sequence[BatchImportRow]) -> BatchImportReport:
+    async def import_batch(
+        self,
+        rows: Sequence[BatchImportRow],
+        *,
+        source: ItemSource = ItemSource.IMPORT,
+    ) -> BatchImportReport:
         """Enqueue many items at once, one CSV row per item.
 
         Every row is resolved to an existing dictionary entry by an *exact*
         hanzi + numbered-pinyin match. Valid rows are all created in one
         transaction; a row that can't be resolved (bad format, no match,
         ambiguous, already queued) is reported, never raised.
+
+        Args:
+            rows: The CSV rows to enqueue, one item each.
+            source: The intake source the created items are attributed to in
+                telemetry; defaults to the manual CSV import so existing callers
+                stay unchanged.
+
+        Returns:
+            One outcome per submitted row, in submission order.
         """
 
         async def _run() -> BatchImportReport:
@@ -167,7 +181,7 @@ class StudyService:
                 item = await self._study.create(resolved, self._engine.new_card(now), now)
                 used_entry_ids.add(resolved.id)
                 outcomes.append(_batch_outcome(index, hanzi, pinyin, BatchRowStatus.CREATED, study_item_id=item.id))
-                self._telemetry.item_added(item_id=item.id, entry_id=resolved.id, source=ItemSource.IMPORT)
+                self._telemetry.item_added(item_id=item.id, entry_id=resolved.id, source=source)
 
             self._telemetry.batch_imported()
             return BatchImportReport(outcomes=tuple(outcomes))

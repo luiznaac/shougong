@@ -426,6 +426,22 @@ async def test_batch_import_records_created_rows_and_skipped_rows_by_reason(tele
     assert dict(records[1].attributes) == {}
 
 
+async def test_batch_import_records_an_explicit_intake_source(telemetry: Telemetry) -> None:
+    service = _service(
+        StudyTelemetry(telemetry.meter),
+        dictionary=FakeDictionaryRepository([_XUE_XI]),
+    )
+
+    await service.import_batch(
+        [BatchImportRow(hanzi="学习", pinyin="xue2 xi2")],
+        source=ItemSource.HANZIHERO,
+    )
+
+    (added,) = metric(telemetry, "study.item_added").data.data_points
+    assert added.value == 1
+    assert dict(added.attributes) == {"source": "hanzihero"}
+
+
 async def test_priority_changes_emit_no_logs_or_metrics(telemetry: Telemetry) -> None:
     study = FakeStudyItemRepository([make_study_item(item_id=1)])
     service = _service(StudyTelemetry(telemetry.meter), study=study)
