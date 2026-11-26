@@ -15,6 +15,7 @@ import { api } from "./client.ts";
 import type {
   BatchImportRowRequest,
   GenerateReadingRequest,
+  HanziHeroConnectRequest,
   PriorityEdge,
   SessionKind,
   SrsRating,
@@ -49,6 +50,7 @@ export const keys = {
   extraStudy: (from: string, to: string) => ["insights", "extra-study", { from, to }] as const,
   studyOverviewPrefix: ["study-overview"] as const,
   studyOverview: (tzOffsetMinutes: number) => ["study-overview", { tzOffsetMinutes }] as const,
+  hanziHeroConnection: ["hanzihero", "connection"] as const,
 };
 
 export interface ExtraStudyQueryOptions {
@@ -69,6 +71,22 @@ export function useStudyOverview(tzOffsetMinutes = -new Date().getTimezoneOffset
   return useQuery({
     queryKey: keys.studyOverview(tzOffsetMinutes),
     queryFn: () => api.getStudyOverview(tzOffsetMinutes),
+  });
+}
+
+export function useHanziHeroStatus() {
+  return useQuery({
+    queryKey: keys.hanziHeroConnection,
+    queryFn: () => api.getHanziHeroStatus(),
+  });
+}
+
+/** A successful connect refreshes the stored-connection status the panel reads. */
+export function useConnectHanziHero() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: HanziHeroConnectRequest) => api.connectHanziHero(req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.hanziHeroConnection }),
   });
 }
 

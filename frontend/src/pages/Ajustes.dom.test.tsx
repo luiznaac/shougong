@@ -1,18 +1,52 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { api } from "../api/client.ts";
 import { Ajustes } from "./Ajustes.tsx";
+
+vi.mock("../api/client.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/client.ts")>();
+  return {
+    ...actual,
+    api: {
+      getHanziHeroStatus: vi.fn(),
+      connectHanziHero: vi.fn(),
+    },
+  };
+});
 
 const ENABLED_KEY = "shougong.handwriting.enabled";
 const TOLERANCE_KEY = "shougong.handwriting.tolerancePercent";
 
+function renderAjustes() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <Ajustes />
+    </QueryClientProvider>,
+  );
+}
+
 beforeEach(() => {
   localStorage.clear();
+  vi.mocked(api.getHanziHeroStatus).mockResolvedValue({
+    connected: false,
+    connected_at: null,
+    last_synced_at: null,
+  });
 });
 
 describe("Ajustes", () => {
+  it("shows the HanziHero connection panel beside the handwriting preferences", async () => {
+    renderAjustes();
+
+    expect(screen.getByRole("heading", { name: "HanziHero" })).toBeTruthy();
+    expect(await screen.findByLabelText("E-mail ou usuário")).toBeTruthy();
+  });
+
   it("exposes the handwriting toggle and its tolerance preset, off by default", () => {
-    render(<Ajustes />);
+    renderAjustes();
 
     const toggle = screen.getByRole("checkbox", { name: "Checagem de escrita à mão" });
     const tolerance = screen.getByLabelText("Tolerância de erros") as HTMLSelectElement;
@@ -24,7 +58,7 @@ describe("Ajustes", () => {
 
   it("enables the tolerance preset with the toggle and shows the allowed mistake count", async () => {
     const user = userEvent.setup();
-    render(<Ajustes />);
+    renderAjustes();
 
     await user.click(screen.getByRole("checkbox", { name: "Checagem de escrita à mão" }));
     const tolerance = screen.getByLabelText("Tolerância de erros") as HTMLSelectElement;
@@ -36,7 +70,7 @@ describe("Ajustes", () => {
 
   it("persists both settings across a reload and reads them back", async () => {
     const user = userEvent.setup();
-    const first = render(<Ajustes />);
+    const first = renderAjustes();
 
     await user.click(screen.getByRole("checkbox", { name: "Checagem de escrita à mão" }));
     await user.selectOptions(screen.getByLabelText("Tolerância de erros"), "40");
@@ -45,7 +79,7 @@ describe("Ajustes", () => {
     expect(localStorage.getItem(TOLERANCE_KEY)).toBe("40");
 
     first.unmount();
-    render(<Ajustes />);
+    renderAjustes();
 
     expect(
       (screen.getByRole("checkbox", { name: "Checagem de escrita à mão" }) as HTMLInputElement)
@@ -56,7 +90,7 @@ describe("Ajustes", () => {
 
   it("keeps the stored tolerance when the check is turned off", async () => {
     const user = userEvent.setup();
-    render(<Ajustes />);
+    renderAjustes();
 
     const toggle = screen.getByRole("checkbox", { name: "Checagem de escrita à mão" });
     await user.click(toggle);

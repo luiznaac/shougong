@@ -1,3 +1,4 @@
+import { HanziHeroPanel } from "../components/HanziHeroPanel.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { Panel } from "../components/Panel.tsx";
 import {
@@ -88,6 +89,8 @@ export function Ajustes() {
           </p>
         </div>
       </Panel>
+
+      <HanziHeroPanel />
     </div>
   );
 }
