@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from typing import Literal, Self
 
@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.model import DictionaryEntry, DictionaryMeaning, DictionaryWordGroup, RelatedEntry
-from shougong.usecase.hanzihero.model import HanziHeroStatus
+from shougong.usecase.hanzihero.model import HanziHeroStatus, HanziHeroSyncReport
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket, StudyOverview
 from shougong.usecase.reading.model import (
@@ -32,6 +32,7 @@ from shougong.usecase.reading.vocabulary import (
 from shougong.usecase.srs.model import SrsCard, SrsRating, SrsReviewLog
 from shougong.usecase.strokes.model import CharacterStrokes
 from shougong.usecase.study.model import (
+    BATCH_IMPORT_LIMIT,
     BatchImportOutcome,
     BatchImportReport,
     PriorityEdge,
@@ -244,7 +245,7 @@ class BatchImportRowRequest(BaseModel):
 
 
 class BatchImportRequest(BaseModel):
-    rows: list[BatchImportRowRequest] = Field(min_length=1, max_length=1000)
+    rows: list[BatchImportRowRequest] = Field(min_length=1, max_length=BATCH_IMPORT_LIMIT)
 
 
 class BatchImportOutcomeResponse(BaseModel):
@@ -271,6 +272,11 @@ class BatchImportOutcomeResponse(BaseModel):
         )
 
 
+def _count_status(outcomes: Sequence[BatchImportOutcomeResponse], status: str) -> int:
+    """How many of the import outcomes landed on `status`."""
+    return sum(1 for outcome in outcomes if outcome.status == status)
+
+
 class BatchImportResponse(BaseModel):
     created: int
     skipped: int
@@ -281,9 +287,9 @@ class BatchImportResponse(BaseModel):
     def from_domain(cls, report: BatchImportReport) -> BatchImportResponse:
         outcomes = [BatchImportOutcomeResponse.from_domain(o) for o in report.outcomes]
         return cls(
-            created=sum(1 for o in outcomes if o.status == "created"),
-            skipped=sum(1 for o in outcomes if o.status == "skipped"),
-            errors=sum(1 for o in outcomes if o.status == "error"),
+            created=_count_status(outcomes, "created"),
+            skipped=_count_status(outcomes, "skipped"),
+            errors=_count_status(outcomes, "error"),
             outcomes=outcomes,
         )
 
@@ -698,4 +704,30 @@ class HanziHeroStatusResponse(BaseModel):
             connected=status.connected_at is not None,
             connected_at=status.connected_at,
             last_synced_at=status.last_synced_at,
+        )
+
+
+class HanziHeroSyncResponse(BaseModel):
+    """A sync run's tallies plus the per-row batch outcomes.
+
+    `already_in_queue` counts rows the batch import skipped as duplicates (an
+    idempotent re-sync), and `unmatched` counts rows no dictionary entry resolved —
+    each carrying candidate readings the learner can inspect.
+    """
+
+    created: int
+    already_in_queue: int
+    unmatched: int
+    last_synced_at: datetime
+    outcomes: list[BatchImportOutcomeResponse]
+
+    @classmethod
+    def from_domain(cls, report: HanziHeroSyncReport) -> Self:
+        outcomes = [BatchImportOutcomeResponse.from_domain(outcome) for outcome in report.outcomes]
+        return cls(
+            created=_count_status(outcomes, "created"),
+            already_in_queue=_count_status(outcomes, "skipped"),
+            unmatched=_count_status(outcomes, "error"),
+            last_synced_at=report.synced_at,
+            outcomes=outcomes,
         )

@@ -51,6 +51,7 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | --- | --- | --- |
 | `POST` | `/hanzihero/connection` | Log in to HanziHero server-side (`email_username`, `password`) and store only the session cookie; returns the status. Wrong credentials are `400`, an unreachable HanziHero `502`. |
 | `GET` | `/hanzihero/connection` | Connection status: `connected`, `connected_at`, `last_synced_at` (`null` until the first sync) |
+| `POST` | `/hanzihero/sync` | Fetch the three known-vocabulary exports and enqueue them as study items; retry-safe. An expired session is `409 hanzihero_reconnect_required` and imports nothing. |
 
 ### Reading
 
@@ -431,6 +432,35 @@ For dialogue readings, words carry a `speaker`; `speakers` at the reading level 
 
 `HanziHeroConnectRequest` is `{ email_username, password }` — used once for the server-side login and never stored or echoed. `HanziHeroStatusResponse` is `{ connected, connected_at, last_synced_at }`; both instants are `null` while disconnected, and `last_synced_at` stays `null` until the first sync.
 
+### HanziHero sync
+
+`POST /hanzihero/sync` takes no body. It fetches the learner's three simplified-course exports (`characters.csv`, `words.csv`, `my-dictionary.csv`) **before importing anything**, drops `skipped=true` rows, turns HanziHero's unspaced numbered pinyin into spaced syllables (`shou3gong1` → `shou3 gong1`), dedupes across the files by hanzi + reading, and submits the rows through the batch import under the `hanzihero` source. The import never deletes or updates an item, so a second sync only skips what is already queued.
+
+```json
+{
+  "created": 3,
+  "already_in_queue": 0,
+  "unmatched": 1,
+  "last_synced_at": "2026-11-26T12:00:00Z",
+  "outcomes": [
+    {
+      "row": 1,
+      "hanzi": "一",
+      "pinyin": "yi1",
+      "status": "created",
+      "study_item_id": 42,
+      "detail": null,
+      "candidates": []
+    }
+  ]
+}
+```
+
+- `created` counts new study items; `already_in_queue` counts rows the import skipped as duplicates (an idempotent re-sync); `unmatched` counts rows no dictionary entry resolved.
+- `outcomes` is one row per submitted row, renumbered across the import chunks, in the same shape as `BatchImportOutcomeResponse`; an unmatched row's `candidates` carry the dictionary readings the learner can inspect.
+- A successful run stamps `last_synced_at`. If any fetch fails — or the stored session is stale and HanziHero answers with its login redirect — nothing is imported, `last_synced_at` does not advance, and the run makes no further export requests.
+- `409 hanzihero_reconnect_required` means the stored session expired; reconnect via `POST /hanzihero/connection`. `409 hanzihero_not_connected` means no session is stored yet.
+
 ## Error model
 
 The app maps domain exceptions to a consistent problem shape:
@@ -445,6 +475,8 @@ The app maps domain exceptions to a consistent problem shape:
 | `400` | `hanzihero_authentication_failed` | HanziHero rejected the email/username or password; nothing is stored |
 | `404` | `resource_not_found` | Unknown entry/item/character/topic |
 | `409` | `conflict` | Duplicate queue entry, not-yet-due review, duplicate scenario |
+| `409` | `hanzihero_not_connected` | A sync was requested with no stored HanziHero session |
+| `409` | `hanzihero_reconnect_required` | The stored HanziHero session expired; reconnect and retry |
 | `422` | `domain_error` | Other domain failures |
 | `502` | `hanzihero_unavailable` | HanziHero is unreachable or its login page/response shape changed |
 | `422` | FastAPI validation | Pydantic/query validation failures, unknown rating |

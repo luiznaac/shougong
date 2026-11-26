@@ -37,8 +37,13 @@ from shougong.usecase.dictionary.model import (
     RelatedEntryPage,
     group_entries,
 )
-from shougong.usecase.hanzihero.gateway import IHanziHeroConnectionRepository, IHanziHeroLoginGateway
-from shougong.usecase.hanzihero.model import HanziHeroConnection
+from shougong.usecase.hanzihero.gateway import (
+    IBatchImporter,
+    IHanziHeroConnectionRepository,
+    IHanziHeroExportGateway,
+    IHanziHeroLoginGateway,
+)
+from shougong.usecase.hanzihero.model import HanziHeroConnection, HanziHeroExports
 from shougong.usecase.health.checker import HealthCheckResult, IHealthChecker
 from shougong.usecase.insights.gateway import IInsightRepository
 from shougong.usecase.insights.model import (
@@ -80,7 +85,18 @@ from shougong.usecase.strokes.gateway import IHanziStrokeSource, IStrokeReposito
 from shougong.usecase.strokes.model import CharacterStrokes, StrokeLookupResult
 from shougong.usecase.strokes.telemetry import StrokesTelemetry
 from shougong.usecase.study.gateway import IStudyItemRepository
-from shougong.usecase.study.model import PriorityEdge, SessionKind, StudyItem, StudyItemFilters, StudyItemSort
+from shougong.usecase.study.model import (
+    BatchImportOutcome,
+    BatchImportReport,
+    BatchImportRow,
+    BatchRowStatus,
+    ItemSource,
+    PriorityEdge,
+    SessionKind,
+    StudyItem,
+    StudyItemFilters,
+    StudyItemSort,
+)
 from shougong.usecase.study.shuffler import IShuffler
 from shougong.usecase.study_item_history.gateway import IStudyItemHistoryRepository
 from shougong.usecase.study_item_history.model import StudyItemHistory
@@ -354,6 +370,61 @@ class StubHanziHeroLoginGateway(IHanziHeroLoginGateway):
         if self.error is not None:
             raise self.error
         return self.session_cookie
+
+
+class StubHanziHeroExportGateway(IHanziHeroExportGateway):
+    """Returns fixed raw exports, or raises the configured error, recording the cookie it saw."""
+
+    def __init__(
+        self,
+        exports: HanziHeroExports | None = None,
+        *,
+        error: BaseException | None = None,
+    ) -> None:
+        self.exports = exports or HanziHeroExports(characters="", words="", dictionary="")
+        self.error = error
+        self.calls: list[str] = []
+
+    async def fetch_exports(self, session_cookie: str) -> HanziHeroExports:
+        self.calls.append(session_cookie)
+        if self.error is not None:
+            raise self.error
+        return self.exports
+
+
+class RecordingBatchImporter(IBatchImporter):
+    """Records each chunk the sync submits and reports a status per row."""
+
+    def __init__(
+        self,
+        *,
+        statuses: Sequence[BatchRowStatus] | None = None,
+        error: BaseException | None = None,
+    ) -> None:
+        self.statuses = list(statuses) if statuses is not None else None
+        self.error = error
+        self.calls: list[tuple[tuple[BatchImportRow, ...], ItemSource]] = []
+
+    async def import_batch(
+        self, rows: Sequence[BatchImportRow], *, source: ItemSource = ItemSource.IMPORT
+    ) -> BatchImportReport:
+        self.calls.append((tuple(rows), source))
+        if self.error is not None:
+            raise self.error
+        outcomes = tuple(
+            BatchImportOutcome(
+                row=index,
+                hanzi=row.hanzi,
+                pinyin=row.pinyin,
+                status=status,
+                study_item_id=index if status is BatchRowStatus.CREATED else None,
+            )
+            for index, (row, status) in enumerate(zip(rows, self._statuses(len(rows)), strict=True), start=1)
+        )
+        return BatchImportReport(outcomes=outcomes)
+
+    def _statuses(self, count: int) -> list[BatchRowStatus]:
+        return self.statuses if self.statuses is not None else [BatchRowStatus.CREATED] * count
 
 
 def build_strokes_telemetry() -> StrokesTelemetry:

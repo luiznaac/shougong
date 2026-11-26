@@ -1,10 +1,20 @@
-"""Outbound ports for the HanziHero slice. Implemented in `gateway/` and `persistence/`."""
+"""Ports of the HanziHero slice — outbound adapters live in `gateway/` and `persistence/`.
+
+`IBatchImporter` is the inbound collaboration seam the sync consumes; `StudyService`
+satisfies it structurally.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
-from shougong.usecase.hanzihero.model import HanziHeroConnection
+from shougong.usecase.hanzihero.model import HanziHeroConnection, HanziHeroExports
+from shougong.usecase.study.model import (
+    BatchImportReport,
+    BatchImportRow,
+    ItemSource,
+)
 
 
 class IHanziHeroConnectionRepository(Protocol):
@@ -26,4 +36,30 @@ class IHanziHeroLoginGateway(Protocol):
         credentials and `HanziHeroUnavailableError` on a transport or unexpected
         response failure.
         """
+        ...
+
+
+class IHanziHeroExportGateway(Protocol):
+    async def fetch_exports(self, session_cookie: str) -> HanziHeroExports:
+        """Fetch all three simplified-course exports before anything is imported.
+
+        Raises `HanziHeroSessionExpiredError` when HanziHero answers with its login
+        redirect (the stored session is stale) and `HanziHeroUnavailableError` on a
+        transport or unexpected response failure. Either raise aborts the run with
+        nothing imported.
+        """
+        ...
+
+
+class IBatchImporter(Protocol):
+    """The study slice's batch-import seam, consumed structurally by the sync.
+
+    `StudyService` satisfies this without importing back into the hanzihero slice;
+    a test double records the chunks the sync submits.
+    """
+
+    async def import_batch(
+        self, rows: Sequence[BatchImportRow], *, source: ItemSource = ItemSource.IMPORT
+    ) -> BatchImportReport:
+        """Resolve and enqueue the rows, reporting one outcome per row."""
         ...

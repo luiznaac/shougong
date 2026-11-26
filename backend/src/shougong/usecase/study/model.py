@@ -15,6 +15,10 @@ from enum import StrEnum
 from shougong.usecase.dictionary.model import DictionaryEntry
 from shougong.usecase.srs.model import SrsCard, SrsReviewLog, SrsState
 
+# The largest row count one batch import accepts; the HanziHero sync chunks its
+# rows to this ceiling so it never exceeds the manual import's limit.
+BATCH_IMPORT_LIMIT = 1000
+
 
 @dataclass(frozen=True, slots=True)
 class StudyItem:
