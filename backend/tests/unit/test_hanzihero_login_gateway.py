@@ -7,6 +7,7 @@ import pytest
 from pytest_httpserver import HTTPServer
 from werkzeug.wrappers import Request, Response
 
+from shougong.acceptance.hanzihero_stub import CSRF_TOKEN
 from shougong.gateway.hanzihero.login_gateway import HanziHeroLoginGateway
 from shougong.usecase.hanzihero.model import HanziHeroAuthenticationError, HanziHeroUnavailableError
 from tests.hanzihero_fake import LOGIN_PAGE, login_page
@@ -33,7 +34,7 @@ async def test_log_in_performs_the_full_phoenix_handshake(httpserver: HTTPServer
 
     assert session_cookie == "_hanzi_hero_key=authenticated"
     assert captured["form"] == {
-        "_csrf_token": "csrf-token-123",
+        "_csrf_token": CSRF_TOKEN,
         "user[email_username]": "learner@example.com",
         "user[password]": "s3cret",
         "user[remember_me]": "true",

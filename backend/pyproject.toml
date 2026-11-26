@@ -74,6 +74,7 @@ migrate = "python scripts/migrate.py"
 # Dev-only acceptance fixture (docs/runbooks/acceptance.md). Never runs in
 # production; the acceptance package is excluded from the image.
 "seed:acceptance" = "python -m shougong.acceptance.fixture"
+"stub:hanzihero" = "python -m shougong.acceptance.hanzihero_stub"
 
 # ---------------------------------------------------------------------------
 # Lint / format — Ruff replaces Detekt + detekt-formatting.

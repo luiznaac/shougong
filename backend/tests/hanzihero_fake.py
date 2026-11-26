@@ -6,6 +6,8 @@ from collections.abc import Callable
 
 from werkzeug.wrappers import Request, Response
 
+from shougong.acceptance.hanzihero_stub import LOGIN_PAGE, PRE_LOGIN_COOKIE, SESSION_COOKIE
+
 CHARACTERS_HEADER = (
     "character,pinyin,meaning,srs_stage,numbered_pinyin,alternate_meanings,user_synonyms,user_notes,skipped\n"
 )
@@ -14,34 +16,16 @@ DICTIONARY_HEADER = (
     "entry,pinyin,primary_definition,srs_stage,numbered_pinyin,definitions,user_definitions,user_notes,skipped\n"
 )
 
-LOGIN_PAGE = """<!DOCTYPE html>
-<html>
-  <body>
-    <form action="/users/log_in" method="post" id="login_form">
-      <input name="_csrf_token" type="hidden" hidden value="csrf-token-123">
-      <input type="text" name="user[email_username]" id="login_form_email_username">
-      <input type="password" name="user[password]" id="login_form_password">
-      <input type="hidden" name="user[remember_me]" value="false">
-      <input type="checkbox" name="user[remember_me]" value="true">
-    </form>
-  </body>
-</html>
-"""
-
 
 def login_page(_: Request) -> Response:
-    return Response(
-        LOGIN_PAGE,
-        content_type="text/html",
-        headers={"Set-Cookie": "_hanzi_hero_key=pre-login; path=/; HttpOnly"},
-    )
+    return Response(LOGIN_PAGE, content_type="text/html", headers={"Set-Cookie": PRE_LOGIN_COOKIE})
 
 
 def accept_login(_: Request) -> Response:
     return Response(
         "",
         status=302,
-        headers={"Location": "/", "Set-Cookie": "_hanzi_hero_key=authenticated; path=/; HttpOnly"},
+        headers={"Location": "/", "Set-Cookie": SESSION_COOKIE},
     )
 
 
