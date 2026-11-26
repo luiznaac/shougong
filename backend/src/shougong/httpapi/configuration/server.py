@@ -32,6 +32,8 @@ from shougong.usecase.commons.request_context import (
 )
 from shougong.usecase.hanzihero.model import (
     HanziHeroAuthenticationError,
+    HanziHeroNotConnectedError,
+    HanziHeroSessionExpiredError,
     HanziHeroUnavailableError,
 )
 from shougong.usecase.reading.model import ReadingGenerationError
@@ -175,6 +177,14 @@ def _install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HanziHeroAuthenticationError)
     async def _hanzihero_authentication(request: Request, exc: HanziHeroAuthenticationError) -> JSONResponse:
         return _problem(request, 400, "hanzihero_authentication_failed", str(exc))
+
+    @app.exception_handler(HanziHeroNotConnectedError)
+    async def _hanzihero_not_connected(request: Request, exc: HanziHeroNotConnectedError) -> JSONResponse:
+        return _problem(request, 409, "hanzihero_not_connected", str(exc))
+
+    @app.exception_handler(HanziHeroSessionExpiredError)
+    async def _hanzihero_session_expired(request: Request, exc: HanziHeroSessionExpiredError) -> JSONResponse:
+        return _problem(request, 409, "hanzihero_reconnect_required", str(exc))
 
     @app.exception_handler(HanziHeroUnavailableError)
     async def _hanzihero_unavailable(request: Request, exc: HanziHeroUnavailableError) -> JSONResponse:

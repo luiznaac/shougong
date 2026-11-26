@@ -397,3 +397,16 @@ export interface HanziHeroStatus {
   connected_at: string | null; // ISO instant, null while disconnected
   last_synced_at: string | null; // ISO instant, null until the first sync
 }
+
+/**
+ * A sync run's tallies plus the per-row batch outcomes. `already_in_queue` counts
+ * rows skipped as duplicates (an idempotent re-sync); `unmatched` counts rows no
+ * dictionary entry resolved, each carrying candidate readings to inspect.
+ */
+export interface HanziHeroSyncResponse {
+  created: number;
+  already_in_queue: number;
+  unmatched: number;
+  last_synced_at: string; // ISO instant the run stamped
+  outcomes: BatchImportOutcome[];
+}

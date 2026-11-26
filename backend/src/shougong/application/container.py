@@ -30,6 +30,7 @@ from shougong.gateway.dictionary.cedict_source import CedictSource
 from shougong.gateway.dictionary.hsk_character_source import HskCharacterSource
 from shougong.gateway.dictionary.hsk_dataset_source import HskDatasetSource
 from shougong.gateway.dictionary.official_hsk_source import OfficialHskSource
+from shougong.gateway.hanzihero.export_gateway import HanziHeroExportGateway
 from shougong.gateway.hanzihero.login_gateway import HanziHeroLoginGateway
 from shougong.gateway.health.app_health_gateway import AppHealthGateway
 from shougong.gateway.health.http_client_health_check import HttpClientHealthCheck
@@ -181,10 +182,13 @@ class Container:
 
         # --- hanzihero slice --------------------------------------------
         self._hanzihero_login_gateway = HanziHeroLoginGateway(settings.hanzihero.base_url)
+        self._hanzihero_export_gateway = HanziHeroExportGateway(self.http_client, settings.hanzihero.base_url)
         self._hanzihero_connection_repository = HanziHeroConnectionRepository(self.transaction_template)
         self._hanzihero_service = HanziHeroService(
             self._hanzihero_connection_repository,
             self._hanzihero_login_gateway,
+            self._hanzihero_export_gateway,
+            self._study_service,
             self.clock,
             self.transaction_template,
         )
