@@ -62,6 +62,7 @@ npm run be:check && npm run be:test && npm run fe:check
 
 - AI reading generation needs an external LiteLLM gateway; the Quickstart does not start it, so the Leitura screen's generation stays unavailable until one is reachable. Its address is in [`backend/.env.example`](backend/.env.example).
 - The combined image boots as a production profile, so it needs an OTLP endpoint; publishing it needs Docker Hub credentials. See the [deploy runbook](docs/runbooks/deploy.md).
+- The HanziHero account sync logs in to `https://hanzihero.com` over the network and keeps only the returned session cookie as a credential in the database (no password at rest). `HANZIHERO__BASE_URL` points it at a fake for offline runs.
 - Acceptance needs Docker and the free `8130`–`8133` port block; the bootstrap-only steps and the fold-aware visual rule are in the [acceptance runbook](docs/runbooks/acceptance.md).
 - The social preview is a manual upload: a 1280×640 crop of the primary screenshot, set once from the repository settings page.
 
@@ -86,6 +87,8 @@ npm run be:check && npm run be:test && npm run fe:check
 - [Proposed API Additions](docs/07-api-gaps.md) — open it before assuming a missing endpoint has no plan.
 - [ADR 0001 — two HSK levels](docs/adr/0001-two-hsk-levels.md) — open it for why vocabulary and handwriting levels are separate.
 - [ADR 0002 — HSK and dictionary sourcing](docs/adr/0002-hsk-and-dictionary-sourcing.md) — open it for the data sources, import policy and in-place re-enrichment.
+- [ADR 0003 — HanziHero sync](docs/adr/0003-hanzihero-sync.md) — open it for why the sync is a one-way CSV import over a stored session cookie.
+- [Research — HanziHero sync](docs/research/hanzihero-sync.md) — open it for the CSV shapes, the login handshake and the item mapping.
 - [Acceptance runbook — shougong](docs/runbooks/acceptance.md) — open it to boot the stack for self-served acceptance.
 - [Deploy runbook — shougong](docs/runbooks/deploy.md) — open it to run or publish the combined image.
 

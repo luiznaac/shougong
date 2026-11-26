@@ -10,10 +10,10 @@ FastAPI hexagonal service for the Chinese-handwriting SRS. Deep architecture, co
 
 ```
 src/shougong/
-  usecase/        domain — dictionary, study (SRS), strokes, reading, commons. No fastapi/
-                  sqlalchemy/httpx/pydantic/fsrs/jieba imports here (import-linter enforced).
+  usecase/        domain — dictionary, study (SRS), strokes, reading, hanzihero, commons. No
+                  fastapi/sqlalchemy/httpx/pydantic/fsrs/jieba imports here (import-linter enforced).
   persistence/    SQLAlchemy 2 async repos, one sub-package per usecase slice
-  gateway/        outbound httpx: CC-CEDICT, HSK dataset, Hanzi Writer, LiteLLM (reading gen)
+  gateway/        outbound httpx: CC-CEDICT, HSK dataset, Hanzi Writer, HanziHero login, LiteLLM
   srs/            FSRS adapter (fsrs_engine.py) — implements ISrsEngine
   segmentation/   jieba adapter (jieba_segmenter.py, jieba_pos.py) — implements ISegmenter
   httpapi/        FastAPI controllers + Pydantic DTOs (schema.py)

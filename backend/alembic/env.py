@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # new one whenever a new persistence/<feature>/entity.py is added.
 from shougong.persistence.configuration.base import Base
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity  # noqa: F401
+from shougong.persistence.hanzihero.entity import HanziHeroConnectionEntity  # noqa: F401
 from shougong.persistence.reading.entity import ReadingTextEntity  # noqa: F401
 from shougong.persistence.reading.topic_entity import ReadingTopicEntity  # noqa: F401
 from shougong.persistence.reading.word_usage_entity import ReadingWordUsageEntity  # noqa: F401
