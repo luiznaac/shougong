@@ -3,7 +3,12 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "../api/client.ts";
-import type { HanziHeroStatus } from "../api/types.ts";
+import type {
+  BatchImportOutcome,
+  DictionaryEntry,
+  HanziHeroStatus,
+  HanziHeroSyncResponse,
+} from "../api/types.ts";
 import { formatDateTime } from "../lib/format.ts";
 import { HanziHeroPanel } from "./HanziHeroPanel.tsx";
 
@@ -14,6 +19,7 @@ vi.mock("../api/client.ts", async (importOriginal) => {
     api: {
       getHanziHeroStatus: vi.fn(),
       connectHanziHero: vi.fn(),
+      syncHanziHero: vi.fn(),
     },
   };
 });
@@ -31,11 +37,71 @@ function connected(overrides: Partial<HanziHeroStatus> = {}): HanziHeroStatus {
   };
 }
 
-function renderPanel(props: { expired?: boolean } = {}) {
+function candidate(overrides: Partial<DictionaryEntry> = {}): DictionaryEntry {
+  return {
+    id: 1201,
+    simplified: "干",
+    pinyin: "gan1",
+    definitions: ["secar", "fazer"],
+    hsk_level: null,
+    pos_tags: [],
+    handwriting_level: null,
+    ...overrides,
+  };
+}
+
+function outcome(overrides: Partial<BatchImportOutcome>): BatchImportOutcome {
+  return {
+    row: 1,
+    hanzi: "学习",
+    pinyin: "xue2 xi2",
+    status: "created",
+    study_item_id: 1,
+    detail: null,
+    candidates: [],
+    ...overrides,
+  };
+}
+
+function syncResponse(overrides: Partial<HanziHeroSyncResponse> = {}): HanziHeroSyncResponse {
+  return {
+    created: 1,
+    already_in_queue: 1,
+    unmatched: 2,
+    last_synced_at: "2026-11-26T12:00:00Z",
+    outcomes: [
+      outcome({ row: 1, hanzi: "学习", pinyin: "xue2 xi2", status: "created" }),
+      outcome({ row: 2, hanzi: "你好", pinyin: "ni3 hao3", status: "skipped", study_item_id: 2 }),
+      outcome({
+        row: 3,
+        hanzi: "干",
+        pinyin: "gan4",
+        status: "error",
+        study_item_id: null,
+        detail: "Hanzi encontrado, mas nenhuma leitura gan4.",
+        candidates: [candidate()],
+      }),
+      outcome({
+        row: 4,
+        hanzi: "着",
+        pinyin: "zhe5",
+        status: "error",
+        study_item_id: null,
+        detail: "Tom neutro não encontrado.",
+        candidates: [
+          candidate({ id: 1301, simplified: "着", pinyin: "zhao2", definitions: ["peça"] }),
+        ],
+      }),
+    ],
+    ...overrides,
+  };
+}
+
+function renderPanel() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <HanziHeroPanel {...props} />
+      <HanziHeroPanel />
     </QueryClientProvider>,
   );
 }
@@ -49,6 +115,7 @@ function currentStep(): string | null {
 beforeEach(() => {
   vi.mocked(api.getHanziHeroStatus).mockResolvedValue(disconnected());
   vi.mocked(api.connectHanziHero).mockReset();
+  vi.mocked(api.syncHanziHero).mockReset();
 });
 
 describe("HanziHeroPanel", () => {
@@ -99,7 +166,7 @@ describe("HanziHeroPanel", () => {
     expect(screen.getByRole("button", { name: "Conectar" })).toBeTruthy();
   });
 
-  it("shows the connected state after a successful connect, never synced", async () => {
+  it("shows the connected state with the Sync action after a successful connect", async () => {
     const user = userEvent.setup();
     const status = connected();
     vi.mocked(api.connectHanziHero).mockImplementation(async () => {
@@ -116,7 +183,7 @@ describe("HanziHeroPanel", () => {
     expect(currentStep()).toContain("Sincronizar");
     expect(screen.getByText(/Sessão iniciada há 5 dias/)).toBeTruthy();
     expect(screen.getByText(/Última sincronização: nunca/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Sincronizar/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Sincronizar agora" })).toBeTruthy();
   });
 
   it("shows the last sync instant once a sync has run", async () => {
@@ -129,11 +196,133 @@ describe("HanziHeroPanel", () => {
     expect(screen.queryByText(/nunca/)).toBeNull();
   });
 
-  it("reuses the connect step with an explicit expired-session notice", async () => {
-    renderPanel({ expired: true });
+  it("shows a running progress state while the sync request is in flight", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getHanziHeroStatus).mockResolvedValue(connected());
+    let resolveSync: (value: HanziHeroSyncResponse) => void = () => {};
+    vi.mocked(api.syncHanziHero).mockReturnValue(
+      new Promise<HanziHeroSyncResponse>((resolve) => {
+        resolveSync = resolve;
+      }),
+    );
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
+
+    expect(screen.getByRole("status").textContent).toContain("Sincronizando");
+    expect(screen.queryByRole("button", { name: "Sincronizar agora" })).toBeNull();
+
+    resolveSync(syncResponse());
+
+    expect(await screen.findByText(/Sincronizado/)).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("shows the count tiles and tabs across the result groups", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getHanziHeroStatus).mockResolvedValue(connected());
+    vi.mocked(api.syncHanziHero).mockResolvedValue(syncResponse());
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
+
+    expect(await screen.findByLabelText("criados: 1")).toBeTruthy();
+    expect(screen.getByLabelText("já na fila: 1")).toBeTruthy();
+    expect(screen.getByLabelText("sem correspondência: 2")).toBeTruthy();
+
+    // The unmatched group is the default because it is the one needing attention.
+    expect(
+      screen.getByRole("button", { name: "Sem correspondência (2)" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(screen.getByText("干")).toBeTruthy();
+    expect(screen.queryByText("学习")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Criados (1)" }));
+    expect(screen.getByText("学习")).toBeTruthy();
+    expect(screen.queryByText("干")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Já na fila (1)" }));
+    expect(screen.getByText("你好")).toBeTruthy();
+  });
+
+  it("shows unmatched rows with their candidate readings inline", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getHanziHeroStatus).mockResolvedValue(connected());
+    vi.mocked(api.syncHanziHero).mockResolvedValue(syncResponse());
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
+
+    expect(await screen.findByText(/Hanzi encontrado, mas nenhuma leitura gan4/)).toBeTruthy();
+    expect(screen.getByText(/gan1/)).toBeTruthy();
+    expect(screen.getByText(/secar; fazer/)).toBeTruthy();
+    expect(screen.getByText(/zhao2/)).toBeTruthy();
+  });
+
+  it("returns to the connect step with the expired-session notice when a sync is rejected", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getHanziHeroStatus).mockResolvedValue(connected());
+    vi.mocked(api.syncHanziHero).mockRejectedValue(
+      new ApiError(409, "session expired", "hanzihero_reconnect_required"),
+    );
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
 
     expect(await screen.findByText(/Sua sessão do HanziHero expirou/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Reconectar" })).toBeTruthy();
     expect(currentStep()).toContain("Conectar");
+    expect(screen.getByRole("button", { name: "Reconectar" })).toBeTruthy();
+    expect(screen.queryByText(/Sincronizado/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sincronizar novamente" })).toBeNull();
+    expect(screen.queryByLabelText(/criados:/)).toBeNull();
+  });
+
+  it("lets the learner reconnect after an expired session and sync again", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getHanziHeroStatus).mockResolvedValue(connected());
+    vi.mocked(api.syncHanziHero).mockRejectedValue(
+      new ApiError(409, "session expired", "hanzihero_reconnect_required"),
+    );
+    vi.mocked(api.connectHanziHero).mockResolvedValue(connected());
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
+    await screen.findByText(/Sua sessão do HanziHero expirou/);
+
+    await user.type(screen.getByLabelText("E-mail ou usuário"), "learner");
+    await user.type(screen.getByLabelText("Senha"), "secret");
+    await user.click(screen.getByRole("button", { name: "Reconectar" }));
+
+    expect(await screen.findByRole("button", { name: "Sincronizar agora" })).toBeTruthy();
+    expect(screen.queryByText(/Sua sessão do HanziHero expirou/)).toBeNull();
+  });
+
+  it("re-syncs safely: the summary reports already-in-queue and never a reset", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getHanziHeroStatus).mockResolvedValue(connected());
+    vi.mocked(api.syncHanziHero)
+      .mockResolvedValueOnce(syncResponse())
+      .mockResolvedValueOnce(
+        syncResponse({
+          created: 0,
+          already_in_queue: 3,
+          unmatched: 0,
+          outcomes: [
+            outcome({ row: 1, hanzi: "学习", status: "skipped", study_item_id: 1 }),
+            outcome({ row: 2, hanzi: "你好", status: "skipped", study_item_id: 2 }),
+            outcome({ row: 3, hanzi: "朋友", status: "skipped", study_item_id: 3 }),
+          ],
+        }),
+      );
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
+    await user.click(await screen.findByRole("button", { name: "Sincronizar novamente" }));
+
+    expect(await screen.findByLabelText("já na fila: 3")).toBeTruthy();
+    expect(screen.getByLabelText("criados: 0")).toBeTruthy();
+    expect(screen.getByText(/nada é apagado/i)).toBeTruthy();
+    expect(screen.queryByText(/removid[oa]s?|excluíd[oa]s?|reset/i)).toBeNull();
+    expect(api.syncHanziHero).toHaveBeenCalledTimes(2);
   });
 });

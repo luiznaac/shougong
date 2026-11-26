@@ -8,6 +8,7 @@ import type {
   GenerateReadingRequest,
   HanziHeroConnectRequest,
   HanziHeroStatus,
+  HanziHeroSyncResponse,
   Page,
   PriorityEdge,
   ReadingSummaryPage,
@@ -37,6 +38,7 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -50,13 +52,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     let detail = res.statusText;
+    let code: string | undefined;
     try {
       const body = await res.json();
       detail = body.detail ?? detail;
+      code = typeof body.code === "string" ? body.code : undefined;
     } catch {
       /* non-JSON body */
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, detail, code);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -185,6 +189,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(req),
     });
+  },
+  syncHanziHero(): Promise<HanziHeroSyncResponse> {
+    return request("/hanzihero/sync", { method: "POST" });
   },
 
   // --- reading vocabulary overview ---
