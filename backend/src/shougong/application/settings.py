@@ -57,6 +57,12 @@ class AiGatewayConfig(BaseModel):
     generation_timeout_seconds: float = Field(default=300.0, gt=0)
 
 
+class HanziHeroConfig(BaseModel):
+    # The HanziHero deployment the sync logs in to. Overridden in tests to point
+    # at a local fake server.
+    base_url: str = "https://hanzihero.com"
+
+
 class GatewaysConfig(BaseModel):
     app: AppGatewayConfig = Field(default_factory=AppGatewayConfig)
     ai: AiGatewayConfig = Field(default_factory=AiGatewayConfig)
@@ -124,6 +130,7 @@ class Settings(BaseSettings):
 
     mysql: MySqlConfig = Field(default_factory=MySqlConfig)
     gateways: GatewaysConfig = Field(default_factory=GatewaysConfig)
+    hanzihero: HanziHeroConfig = Field(default_factory=HanziHeroConfig)
 
     @model_validator(mode="after")
     def _apply_dev_port_block(self) -> Self:

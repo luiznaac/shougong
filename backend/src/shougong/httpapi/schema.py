@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from shougong.usecase.commons.page import Page
 from shougong.usecase.dictionary.model import DictionaryEntry, DictionaryMeaning, DictionaryWordGroup, RelatedEntry
+from shougong.usecase.hanzihero.model import HanziHeroStatus
 from shougong.usecase.health.checker import HealthCheckResult
 from shougong.usecase.insights.model import ExtraStudyReport, InsightBucket, StudyOverview
 from shougong.usecase.reading.model import (
@@ -679,3 +680,22 @@ class AddReadingTopicRequest(BaseModel):
 
 class SetReadingTopicActiveRequest(BaseModel):
     active: bool
+
+
+class HanziHeroConnectRequest(BaseModel):
+    email_username: str = Field(min_length=1, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class HanziHeroStatusResponse(BaseModel):
+    connected: bool
+    connected_at: datetime | None
+    last_synced_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, status: HanziHeroStatus) -> Self:
+        return cls(
+            connected=status.connected_at is not None,
+            connected_at=status.connected_at,
+            last_synced_at=status.last_synced_at,
+        )

@@ -30,6 +30,7 @@ from shougong.gateway.dictionary.cedict_source import CedictSource
 from shougong.gateway.dictionary.hsk_character_source import HskCharacterSource
 from shougong.gateway.dictionary.hsk_dataset_source import HskDatasetSource
 from shougong.gateway.dictionary.official_hsk_source import OfficialHskSource
+from shougong.gateway.hanzihero.login_gateway import HanziHeroLoginGateway
 from shougong.gateway.health.app_health_gateway import AppHealthGateway
 from shougong.gateway.health.http_client_health_check import HttpClientHealthCheck
 from shougong.gateway.reading.litellm_reading_gateway import LiteLlmReadingGateway
@@ -37,6 +38,7 @@ from shougong.gateway.strokes.hanzi_writer_source import HanziWriterSource
 from shougong.httpapi.configuration.server import build_app, install_request_context_middleware
 from shougong.httpapi.controller.base import IController
 from shougong.httpapi.controller.dictionary_controller import DictionaryController
+from shougong.httpapi.controller.hanzihero_controller import HanziHeroController
 from shougong.httpapi.controller.health_controller import HealthController
 from shougong.httpapi.controller.insights_controller import InsightsController
 from shougong.httpapi.controller.overview_controller import OverviewController
@@ -50,6 +52,7 @@ from shougong.httpapi.controller.vocabulary_controller import VocabularyControll
 from shougong.persistence.configuration.database import build_engine, build_session_factory
 from shougong.persistence.configuration.transaction import SqlAlchemyTransactionTemplate
 from shougong.persistence.dictionary.repository import DictionaryRepository
+from shougong.persistence.hanzihero.repository import HanziHeroConnectionRepository
 from shougong.persistence.health.mysql_health_check import MySqlConnectionHealthCheck
 from shougong.persistence.insights.repository import InsightRepository
 from shougong.persistence.reading.repository import ReadingHistoryRepository
@@ -67,6 +70,7 @@ from shougong.usecase.commons.request_context import job_context
 from shougong.usecase.commons.time import IClock, SystemClock
 from shougong.usecase.dictionary.service import DictionaryService
 from shougong.usecase.dictionary.telemetry import AutoloadStage, DictionaryTelemetry
+from shougong.usecase.hanzihero.service import HanziHeroService
 from shougong.usecase.health.checker import IHealthChecker
 from shougong.usecase.health.telemetry import HealthTelemetry
 from shougong.usecase.insights.overview_service import StudyOverviewService
@@ -175,6 +179,16 @@ class Container:
             self.transaction_template,
         )
 
+        # --- hanzihero slice --------------------------------------------
+        self._hanzihero_login_gateway = HanziHeroLoginGateway(settings.hanzihero.base_url)
+        self._hanzihero_connection_repository = HanziHeroConnectionRepository(self.transaction_template)
+        self._hanzihero_service = HanziHeroService(
+            self._hanzihero_connection_repository,
+            self._hanzihero_login_gateway,
+            self.clock,
+            self.transaction_template,
+        )
+
         # --- insights slice ---------------------------------------------
         self._insight_repository = InsightRepository(self.transaction_template)
         self._insights_telemetry = InsightsTelemetry(self.telemetry.meter)
@@ -225,6 +239,7 @@ class Container:
         self.controllers: list[IController] = [
             HealthController(self.health_checkers, self.health_telemetry),
             DictionaryController(self._dictionary_service),
+            HanziHeroController(self._hanzihero_service),
             StrokesController(self._stroke_service),
             StudyController(self._study_service, self._insight_service),
             StudySessionController(self._study_service),
@@ -299,6 +314,7 @@ class Container:
                 self.reading_telemetry.record_jieba_warmup_failure(error)
 
     async def aclose(self) -> None:
+        await self._hanzihero_login_gateway.aclose()
         await self.http_client.aclose()
         await self.engine.dispose()
         await self.telemetry.async_shutdown()

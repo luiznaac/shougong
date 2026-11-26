@@ -45,6 +45,13 @@ All routes live under the FastAPI app; in the Docker deployment nginx exposes th
 | `GET` | `/study/insights/extra-study?from=&to=` | Recent failures and graduations in an instant range |
 | `GET` | `/study/overview?tz_offset_minutes=` | Dashboard aggregate: counts, SRS distribution, 7-day forecast, learned curve |
 
+### HanziHero
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/hanzihero/connection` | Log in to HanziHero server-side (`email_username`, `password`) and store only the session cookie; returns the status. Wrong credentials are `400`, an unreachable HanziHero `502`. |
+| `GET` | `/hanzihero/connection` | Connection status: `connected`, `connected_at`, `last_synced_at` (`null` until the first sync) |
+
 ### Reading
 
 | Method | Path | Description |
@@ -420,6 +427,10 @@ For dialogue readings, words carry a `speaker`; `speakers` at the reading level 
 - `by_category` is a membership count: a word in N categories counts N times, so the values need not sum to `total`.
 - `proficiency.coverage_by_level` is known words / the official list's per-level total (recorded by the enrichment pass), not the dictionary subset; `estimated_level` is the highest level mastered contiguously from 1 (at least half of its words known).
 
+### HanziHero connection
+
+`HanziHeroConnectRequest` is `{ email_username, password }` — used once for the server-side login and never stored or echoed. `HanziHeroStatusResponse` is `{ connected, connected_at, last_synced_at }`; both instants are `null` while disconnected, and `last_synced_at` stays `null` until the first sync.
+
 ## Error model
 
 The app maps domain exceptions to a consistent problem shape:
@@ -431,9 +442,11 @@ The app maps domain exceptions to a consistent problem shape:
 | Status | Code | When |
 | --- | --- | --- |
 | `400` | `invalid_argument` | Invalid input caught by the service |
+| `400` | `hanzihero_authentication_failed` | HanziHero rejected the email/username or password; nothing is stored |
 | `404` | `resource_not_found` | Unknown entry/item/character/topic |
 | `409` | `conflict` | Duplicate queue entry, not-yet-due review, duplicate scenario |
 | `422` | `domain_error` | Other domain failures |
+| `502` | `hanzihero_unavailable` | HanziHero is unreachable or its login page/response shape changed |
 | `422` | FastAPI validation | Pydantic/query validation failures, unknown rating |
 | `502` | `timeout` / `gateway_unreachable` / `gateway_rate_limited` / `gateway_http_error` / `no_tool_call` / `malformed_tool_call` / `empty_text` / `_OTHER` | Reading generation or model-list failure — the bounded AI-gateway code is also the boundary record's `error.type` |
 

@@ -37,6 +37,8 @@ from shougong.usecase.dictionary.model import (
     RelatedEntryPage,
     group_entries,
 )
+from shougong.usecase.hanzihero.gateway import IHanziHeroConnectionRepository, IHanziHeroLoginGateway
+from shougong.usecase.hanzihero.model import HanziHeroConnection
 from shougong.usecase.health.checker import HealthCheckResult, IHealthChecker
 from shougong.usecase.insights.gateway import IInsightRepository
 from shougong.usecase.insights.model import (
@@ -321,6 +323,37 @@ class FakeHanziStrokeSource(IHanziStrokeSource):
     async def fetch(self, character: str) -> CharacterStrokes | None:
         self.fetch_calls += 1
         return self.data.get(character)
+
+
+class FakeHanziHeroConnectionRepository(IHanziHeroConnectionRepository):
+    def __init__(self, connection: HanziHeroConnection | None = None) -> None:
+        self.connection = connection
+
+    async def get(self) -> HanziHeroConnection | None:
+        return self.connection
+
+    async def save(self, connection: HanziHeroConnection) -> None:
+        self.connection = connection
+
+
+class StubHanziHeroLoginGateway(IHanziHeroLoginGateway):
+    """Returns a fixed session cookie, or raises the configured error, recording every attempt."""
+
+    def __init__(
+        self,
+        *,
+        session_cookie: str = "_hanzi_hero_key=session",
+        error: BaseException | None = None,
+    ) -> None:
+        self.session_cookie = session_cookie
+        self.error = error
+        self.calls: list[tuple[str, str]] = []
+
+    async def log_in(self, identifier: str, password: str) -> str:
+        self.calls.append((identifier, password))
+        if self.error is not None:
+            raise self.error
+        return self.session_cookie
 
 
 def build_strokes_telemetry() -> StrokesTelemetry:

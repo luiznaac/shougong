@@ -27,6 +27,7 @@ from shougong.persistence.configuration.base import Base
 
 # Populates Base.metadata as a side effect of import, same as alembic/env.py.
 from shougong.persistence.dictionary.entity import DictionaryEntryEntity  # noqa: F401
+from shougong.persistence.hanzihero.entity import HanziHeroConnectionEntity  # noqa: F401
 from shougong.persistence.reading.entity import ReadingTextEntity  # noqa: F401
 from shougong.persistence.reading.topic_entity import ReadingTopicEntity  # noqa: F401
 from shougong.persistence.reading.word_usage_entity import ReadingWordUsageEntity  # noqa: F401

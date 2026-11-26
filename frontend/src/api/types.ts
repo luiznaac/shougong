@@ -384,3 +384,16 @@ export interface ReadingSummaryPage {
   limit: number;
   offset: number;
 }
+
+/** The HanziHero credentials submitted once; they are never stored or echoed back. */
+export interface HanziHeroConnectRequest {
+  email_username: string;
+  password: string;
+}
+
+/** Whether a session is stored, when the account was connected, and when it last synced. */
+export interface HanziHeroStatus {
+  connected: boolean;
+  connected_at: string | null; // ISO instant, null while disconnected
+  last_synced_at: string | null; // ISO instant, null until the first sync
+}

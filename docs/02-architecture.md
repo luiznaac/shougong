@@ -15,7 +15,7 @@ flowchart TB
     subgraph Edge["Edge (adapters)"]
         HTTP["httpapi: FastAPI controllers + Pydantic DTOs"]
         PERS["persistence: SQLAlchemy repositories"]
-        GW["gateway: httpx outbound sources (CEDICT, HSK words + characters, Hanzi Writer, LiteLLM)"]
+        GW["gateway: httpx outbound sources (CEDICT, HSK words + characters, Hanzi Writer, HanziHero login, LiteLLM)"]
         SRS["srs: FSRS adapter"]
         SEG["segmentation: jieba adapter"]
     end
@@ -27,6 +27,7 @@ flowchart TB
         VOCAB["vocabulary / proficiency"]
         HIST["study item history"]
         INSIGHTS["insights / leeches"]
+        HH["hanzihero connection"]
     end
     APP["application: composition root"]
     APP --> HTTP
@@ -53,6 +54,7 @@ Rules that keep the architecture honest:
 | SRS | FSRS card model and rating | `ISrsEngine` | `DayBoundaryEngine` + `FsrsEngine` |
 | Strokes | per-character stroke order | `IStrokeRepository`, `IHanziStrokeSource` | SQLAlchemy cache, Hanzi Writer source |
 | Reading | generation, working sets, topics, word usage | `IReadingTextGateway`, `ISegmenter`, `IReadingHistoryRepository`, `IReadingTopicRepository`, `IReadingWordUsageRepository` | LiteLLM gateway, jieba segmenter, SQLAlchemy repos |
+| HanziHero | account connection status; the stored session cookie | `IHanziHeroConnectionRepository`, `IHanziHeroLoginGateway` | SQLAlchemy single-row repo, Phoenix login-handshake gateway |
 | Insights | leech policy, Extra Study buckets | `IInsightRepository` (read-only), `IStudyItemRepository` | SQLAlchemy repo; derived on read, not persisted |
 | Vocabulary | grammatical overview and proficiency | `IStudyItemRepository`, `IDictionaryRepository` | derived on read, not persisted |
 | Health | liveness/readiness | `IHealthChecker` | MySQL check, self-HTTP check |
@@ -171,6 +173,7 @@ All configuration is environment-based (`pydantic-settings`); nested keys use `_
 | `GATEWAYS__AI__REASONING_EFFORT` | `low` | Reasoning effort sent to the proxy (reasoning tokens count against the output ceiling) |
 | `GATEWAYS__AI__MAX_OUTPUT_TOKENS` | `16000` | Output-token ceiling for a reading generation |
 | `GATEWAYS__AI__GENERATION_TIMEOUT_SECONDS` | `300` | Per-attempt read timeout for a non-streaming generation (a slow reasoning model outlasts a normal HTTP timeout) |
+| `HANZIHERO__BASE_URL` | `https://hanzihero.com` | HanziHero deployment the account-sync login talks to; set it to a local fake in tests |
 | `OTEL_SERVICE_NAME` | `shougong` | Telemetry resource `service.name` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` in dev; **required in prod** | OTLP/HTTP Collector endpoint; a missing value under `APP_ENV=prod` fails boot |
 | `SERVICE_VERSION` | the installed package version | Telemetry resource `service.version` |

@@ -97,6 +97,12 @@ erDiagram
         int uses
         datetime last_used_at
     }
+    HANZIHERO_CONNECTION {
+        int id PK
+        text session_cookie
+        datetime connected_at
+        datetime last_synced_at
+    }
 ```
 
 > Some edges are conceptual, not foreign keys: `reading_text` references `reading_topic` by topic text, `reading_word_usage` is keyed by simplified word text, and `character_strokes`/`character_writing_level` are keyed by character. The hard FKs are `study_item -> dictionary_entry`, `review_log/study_item_history/study_item_priority -> study_item`, and `study_item_history -> dictionary_entry`.
@@ -133,6 +139,14 @@ The single-row marker recording which enrichment version last stamped `dictionar
 - A re-run clears every row's level and tags before stamping the current sources, so a word dropped from the official list loses its level.
 - `level_totals` records the official word counts per level (`"1"`..`"7"`), so proficiency and coverage divide by the official list's totals, not the dictionary subset; it is `NULL` until a pass records it.
 - Created by migration `0007_dictionary_enrich`; `character_writing_level` and `handwriting_level` added by `0008_handwriting_levels`; `level_totals` added by `0009_enrichment_level_totals`. Version 4 is the first that applies the import policy.
+
+### `hanzihero_connection`
+
+The single-row connection to the learner's HanziHero account. `id` is always `1`; connecting upserts over it.
+
+- `session_cookie` is the authenticated HanziHero session cookie (`name=value`, or several joined with `; `) captured after the server-side login — the only credential stored. The email/username and password are sent upstream once and never persisted, logged or echoed.
+- `connected_at` is when the current session was captured; `last_synced_at` is when a sync last completed and stays `NULL` until the first one. A reconnect keeps the prior `last_synced_at`.
+- Created by migration `0010_hanzihero_connection`.
 
 ### `study_item`
 

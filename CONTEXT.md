@@ -35,3 +35,6 @@ The vocabulary of the handwriting trainer. Terms are defined in the product's la
 - **Snapshot** — a record of a study item's card state at a change, kept so its trajectory can be plotted.
 - **Trajectory** — a study item's stability and difficulty over time, read from its snapshots.
 - **Insight** — a derived summary over the study data, such as leeches, the due forecast or the learned curve.
+- **HanziHero connection** — the stored HanziHero session cookie with its connected-at and last-synced-at instants. The email/username and password are sent once for the server-side login and never stored.
+- **Sync (HanziHero sync)** — the one-way, additive import of the learner's known HanziHero items into shougong as study items. It never deletes or updates existing items.
+- **Skipped item** — a HanziHero item the learner marked as known without drilling it. Skipped items are excluded from the sync.
