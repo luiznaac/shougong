@@ -90,6 +90,23 @@ export function useConnectHanziHero() {
   });
 }
 
+/**
+ * A sync imports ordinary study items, so on success it refreshes the connection
+ * status (last-synced-at), the queue counters and the Extra Study buckets.
+ */
+export function useSyncHanziHero() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.syncHanziHero(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.hanziHeroConnection });
+      qc.invalidateQueries({ queryKey: keys.studyItemsPrefix });
+      qc.invalidateQueries({ queryKey: keys.studyOverviewPrefix });
+      qc.invalidateQueries({ queryKey: keys.insightsPrefix });
+    },
+  });
+}
+
 export function useStudyItems(opts: StudyItemListQuery = {}) {
   return useQuery({
     queryKey: keys.studyItems(opts),

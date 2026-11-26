@@ -5,7 +5,9 @@ against whatever `HANZIHERO__BASE_URL` points at. The acceptance runbook points
 it here: this stub serves the login page (CSRF token plus pre-login cookie) and
 accepts exactly one fixture credential pair, redirecting with an authenticated
 session cookie. Every other pair is answered with the login page again, so a
-rejected login is driveable too.
+rejected login is driveable too. Its three export routes answer with the login
+redirect (a stale stored session), so a sync run drives the "session expired"
+reconnect path.
 
 It is a fixture, not a product surface: like the rest of the acceptance package
 it is excluded from the production image (`.dockerignore`), and its contract is
@@ -35,6 +37,13 @@ CSRF_TOKEN = "acceptance-csrf-token"
 PRE_LOGIN_COOKIE = "_hanzi_hero_key=pre-login; Path=/; HttpOnly"
 SESSION_COOKIE = "_hanzi_hero_key=authenticated; Path=/; HttpOnly"
 _LOGIN_PATH = "/users/log_in"
+
+# The three exports the sync fetches. The stub answers each with the login
+# redirect instead of CSV: that is HanziHero's "stored session is stale" shape,
+# which `HanziHeroExportGateway` surfaces as `HanziHeroSessionExpiredError`. It
+# lets the acceptance run drive the sync-triggered "session expired" notice
+# without a real account or network.
+_EXPORT_PATHS = frozenset({"/simplified/characters.csv", "/simplified/words.csv", "/simplified/my-dictionary.csv"})
 
 LOGIN_PAGE = f"""<!DOCTYPE html>
 <html>
@@ -66,10 +75,13 @@ class _HanziHeroStubHandler(http.server.BaseHTTPRequestHandler):
     server_version = "HanziHeroStub/1.0"
 
     def do_GET(self) -> None:
-        if self.path != _LOGIN_PATH:
-            self._respond(404, "not found")
+        if self.path == _LOGIN_PATH:
+            self._respond(200, LOGIN_PAGE, headers={"Set-Cookie": PRE_LOGIN_COOKIE})
             return
-        self._respond(200, LOGIN_PAGE, headers={"Set-Cookie": PRE_LOGIN_COOKIE})
+        if self.path in _EXPORT_PATHS:
+            self._respond(302, "", headers={"Location": _LOGIN_PATH})
+            return
+        self._respond(404, "not found")
 
     def do_POST(self) -> None:
         if self.path != _LOGIN_PATH:
