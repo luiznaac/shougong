@@ -26,7 +26,7 @@ In a second shell, start the SPA:
 npm run fe:dev
 ```
 
-The app opens at <http://localhost:8133/>. The API listens on `:8130`, MySQL on `:8132`, and the combined image serves the SPA on `:8131`. A gitignored `.env` may override a host port; the committed defaults apply to a fresh clone.
+The app opens at <http://localhost:8133/>. The API listens on `:8130`, MySQL on `:8132`, and the combined image serves the SPA on `:8131`. The acceptance runbook's dev-only HanziHero stub listens on `:8134`. A gitignored `.env` may override a host port; the committed defaults apply to a fresh clone.
 
 ## Checks
 
@@ -63,7 +63,7 @@ npm run be:check && npm run be:test && npm run fe:check
 - AI reading generation needs an external LiteLLM gateway; the Quickstart does not start it, so the Leitura screen's generation stays unavailable until one is reachable. Its address is in [`backend/.env.example`](backend/.env.example).
 - The combined image boots as a production profile, so it needs an OTLP endpoint; publishing it needs Docker Hub credentials. See the [deploy runbook](docs/runbooks/deploy.md).
 - The HanziHero account sync logs in to `https://hanzihero.com` over the network and keeps only the returned session cookie as a credential in the database (no password at rest). `HANZIHERO__BASE_URL` points it at a fake for offline runs.
-- Acceptance needs Docker and the free `8130`–`8133` port block; the bootstrap-only steps and the fold-aware visual rule are in the [acceptance runbook](docs/runbooks/acceptance.md).
+- Acceptance needs Docker and the free `8130`–`8134` port block (the top of it is the dev-only HanziHero stub); the bootstrap-only steps and the fold-aware visual rule are in the [acceptance runbook](docs/runbooks/acceptance.md).
 - The social preview is a manual upload: a 1280×640 crop of the primary screenshot, set once from the repository settings page.
 
 ## Docs
