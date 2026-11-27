@@ -309,7 +309,7 @@ export function Quiz({
         (handwritingEnabled ? (
           <div className="flex flex-col items-center gap-2">
             {chars.length > 1 && (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 lg:hidden">
                 caractere {drawIdx + 1}/{chars.length}
               </p>
             )}
@@ -406,8 +406,8 @@ export function Quiz({
         <DesktopStage>
           {band}
           <div className="relative z-10 -mt-5 flex justify-center">{questionStrip}</div>
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-8 py-4">
-            {middle}
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 py-2">
+            <div className="my-auto flex w-full flex-col items-center gap-3">{middle}</div>
           </div>
           {dock}
         </DesktopStage>
@@ -435,8 +435,8 @@ export function Quiz({
 
 function DesktopStage({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-950 p-6">
-      <div className="flex h-[calc(100dvh-3rem)] max-h-[720px] w-full max-w-[720px] flex-col overflow-hidden rounded-[2rem] bg-slate-950 text-slate-200 ring-1 ring-white/10">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-950 p-3">
+      <div className="flex h-[calc(100dvh-1.5rem)] max-h-[720px] w-full max-w-[720px] flex-col overflow-hidden rounded-[2rem] bg-slate-950 text-slate-200 ring-1 ring-white/10">
         {children}
       </div>
     </div>
