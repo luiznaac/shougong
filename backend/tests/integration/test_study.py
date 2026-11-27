@@ -244,7 +244,7 @@ async def test_batch_import_creates_words_whose_only_collisions_were_aliases(
     assert {row["entry"]["simplified"] for row in listed.json()["items"]} == {"了", "吃"}
 
 
-async def test_batch_import_still_reports_every_genuine_homograph_with_its_meanings(
+async def test_batch_import_drops_a_surname_row_and_keeps_every_genuine_homograph(
     container: Container, client: httpx.AsyncClient
 ) -> None:
     await _populate(container, _COLLIDING_CEDICT)
@@ -261,14 +261,12 @@ async def test_batch_import_still_reports_every_genuine_homograph_with_its_meani
     )
 
     outcomes = response.json()["outcomes"]
-    assert [outcome["status"] for outcome in outcomes] == ["error", "error", "error"]
-
-    surname_or_conjunction = {candidate["definitions"][0] for candidate in outcomes[0]["candidates"]}
-    assert "surname He" in surname_or_conjunction
-    assert len(outcomes[0]["candidates"]) == 2  # both aliases already dropped
+    assert [outcome["status"] for outcome in outcomes] == ["created", "error", "error"]
+    created = (await client.get("/study-items")).json()["items"]
+    assert [item["entry"]["definitions"][0] for item in created] == ["(joining two nouns) and"]
 
     assert all("you" in candidate["definitions"][0] for candidate in outcomes[1]["candidates"])
-    assert len(outcomes[1]["candidates"]) == 2
+    assert len(outcomes[1]["candidates"]) == 2  # both aliases already dropped
 
     assert {candidate["definitions"][0] for candidate in outcomes[2]["candidates"]} == {
         "below",

@@ -20,10 +20,24 @@ type WordReading = tuple[str, str]
 # variant further down (了 liao3 "to finish ... variant of 瞭") stays real.
 _VARIANT_MARKER = re.compile(r"variant of\b|erhua form of\b", re.IGNORECASE)
 
+# A CC-CEDICT surname gloss ("surname He") marks the capitalized proper-noun row
+# that shares a hanzi and a sanitised reading with the common word.
+_SURNAME_GLOSS = re.compile(r"^surname \S", re.IGNORECASE)
+
 
 def is_variant_gloss(definitions: tuple[str, ...]) -> bool:
     """True when the record's primary gloss only points at another form."""
     return bool(definitions) and _VARIANT_MARKER.search(definitions[0]) is not None
+
+
+def is_surname_entry(definitions: tuple[str, ...]) -> bool:
+    """True when any gloss is a CC-CEDICT `surname X` proper-noun gloss.
+
+    Stored pinyin is lower-cased at import, so a surname row such as `San1
+    /surname San/` collides with the common `san1 /three/`. The surname gloss is
+    the remaining signal that the row is a proper noun.
+    """
+    return any(_SURNAME_GLOSS.match(gloss.strip()) for gloss in definitions)
 
 
 @dataclass(frozen=True, slots=True)

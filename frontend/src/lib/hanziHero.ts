@@ -1,4 +1,5 @@
 import { ApiError } from "../api/client.ts";
+import type { BatchImportOutcome, HanziHeroSyncResponse } from "../api/types.ts";
 
 const CREDENTIALS_MESSAGE = "E-mail/usuário ou senha incorretos. Verifique e tente de novo.";
 const UNAVAILABLE_MESSAGE =
@@ -30,3 +31,26 @@ export function isSessionExpired(error: unknown): boolean {
  * the learner can retry.
  */
 export const SYNC_UNAVAILABLE_MESSAGE = UNAVAILABLE_MESSAGE;
+
+/**
+ * Rewrite one row's outcome after the learner resolves its ambiguity, recounting
+ * the three tiles from the outcomes the same way the server does. The picked
+ * entry is added through the ordinary single-item endpoint, so a 409 turns the
+ * row into already-in-queue rather than an error.
+ */
+export function applyOutcomePatch(
+  result: HanziHeroSyncResponse,
+  row: number,
+  patch: Partial<BatchImportOutcome>,
+): HanziHeroSyncResponse {
+  const outcomes = result.outcomes.map((outcome) =>
+    outcome.row === row ? { ...outcome, ...patch } : outcome,
+  );
+  return {
+    ...result,
+    outcomes,
+    created: outcomes.filter((outcome) => outcome.status === "created").length,
+    already_in_queue: outcomes.filter((outcome) => outcome.status === "skipped").length,
+    unmatched: outcomes.filter((outcome) => outcome.status === "error").length,
+  };
+}

@@ -1,12 +1,20 @@
 import { type FormEvent, type ReactNode, useState } from "react";
-import { useConnectHanziHero, useHanziHeroStatus, useSyncHanziHero } from "../api/queries.ts";
+import { ApiError } from "../api/client.ts";
+import {
+  useAddStudyItem,
+  useConnectHanziHero,
+  useHanziHeroStatus,
+  useSyncHanziHero,
+} from "../api/queries.ts";
 import type { BatchImportOutcome, HanziHeroStatus, HanziHeroSyncResponse } from "../api/types.ts";
 import { formatDateTime, fromNow } from "../lib/format.ts";
 import {
   SYNC_UNAVAILABLE_MESSAGE,
+  applyOutcomePatch,
   connectErrorMessage,
   isSessionExpired,
 } from "../lib/hanziHero.ts";
+import { CandidatePicker } from "./CandidatePicker.tsx";
 import { Panel } from "./Panel.tsx";
 import { Pinyin } from "./Pinyin.tsx";
 import { PanelState } from "./QueryState.tsx";
@@ -295,7 +303,15 @@ function ResultTiles({ result }: { result: HanziHeroSyncResponse }) {
   );
 }
 
-function OutcomeRow({ outcome }: { outcome: BatchImportOutcome }) {
+function OutcomeRow({
+  outcome,
+  resolving,
+  onPick,
+}: {
+  outcome: BatchImportOutcome;
+  resolving: boolean;
+  onPick: (row: number, entryId: number) => void;
+}) {
   const unmatched = outcome.status === "error";
   return (
     <li className="border-b border-white/5 py-2 last:border-0">
@@ -312,20 +328,15 @@ function OutcomeRow({ outcome }: { outcome: BatchImportOutcome }) {
       </div>
       {unmatched ? (
         <div className="mt-1 space-y-1">
-          {outcome.detail ? <p className="text-xs text-slate-500">{outcome.detail}</p> : null}
           {outcome.candidates.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {outcome.candidates.map((entry) => (
-                <span
-                  key={entry.id}
-                  className="inline-flex items-center gap-1 rounded border border-white/10 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300"
-                >
-                  {`#${entry.id} ${entry.pinyin} — ${
-                    entry.definitions.slice(0, 2).join("; ") || "sem definição"
-                  }`}
-                </span>
-              ))}
-            </div>
+            <CandidatePicker
+              detail={outcome.detail}
+              candidates={outcome.candidates}
+              resolving={resolving}
+              onPick={(entryId) => onPick(outcome.row, entryId)}
+            />
+          ) : outcome.detail ? (
+            <p className="text-xs text-slate-500">{outcome.detail}</p>
           ) : null}
         </div>
       ) : null}
@@ -336,9 +347,13 @@ function OutcomeRow({ outcome }: { outcome: BatchImportOutcome }) {
 function ResultStep({
   result,
   onSync,
+  resolvingRow,
+  onPick,
 }: {
   result: HanziHeroSyncResponse;
   onSync: () => void;
+  resolvingRow: number | null;
+  onPick: (row: number, entryId: number) => void;
 }) {
   const [tab, setTab] = useState<ResultTab>(() => defaultTab(result));
   const active = RESULT_GROUPS.find((group) => group.key === tab) ?? RESULT_GROUPS[2];
@@ -372,7 +387,12 @@ function ResultStep({
         ) : (
           <ul className="mt-2" aria-label={`Itens ${active.tileLabel}`}>
             {rows.map((outcome) => (
-              <OutcomeRow key={outcome.row} outcome={outcome} />
+              <OutcomeRow
+                key={outcome.row}
+                outcome={outcome}
+                resolving={resolvingRow === outcome.row}
+                onPick={onPick}
+              />
             ))}
           </ul>
         )}
@@ -406,23 +426,63 @@ function ResultStep({
  *
  * Disconnected (or an expired session) shows the connect form; connected shows
  * the Sync action and its running progress; a completed run shows the result
- * tiles, the per-group tabs and the unmatched rows' candidate readings. A sync
- * rejected with `hanzihero_reconnect_required` drops the learner back on the
- * connect step with an explicit "session expired" notice and no summary. A
- * re-sync is additive: the result reports already-in-queue rows and says nothing
- * about deletion or reset.
+ * tiles, the per-group tabs and the unmatched rows' candidate readings, which
+ * the learner can pick to add that entry to the queue. A sync rejected with
+ * `hanzihero_reconnect_required` drops the learner back on the connect step with
+ * an explicit "session expired" notice and no summary. A re-sync is additive:
+ * the result reports already-in-queue rows and says nothing about deletion or
+ * reset.
  */
 export function HanziHeroPanel() {
   const status = useHanziHeroStatus();
   const sync = useSyncHanziHero();
+  const addItem = useAddStudyItem();
   const [handle, setHandle] = useState<string | null>(null);
   const [expiredFromSync, setExpiredFromSync] = useState(false);
   const [result, setResult] = useState<HanziHeroSyncResponse | null>(null);
+  const [resolvingRow, setResolvingRow] = useState<number | null>(null);
 
   const connected = !expiredFromSync && status.data?.connected === true;
 
+  const pickCandidate = async (row: number, entryId: number) => {
+    setResolvingRow(row);
+    try {
+      const item = await addItem.mutateAsync(entryId);
+      setResult((current) =>
+        current
+          ? applyOutcomePatch(current, row, {
+              status: "created",
+              study_item_id: item.id,
+              detail: null,
+              candidates: [],
+            })
+          : current,
+      );
+    } catch (caught) {
+      const alreadyQueued = caught instanceof ApiError && caught.status === 409;
+      setResult((current) =>
+        current
+          ? applyOutcomePatch(
+              current,
+              row,
+              alreadyQueued
+                ? { status: "skipped", detail: "já está na fila", candidates: [] }
+                : {
+                    detail: `falha ao confirmar: ${
+                      caught instanceof Error ? caught.message : String(caught)
+                    }`,
+                  },
+            )
+          : current,
+      );
+    } finally {
+      setResolvingRow(null);
+    }
+  };
+
   const runSync = () => {
     setResult(null);
+    setResolvingRow(null);
     sync.mutate(undefined, {
       onSuccess: (data) => {
         setExpiredFromSync(false);
@@ -459,7 +519,12 @@ export function HanziHeroPanel() {
           <StepRail current={current} />
           {connected && status.data ? (
             showingResult && result ? (
-              <ResultStep result={result} onSync={runSync} />
+              <ResultStep
+                result={result}
+                onSync={runSync}
+                resolvingRow={resolvingRow}
+                onPick={pickCandidate}
+              />
             ) : (
               <SyncStep
                 accountLine={<ConnectedLine status={status.data} handle={handle} />}

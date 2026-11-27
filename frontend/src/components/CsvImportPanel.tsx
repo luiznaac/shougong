@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { ApiError } from "../api/client.ts";
 import { useAddImportRefresh, useAddStudyItem, useBatchImportStudyItems } from "../api/queries.ts";
-import type { BatchImportOutcome, BatchImportRowRequest, DictionaryEntry } from "../api/types.ts";
+import type { BatchImportOutcome, BatchImportRowRequest } from "../api/types.ts";
 import { CSV_RESULT_PAGE_SIZE } from "../lib/addImport.ts";
 import { parseStudyItemsCsv } from "../lib/csv.ts";
+import { CandidatePicker } from "./CandidatePicker.tsx";
 import { DataList, type DataListColumn } from "./DataList.tsx";
 import { EmptyState } from "./EmptyState.tsx";
 import { Pager } from "./Pager.tsx";
@@ -425,39 +426,4 @@ function ResultDetail({
     );
   }
   return <span>{row.outcome?.detail ?? ""}</span>;
-}
-
-function CandidatePicker({
-  detail,
-  candidates,
-  resolving,
-  onPick,
-}: {
-  detail: string | null | undefined;
-  candidates: DictionaryEntry[];
-  resolving: boolean;
-  onPick: (entryId: number) => void;
-}) {
-  return (
-    <div className="space-y-1">
-      {detail ? <p>{detail}</p> : null}
-      <p className="text-xs text-slate-500">
-        {candidates.length > 1 ? "Escolha qual usar:" : "Adicionar assim mesmo?"}
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        {candidates.map((candidate) => (
-          <button
-            type="button"
-            key={candidate.id}
-            disabled={resolving}
-            onClick={() => onPick(candidate.id)}
-            className="inline-flex items-center gap-1 rounded border border-white/10 bg-slate-800 px-2 py-1 text-xs text-slate-200 transition-colors hover:border-accent-500 hover:text-accent-400 disabled:opacity-50"
-          >
-            {resolving ? <Spinner /> : null}#{candidate.id} {candidate.pinyin} —{" "}
-            {candidate.definitions.slice(0, 2).join("; ") || "sem definição"}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
