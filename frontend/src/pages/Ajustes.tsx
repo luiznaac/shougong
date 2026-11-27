@@ -1,16 +1,17 @@
 import { HanziHeroPanel } from "../components/HanziHeroPanel.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { Panel } from "../components/Panel.tsx";
-import { useHandwritingEnabled } from "../lib/localSettings.ts";
+import { useAutoReveal, useHandwritingEnabled } from "../lib/localSettings.ts";
 
 /**
- * Ajustes: the per-browser handwriting preference, composed from the shared
- * header and panel. The toggle persists locally through
- * `lib/localSettings.ts`, so a reload keeps it and the quiz reads the same
- * value. No server involvement.
+ * Ajustes: the per-browser handwriting preferences, composed from the shared
+ * header and panel. Both toggles persist locally through
+ * `lib/localSettings.ts`, so a reload keeps them and the quiz reads the same
+ * values. No server involvement.
  */
 export function Ajustes() {
   const [enabled, setEnabled] = useHandwritingEnabled();
+  const [autoReveal, setAutoReveal] = useAutoReveal();
 
   return (
     <div className="space-y-6">
@@ -41,8 +42,28 @@ export function Ajustes() {
             <p className="text-xs text-slate-500">A checagem está desligada neste navegador.</p>
           )}
 
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <label htmlFor="auto-reveal-enabled" className="text-sm font-medium text-slate-200">
+                Revelar automaticamente
+              </label>
+              <p className="mt-1 text-xs text-slate-500">
+                Terminado o último caractere, a comparação aparece sozinha. Desligado, você toca em
+                “Revelar” para ver o modelo.
+              </p>
+            </div>
+            <input
+              id="auto-reveal-enabled"
+              type="checkbox"
+              checked={autoReveal}
+              onChange={(event) => setAutoReveal(event.target.checked)}
+              className="mt-1 h-5 w-5 shrink-0 accent-accent-500"
+            />
+          </div>
+
           <p className="text-xs text-slate-500">
-            Esta preferência fica salva neste navegador — não é sincronizada entre dispositivos.
+            Estas preferências ficam salvas neste navegador — não são sincronizadas entre
+            dispositivos.
           </p>
         </div>
       </Panel>

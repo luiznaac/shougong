@@ -19,7 +19,7 @@ function markupsOf(html: string, needle: string): number {
 describe("SlotRow", () => {
   it("shows one slot per character, including a single-character word", () => {
     const html = renderToStaticMarkup(
-      <SlotRow chars={["好"]} snapshots={[null]} currentIdx={0} revealed={false} />,
+      <SlotRow chars={["好"]} snapshots={[null]} currentIdx={0} reveal="none" />,
     );
 
     expect(markupsOf(html, "<li ")).toBe(1);
@@ -28,7 +28,7 @@ describe("SlotRow", () => {
 
   it("highlights the current slot and keeps each completed drawing", () => {
     const html = renderToStaticMarkup(
-      <SlotRow chars={["学", "习"]} snapshots={[drawn(), null]} currentIdx={1} revealed={false} />,
+      <SlotRow chars={["学", "习"]} snapshots={[drawn(), null]} currentIdx={1} reveal="none" />,
     );
 
     expect(markupsOf(html, "<li ")).toBe(2);
@@ -43,7 +43,7 @@ describe("SlotRow", () => {
         chars={["学", "习"]}
         snapshots={[drawn(), drawn(["M2 2 L3 3"])]}
         currentIdx={1}
-        revealed
+        reveal="whole"
       />,
     );
 
@@ -55,13 +55,33 @@ describe("SlotRow", () => {
     expect(markupsOf(html, 'aria-label="Ordem dos traços de 习"')).toBe(1);
   });
 
+  it("shows the comparison only for the current slot on an early peek", () => {
+    const html = renderToStaticMarkup(
+      <SlotRow
+        chars={["学", "习"]}
+        snapshots={[null, null]}
+        currentIdx={0}
+        reveal="peek"
+        peekModel={strokes}
+      />,
+    );
+
+    expect(markupsOf(html, ">Seu traço<")).toBe(1);
+    expect(markupsOf(html, ">Modelo<")).toBe(1);
+    expect(html).toContain('aria-label="Comparação de 学"');
+    expect(html).not.toContain('aria-label="Comparação de 习"');
+    expect(html).toContain('aria-label="Caractere 2"');
+    expect(html).toContain('aria-label="Ordem dos traços de 学"');
+    expect(html).not.toContain('aria-label="Ordem dos traços de 习"');
+  });
+
   it("falls back to the character when a slot has no fetched model strokes", () => {
     const html = renderToStaticMarkup(
       <SlotRow
         chars={["好"]}
         snapshots={[{ drawing: { strokes: [], size: 170 }, model: [] }]}
         currentIdx={0}
-        revealed
+        reveal="whole"
       />,
     );
 

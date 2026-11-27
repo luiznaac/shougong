@@ -2,12 +2,13 @@ import type { SrsRating } from "../api/types.ts";
 
 export type QuizMode = "lesson" | "review";
 
-export type QuizPhase = "info" | "prompt" | "revealed";
+export type QuizPhase = "info" | "prompt" | "peek" | "revealed";
 
 /** The question strip's copy for the current phase. */
 export const QUESTION_LABEL: Record<QuizPhase, string> = {
   info: "Estude o item",
   prompt: "Escreva o caractere à mão",
+  peek: "Compare este caractere com o modelo",
   revealed: "Compare seu traço com o modelo",
 };
 
@@ -17,7 +18,9 @@ export const QUESTION_LABEL: Record<QuizPhase, string> = {
  * it keeps asking whether the learner got the writing right.
  */
 export function questionLabel(phase: QuizPhase, handwritingEnabled: boolean): string {
-  if (phase === "revealed" && !handwritingEnabled) return "Você acertou a escrita?";
+  if (!handwritingEnabled && (phase === "peek" || phase === "revealed")) {
+    return "Você acertou a escrita?";
+  }
   return QUESTION_LABEL[phase];
 }
 
@@ -25,6 +28,7 @@ export function questionLabel(phase: QuizPhase, handwritingEnabled: boolean): st
 export const NEXT_LABEL: Record<QuizPhase, string> = {
   info: "Continuar",
   prompt: "Revelar",
+  peek: "Continuar",
   revealed: "Próximo",
 };
 

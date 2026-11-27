@@ -17,6 +17,7 @@ vi.mock("../api/client.ts", async (importOriginal) => {
 });
 
 const ENABLED_KEY = "shougong.handwriting.enabled";
+const AUTO_REVEAL_KEY = "shougong.handwriting.autoReveal";
 
 function renderAjustes() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -80,5 +81,31 @@ describe("Ajustes", () => {
 
     expect(localStorage.getItem(ENABLED_KEY)).toBe("false");
     expect((toggle as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("exposes auto-reveal, on by default", () => {
+    renderAjustes();
+
+    const toggle = screen.getByRole("checkbox", { name: "Revelar automaticamente" });
+
+    expect((toggle as HTMLInputElement).checked).toBe(true);
+    expect(localStorage.getItem(AUTO_REVEAL_KEY)).toBeNull();
+  });
+
+  it("persists turning auto-reveal off across a reload", async () => {
+    const user = userEvent.setup();
+    const first = renderAjustes();
+
+    await user.click(screen.getByRole("checkbox", { name: "Revelar automaticamente" }));
+
+    expect(localStorage.getItem(AUTO_REVEAL_KEY)).toBe("false");
+
+    first.unmount();
+    renderAjustes();
+
+    expect(
+      (screen.getByRole("checkbox", { name: "Revelar automaticamente" }) as HTMLInputElement)
+        .checked,
+    ).toBe(false);
   });
 });

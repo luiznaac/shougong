@@ -35,3 +35,30 @@ export function slotState(
   if (index < currentIdx || capture) return "completed";
   return "upcoming";
 }
+
+export type RevealTarget = "peek" | "whole";
+
+/**
+ * What a reveal shows. Any character before the last one peeks at just that
+ * character, so the learner can check it and carry on; the last character's
+ * reveal compares the whole word.
+ */
+export function revealTarget(index: number, count: number): RevealTarget {
+  return index >= count - 1 ? "whole" : "peek";
+}
+
+export type CompletionStep = "next" | "revealed" | "waiting";
+
+/**
+ * What completing a character does. A character before the last advances to the
+ * next; the last character reveals the whole word automatically when
+ * auto-reveal is on, and otherwise waits for the learner to tap "Revelar".
+ */
+export function afterCharacterComplete(
+  index: number,
+  count: number,
+  autoReveal: boolean,
+): CompletionStep {
+  if (revealTarget(index, count) === "peek") return "next";
+  return autoReveal ? "revealed" : "waiting";
+}

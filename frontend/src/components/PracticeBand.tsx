@@ -38,7 +38,9 @@ function ProgressSegments({
  * The practice stage's coloured subject band: the header row, session
  * progress, tone-coloured pinyin, the one glyph slot and the meaning. The
  * glyph renders once per phase — the stroke player in info, hidden cards in
- * prompt, and the answer cards in revealed with an in-place player swap.
+ * prompt, and the answer cards in revealed with an in-place player swap. With
+ * handwriting on the middle owns the glyph (the canvas in prompt, the
+ * comparison in revealed), so the band drops its slot.
  */
 export function PracticeBand({
   presentation,
@@ -81,12 +83,14 @@ export function PracticeBand({
   const mobile = presentation === "mobile";
   const chars = [...item.entry.simplified];
   const playerSize = mobile ? 150 : 175;
-  // At the handwriting comparison the middle carries the learner's drawing
-  // beside the model, so the band drops its own glyph (cards and player) and the
-  // model appears once. Pinyin, levels and meaning stay.
-  const compareWithDrawing = handwritingEnabled && phase === "revealed";
+  // With handwriting on the middle carries the glyph: the writing canvas during
+  // recall, the single-character pair on an early peek, and the learner-vs-model
+  // comparison at the reveal. The band drops its own slot (cards and player) so
+  // that glyph appears once; pinyin, levels and meaning stay.
+  const middleCarriesGlyph =
+    handwritingEnabled && (phase === "prompt" || phase === "peek" || phase === "revealed");
   const showPlayer =
-    !compareWithDrawing && (phase === "info" || (phase === "revealed" && playerOn));
+    !middleCarriesGlyph && (phase === "info" || (phase === "revealed" && playerOn));
 
   const handwriting = (
     <div
@@ -161,7 +165,7 @@ export function PracticeBand({
           />
         </div>
 
-        {!compareWithDrawing &&
+        {!middleCarriesGlyph &&
           (showPlayer ? (
             <StrokePlayer key={item.id} word={item.entry.simplified} sizePx={playerSize} />
           ) : (
@@ -190,7 +194,7 @@ export function PracticeBand({
           {item.entry.definitions.slice(0, mobile ? 2 : 3).join(" · ")}
         </p>
 
-        {phase === "revealed" && !compareWithDrawing && (
+        {phase === "revealed" && !middleCarriesGlyph && (
           <button
             type="button"
             onClick={onTogglePlayer}
