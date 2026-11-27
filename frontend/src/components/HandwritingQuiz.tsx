@@ -1,6 +1,7 @@
 import HanziWriter from "hanzi-writer";
 import { useEffect, useRef } from "react";
 import { useCharacterStrokes } from "../api/queries.ts";
+import { useHandwritingCanvasSize } from "../lib/handwriting.ts";
 import type { SlotCapture } from "../lib/selfCheck.ts";
 
 /**
@@ -13,21 +14,51 @@ import type { SlotCapture } from "../lib/selfCheck.ts";
  */
 export interface HandwritingStepProps {
   character: string;
-  sizePx?: number;
   onComplete: (snapshot: SlotCapture) => void;
 }
 
 /**
- * Interactive stroke-order self-check for a single character: the user draws it
- * from memory (no outline hint), hanzi-writer guides each stroke against the
- * reference data we already fetch/cache ourselves (via `charDataLoader`, so
- * there's no second network round trip to a CDN). The automatic hint appears
- * after 3 misses and the stroke is force-accepted on the 4th, so the hint is
- * reachable before the stroke is accepted. `onComplete` fires exactly once,
- * regardless of the mistake count.
+ * The 米字格 guide drawn behind the writer: a square frame with dashed centre
+ * axes and diagonals. It carries no character outline, so the answer stays
+ * hidden while the learner recalls it.
  */
-export function HandwritingQuiz({ character, sizePx = 220, onComplete }: HandwritingStepProps) {
+function MiZiGeGrid() {
+  return (
+    <svg
+      aria-hidden="true"
+      data-testid="mizige-grid"
+      viewBox="0 0 100 100"
+      className="pointer-events-none absolute inset-0 h-full w-full"
+    >
+      <g fill="none" strokeWidth="0.6">
+        <rect x="1" y="1" width="98" height="98" rx="2" stroke="rgba(255,255,255,0.28)" />
+        <g stroke="rgba(255,255,255,0.16)">
+          <line x1="50" y1="1" x2="50" y2="99" strokeDasharray="2 2" />
+          <line x1="1" y1="50" x2="99" y2="50" strokeDasharray="2 2" />
+          <line x1="1" y1="1" x2="99" y2="99" strokeDasharray="2 3" />
+          <line x1="99" y1="1" x2="1" y2="99" strokeDasharray="2 3" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * Interactive stroke-order self-check for a single character: the user draws it
+ * from memory on a 米字格 grid (no outline hint), hanzi-writer guides each stroke
+ * against the reference data we already fetch/cache ourselves (via
+ * `charDataLoader`, so there's no second network round trip to a CDN). The
+ * automatic hint appears after 3 misses and the stroke is force-accepted on the
+ * 4th, so the hint is reachable before the stroke is accepted. `onComplete`
+ * fires exactly once, regardless of the mistake count.
+ *
+ * The square is sized for the pointer — coarse pointers get a finger-sized
+ * canvas, fine pointers a mouse-sized one — and the grid and the writer always
+ * share it.
+ */
+export function HandwritingQuiz({ character, onComplete }: HandwritingStepProps) {
   const { data, isLoading, error } = useCharacterStrokes(character);
+  const sizePx = useHandwritingCanvasSize();
 
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -91,14 +122,26 @@ export function HandwritingQuiz({ character, sizePx = 220, onComplete }: Handwri
     };
   }, [data, character, sizePx]);
 
-  if (isLoading) return <div style={{ width: sizePx, height: sizePx }} />;
+  const frame = (
+    <div
+      data-testid="handwriting-canvas"
+      className="relative overflow-hidden rounded-lg bg-slate-800/40"
+      style={{ width: sizePx, height: sizePx }}
+    >
+      <MiZiGeGrid />
+      {!isLoading && !error && data && (
+        <div
+          ref={mountRef}
+          data-testid="handwriting-writer"
+          className="absolute inset-0"
+          style={{ touchAction: "none" }}
+        />
+      )}
+    </div>
+  );
+
+  if (isLoading) return frame;
   if (error || !data) return null;
 
-  return (
-    <div
-      ref={mountRef}
-      style={{ width: sizePx, height: sizePx, touchAction: "none" }}
-      className="rounded-lg bg-slate-800/40"
-    />
-  );
+  return frame;
 }

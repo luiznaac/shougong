@@ -316,7 +316,6 @@ export function Quiz({
             <HandwritingStep
               key={`${current.id}-${drawIdx}`}
               character={chars[drawIdx]}
-              sizePx={desktop ? 170 : 150}
               onComplete={handleCharComplete}
             />
             {awaitingReveal && (
