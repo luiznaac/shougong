@@ -190,6 +190,16 @@ describe("Quiz interaction", () => {
     expect(screen.getAllByText("?")).toHaveLength(2);
   });
 
+  it("drops the band's hidden-card glyph while the writing canvas is the glyph", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ mode: "lesson", handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: /Continuar/ }));
+
+    expect(screen.getByRole("button", { name: "Concluir 学" })).toBeTruthy();
+    expect(screen.queryAllByText("?")).toHaveLength(0);
+  });
+
   it("swaps the revealed answer cards for the player in place and back", async () => {
     const user = userEvent.setup();
     renderQuiz({ item: word("学习", "xue2 xi2") });
@@ -366,11 +376,12 @@ describe("Quiz interaction", () => {
     expect(strokeCalls()).toBe(0);
   });
 
-  it("hides the band's cards during the comparison while the meaning stays", async () => {
+  it("hides the band's cards while the middle carries the handwriting glyph", async () => {
     const user = userEvent.setup();
     renderQuiz({ handwriting: true, item: word("好", "hao3") });
 
-    expect(screen.getAllByText("?")).toHaveLength(1);
+    // Recall already owns the glyph (the canvas), so the band keeps no hidden card.
+    expect(screen.queryAllByText("?")).toHaveLength(0);
 
     await user.click(screen.getByRole("button", { name: "Concluir 好" }));
 
