@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudyItem } from "../api/types.ts";
@@ -18,10 +19,18 @@ function word(simplified: string, pinyin: string): StudyItem {
 /** The handwriting child double: a button that reports a snapshot on demand. */
 const MODEL_STROKES = ["M0 0 L10 10", "M10 0 L0 10"];
 
+let mountSequence = 0;
+
+function mountId(name: string): number {
+  return Number(screen.getByRole("button", { name }).getAttribute("data-mount"));
+}
+
 function CompletionDouble({ character, onComplete }: HandwritingStepProps) {
+  const [mountId] = useState(() => ++mountSequence);
   return (
     <button
       type="button"
+      data-mount={mountId}
       onClick={() =>
         onComplete({
           drawing: { strokes: ["M0 0 L10 10"], size: 170 },
@@ -350,6 +359,39 @@ describe("Quiz interaction", () => {
     expect(screen.getByRole("img", { name: "Seu traço de 学" })).toBeTruthy();
     expect(screen.getAllByRole("listitem")[1].getAttribute("aria-current")).toBe("step");
     expect(screen.getByRole("button", { name: "Concluir 习" })).toBeTruthy();
+  });
+
+  it("clears only the current character and keeps the earlier drawings", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+    const before = mountId("Concluir 习");
+
+    await user.click(screen.getByRole("button", { name: "Limpar" }));
+
+    const after = mountId("Concluir 习");
+
+    expect(after).toBeGreaterThan(before);
+    expect(screen.getByRole("img", { name: "Seu traço de 学" })).toBeTruthy();
+    expect(screen.getAllByRole("listitem")[1].getAttribute("aria-current")).toBe("step");
+    expect(screen.queryByRole("button", { name: /Próximo/ })).toBeNull();
+  });
+
+  it("offers Limpar on a single character and stays in recall", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: "Limpar" }));
+
+    expect(screen.getByRole("button", { name: "Concluir 好" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Próximo/ })).toBeNull();
+  });
+
+  it("hides Limpar when handwriting is off", () => {
+    renderQuiz({ item: word("好", "hao3") });
+
+    expect(screen.queryByRole("button", { name: "Limpar" })).toBeNull();
   });
 
   it("shows the learner's drawing beside the model for every slot at the final reveal", async () => {

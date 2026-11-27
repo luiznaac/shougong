@@ -83,6 +83,7 @@ export function Quiz({
   const [handwritingEnabled, setHandwritingEnabled] = useHandwritingEnabled();
   const [autoReveal] = useAutoReveal();
   const [drawIdx, setDrawIdx] = useState(0);
+  const [redrawCount, setRedrawCount] = useState(0);
   const [snapshots, setSnapshots] = useState<(SlotCapture | null)[]>([]);
 
   const current = items[idx];
@@ -103,6 +104,7 @@ export function Quiz({
     setPhase(mode === "lesson" ? "info" : "prompt");
     setIdx((i) => i + 1);
     setDrawIdx(0);
+    setRedrawCount(0);
     setSnapshots([]);
   }, [mode]);
 
@@ -187,6 +189,7 @@ export function Quiz({
       case "step-back":
         setPhase("prompt");
         setDrawIdx(rollbackAction.drawIdx);
+        setRedrawCount(0);
         setSnapshots((all) => all.map((s, i) => (i < rollbackAction.drawIdx ? s : null)));
         return;
       case "return-to-recall":
@@ -194,6 +197,7 @@ export function Quiz({
       case "back-to-info":
         setPhase("info");
         setDrawIdx(0);
+        setRedrawCount(0);
         setSnapshots([]);
         return;
       case "unavailable":
@@ -225,6 +229,14 @@ export function Quiz({
     },
     [drawIdx, chars.length, autoReveal],
   );
+
+  // Clear the character being drawn: bumping the count remounts the writer so
+  // its strokes and hint state reset, while earlier characters keep their
+  // snapshots in the slot row.
+  const clearCurrent = useCallback(() => {
+    setSnapshots((all) => all.map((capture, i) => (i === drawIdx ? null : capture)));
+    setRedrawCount((count) => count + 1);
+  }, [drawIdx]);
 
   const canGoNext = phase !== "revealed" || selected != null;
   const awaitingReveal =
@@ -335,11 +347,20 @@ export function Quiz({
                 caractere {drawIdx + 1}/{chars.length}
               </p>
             )}
-            <HandwritingStep
-              key={`${current.id}-${drawIdx}`}
-              character={chars[drawIdx]}
-              onComplete={handleCharComplete}
-            />
+            <div className="flex items-center gap-3">
+              <HandwritingStep
+                key={`${current.id}-${drawIdx}-${redrawCount}`}
+                character={chars[drawIdx]}
+                onComplete={handleCharComplete}
+              />
+              <button
+                type="button"
+                onClick={clearCurrent}
+                className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-medium text-slate-200 ring-1 ring-white/10 hover:bg-slate-700"
+              >
+                Limpar
+              </button>
+            </div>
             {awaitingReveal && (
               <p className="text-center text-xs text-slate-400">
                 Pronto — toque em “Revelar” para comparar a palavra.
