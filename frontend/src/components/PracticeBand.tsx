@@ -81,10 +81,11 @@ export function PracticeBand({
   const mobile = presentation === "mobile";
   const chars = [...item.entry.simplified];
   const playerSize = mobile ? 150 : 175;
-  // At the handwriting comparison the middle carries the learner's drawing
-  // beside the model, so the band drops its own glyph (cards and player) and the
-  // model appears once. Pinyin, levels and meaning stay.
-  const compareWithDrawing = handwritingEnabled && phase === "revealed";
+  // At the handwriting comparison — an early peek or the final whole-word
+  // reveal — the middle carries the learner's drawing beside the model, so the
+  // band drops its own glyph (cards and player) and the model appears once.
+  // Pinyin, levels and meaning stay.
+  const compareWithDrawing = handwritingEnabled && (phase === "peek" || phase === "revealed");
   const showPlayer =
     !compareWithDrawing && (phase === "info" || (phase === "revealed" && playerOn));
 

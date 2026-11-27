@@ -26,7 +26,8 @@ The vocabulary of the handwriting trainer. Terms are defined in the product's la
 - **Stroke** — one pen movement of a character; its order is the sequence a learner reproduces.
 - **Handwriting step** — the draw-from-memory part of an item, shown in the prompt phase when handwriting is on. _Avoid_: writing quiz, drawing test.
 - **Self-check** — the learner's own comparison of their drawing with the model, followed by a manual SRS grade; the app does not grade the drawing. _Avoid_: ungraded quiz, auto-grade.
-- **Reveal** — the transition from drawing to comparison, automatic on the last character or when the learner asks for it. _Avoid_: flip, answer phase.
+- **Reveal** — the transition from drawing to comparison, automatic after the last character by default or when the learner asks for it. _Avoid_: flip, answer phase.
+- **Peek** — an early reveal during recall: the comparison for just the character being drawn, before the word is finished. _Avoid_: hint, preview.
 - **Comparison** — the reveal's view: the learner's drawing beside the model character, one pair per character slot. _Avoid_: result, feedback.
 - **Slot row** — the per-character row showing which character is being drawn, the completed drawings, and each drawing beside its model on reveal. _Avoid_: progress bar, character tabs.
 - **Reading** — a generated Mandarin text for reading practice.

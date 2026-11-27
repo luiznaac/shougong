@@ -9,6 +9,7 @@ import type { HandwritingStepProps } from "./HandwritingQuiz.tsx";
 import { Quiz } from "./Quiz.tsx";
 
 const ENABLED_KEY = "shougong.handwriting.enabled";
+const AUTO_REVEAL_KEY = "shougong.handwriting.autoReveal";
 
 function word(simplified: string, pinyin: string): StudyItem {
   return studyItem({ entry: { ...studyItem().entry, simplified, pinyin } });
@@ -423,5 +424,67 @@ describe("Quiz interaction", () => {
 
     expect(screen.getAllByText("Seu traço")).toHaveLength(1);
     expect(screen.getAllByText("Modelo")).toHaveLength(1);
+  });
+
+  it("peeks at only the current character, then continues to the next", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: /Revelar/ }));
+
+    expect(screen.getByText("Compare este caractere com o modelo")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Continuar/ })).toBeTruthy();
+    expect(screen.getByLabelText("Comparação de 学")).toBeTruthy();
+    expect(screen.queryByLabelText("Comparação de 习")).toBeNull();
+    expect(screen.getAllByText("Seu traço")).toHaveLength(1);
+    expect(screen.getAllByText("Modelo")).toHaveLength(1);
+    expect((screen.getByRole("button", { name: /^Bom/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByRole("img", { name: "Ordem dos traços de 学" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /Continuar/ }));
+
+    expect(screen.getByRole("button", { name: "Concluir 习" })).toBeTruthy();
+    expect(screen.queryByLabelText("Comparação de 学")).toBeNull();
+  });
+
+  it("waits for Revelar after the last character when auto-reveal is off", async () => {
+    localStorage.setItem(AUTO_REVEAL_KEY, "false");
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    expect(screen.queryByText("Modelo")).toBeNull();
+    expect(screen.getByText(/Revelar.*comparar a palavra/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: /^Bom/ }) as HTMLButtonElement).disabled).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: /Revelar/ }));
+
+    expect(screen.getByText("Compare seu traço com o modelo")).toBeTruthy();
+    expect(screen.getByText("Modelo")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /^Bom/ }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  it("waits for Revelar on the last character of a word, then compares the whole word", async () => {
+    localStorage.setItem(AUTO_REVEAL_KEY, "false");
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+
+    expect(screen.getByRole("button", { name: "Concluir 习" })).toBeTruthy();
+    expect(screen.queryByText("Modelo")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Concluir 习" }));
+
+    expect(screen.queryByText("Modelo")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Revelar/ }));
+
+    expect(screen.getAllByText("Seu traço")).toHaveLength(2);
+    expect(screen.getAllByText("Modelo")).toHaveLength(2);
+    expect(screen.getByRole("img", { name: "Ordem dos traços de 学" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Ordem dos traços de 习" })).toBeTruthy();
   });
 });

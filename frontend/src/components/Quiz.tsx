@@ -8,9 +8,9 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client.ts";
-import { useReviewMutation } from "../api/queries.ts";
+import { useCharacterStrokes, useReviewMutation } from "../api/queries.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
-import { useHandwritingEnabled } from "../lib/localSettings.ts";
+import { useAutoReveal, useHandwritingEnabled } from "../lib/localSettings.ts";
 import { PATHS, itemPath } from "../lib/navigation.ts";
 import { gradeByHotkey, gradeConsequence } from "../lib/practiceGrades.ts";
 import {
@@ -24,7 +24,7 @@ import {
   topBarTitle,
 } from "../lib/quizPractice.ts";
 import { STAGE_HORIZONTAL_PADDING } from "../lib/safeArea.ts";
-import type { SlotCapture } from "../lib/selfCheck.ts";
+import { type SlotCapture, afterCharacterComplete, revealTarget } from "../lib/selfCheck.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
 import { HandwritingQuiz, type HandwritingStepProps } from "./HandwritingQuiz.tsx";
 import { PracticeBand } from "./PracticeBand.tsx";
@@ -76,11 +76,15 @@ export function Quiz({
   const [toast, setToast] = useState<string | null>(null);
   const [playerOn, setPlayerOn] = useState(false);
   const [handwritingEnabled, setHandwritingEnabled] = useHandwritingEnabled();
+  const [autoReveal] = useAutoReveal();
   const [drawIdx, setDrawIdx] = useState(0);
   const [snapshots, setSnapshots] = useState<(SlotCapture | null)[]>([]);
 
   const current = items[idx];
   const chars = current ? [...current.entry.simplified] : [];
+  // The peek's model comes from the same cached stroke query the handwriting
+  // child already used, so it adds no new request beyond the one the child made.
+  const { data: peekStrokes } = useCharacterStrokes(phase === "peek" ? (chars[drawIdx] ?? "") : "");
   const remaining = items.length - idx;
   const accuracy = done > 0 ? Math.round((correct / done) * 100) : 100;
   const finished = idx >= items.length;
@@ -93,14 +97,28 @@ export function Quiz({
     setPlayerOn(false);
     setPhase(mode === "lesson" ? "info" : "prompt");
     setIdx((i) => i + 1);
+    setDrawIdx(0);
+    setSnapshots([]);
   }, [mode]);
 
-  // Forward: info → prompt → revealed → (submit + next). On `revealed` it only
+  // Forward: info → prompt → (peek) → revealed → (submit + next). A manual
+  // reveal before the last character peeks at just that one; the last
+  // character's reveal compares the whole word. On `revealed` the advance only
   // fires once a grade is selected, so it doubles as the answer confirmation.
   const goNext = useCallback(async () => {
     if (submitting || !current) return;
     if (phase === "info") return setPhase("prompt");
-    if (phase === "prompt") return setPhase("revealed");
+    if (phase === "peek") {
+      setDrawIdx((i) => i + 1);
+      return setPhase("prompt");
+    }
+    if (phase === "prompt") {
+      setSelected(null);
+      if (!handwritingEnabled || revealTarget(drawIdx, chars.length) === "whole") {
+        return setPhase("revealed");
+      }
+      return setPhase("peek");
+    }
     if (!selected) return;
 
     setSubmitting(true);
@@ -127,23 +145,45 @@ export function Quiz({
     } finally {
       setSubmitting(false);
     }
-  }, [phase, selected, submitting, current, advance, review, record]);
+  }, [
+    phase,
+    selected,
+    submitting,
+    current,
+    advance,
+    review,
+    record,
+    handwritingEnabled,
+    drawIdx,
+    chars.length,
+  ]);
 
-  // Backward: undo the selected grade, else step back a phase.
+  // Backward: undo the selected grade, else step back a phase. An early peek
+  // returns to the character being drawn without losing its place.
   const rollback = useCallback(() => {
     if (submitting) return;
     if (phase === "revealed") {
       if (selected) return setSelected(null);
-      return setPhase("prompt");
+      setPhase("prompt");
+      setDrawIdx(0);
+      setSnapshots([]);
+      return;
     }
-    if (phase === "prompt" && mode === "lesson") return setPhase("info");
+    if (phase === "peek") return setPhase("prompt");
+    if (phase === "prompt" && mode === "lesson") {
+      setPhase("info");
+      setDrawIdx(0);
+      setSnapshots([]);
+    }
   }, [phase, selected, submitting, mode]);
 
   // Handwriting self-check: one character at a time. The drawing is never
   // graded — completion just moves to the next character, and the final one
   // reveals with no note chosen, so the learner grades their own attempt. Each
   // completion stores its snapshot (the learner's drawing and the fetched model)
-  // so the slot row can hold it during recall and compare it at the reveal.
+  // so the slot row can hold it during recall and compare it at the reveal. The
+  // final character reveals automatically only when the auto-reveal preference
+  // is on; off, the learner taps "Revelar" when ready.
   const handleCharComplete = useCallback(
     (snapshot: SlotCapture) => {
       setSnapshots((all) => {
@@ -152,19 +192,25 @@ export function Quiz({
         next[drawIdx] = snapshot;
         return next;
       });
-      const next = drawIdx + 1;
-      if (next >= chars.length) {
+      const step = afterCharacterComplete(drawIdx, chars.length, autoReveal);
+      if (step === "next") setDrawIdx((i) => i + 1);
+      if (step === "revealed") {
         setSelected(null);
         setPhase("revealed");
-      } else {
-        setDrawIdx(next);
       }
     },
-    [drawIdx, chars.length],
+    [drawIdx, chars.length, autoReveal],
   );
 
-  const canRollback = phase === "revealed" || (phase === "prompt" && mode === "lesson");
+  const canRollback =
+    phase === "revealed" || phase === "peek" || (phase === "prompt" && mode === "lesson");
   const canGoNext = phase !== "revealed" || selected != null;
+  const awaitingReveal =
+    phase === "prompt" &&
+    handwritingEnabled &&
+    !autoReveal &&
+    drawIdx === chars.length - 1 &&
+    (snapshots[drawIdx] ?? null) !== null;
 
   const stateRef = useRef({ phase, selected, canRollback });
   stateRef.current = { phase, selected, canRollback };
@@ -193,15 +239,6 @@ export function Quiz({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [goNext, rollback, navigate]);
-
-  // Reset the drawing sequence every time a "write from memory" step begins
-  // (a new item, or rolling back into "prompt") so it always starts fresh.
-  const promptedItemId = phase === "prompt" ? current?.id : undefined;
-  useEffect(() => {
-    if (promptedItemId === undefined) return;
-    setDrawIdx(0);
-    setSnapshots(Array.from({ length: chars.length }, () => null));
-  }, [promptedItemId, chars.length]);
 
   useEffect(() => {
     if (!toast) return;
@@ -241,14 +278,15 @@ export function Quiz({
     );
   }
 
+  const comparing = phase === "peek" || phase === "revealed";
   const questionStrip = (
     <p className="flex items-center justify-center gap-1.5 rounded-full bg-slate-800 px-4 py-1.5 text-xs font-medium text-slate-100 ring-1 ring-white/10">
-      <span aria-hidden>{phase === "revealed" ? "🔍" : "✍️"}</span>
+      <span aria-hidden>{comparing ? "🔍" : "✍️"}</span>
       {questionLabel(phase, handwritingEnabled)}
     </p>
   );
 
-  const showSlotRow = handwritingEnabled && (phase === "prompt" || phase === "revealed");
+  const showSlotRow = handwritingEnabled && (phase === "prompt" || comparing);
 
   const middle = (
     <>
@@ -258,7 +296,8 @@ export function Quiz({
           chars={chars}
           snapshots={snapshots}
           currentIdx={drawIdx}
-          revealed={phase === "revealed"}
+          reveal={phase === "revealed" ? "whole" : phase === "peek" ? "peek" : "none"}
+          peekModel={peekStrokes?.strokes ?? []}
         />
       )}
       {phase === "info" && (
@@ -280,12 +319,22 @@ export function Quiz({
               sizePx={desktop ? 170 : 150}
               onComplete={handleCharComplete}
             />
+            {awaitingReveal && (
+              <p className="text-center text-xs text-slate-400">
+                Pronto — toque em “Revelar” para comparar a palavra.
+              </p>
+            )}
           </div>
         ) : (
           <p className="text-center text-xs text-slate-400">
             Escrita à mão desligada — use “Revelar” para avaliar.
           </p>
         ))}
+      {phase === "peek" && (
+        <p className="text-center text-xs text-slate-500">
+          Só este caractere. “Continuar” segue para o próximo.
+        </p>
+      )}
       {phase === "revealed" && (
         <div className="text-center">
           {selected ? (

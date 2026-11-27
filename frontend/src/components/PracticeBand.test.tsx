@@ -65,4 +65,12 @@ describe("PracticeBand", () => {
     expect(html).not.toContain(">?<");
     expect(html).toContain("estudar");
   });
+
+  it("hides the flip cards at an early peek but keeps pinyin and meaning", () => {
+    const html = markup("desktop", { phase: "peek", handwritingEnabled: true });
+
+    expect(html).not.toContain("學");
+    expect(html).not.toContain(">?<");
+    expect(html).toContain("estudar");
+  });
 });
