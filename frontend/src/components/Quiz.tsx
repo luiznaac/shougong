@@ -15,19 +15,21 @@ import { PATHS, itemPath } from "../lib/navigation.ts";
 import { gradeByHotkey, gradeConsequence } from "../lib/practiceGrades.ts";
 import {
   NEXT_LABEL,
-  QUESTION_LABEL,
   type QuizMode,
   type QuizPhase,
+  questionLabel,
   stageBandClass,
   submitRevealedGrade,
   summaryCopy,
   topBarTitle,
 } from "../lib/quizPractice.ts";
 import { STAGE_HORIZONTAL_PADDING } from "../lib/safeArea.ts";
+import type { SlotCapture } from "../lib/selfCheck.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
 import { HandwritingQuiz, type HandwritingStepProps } from "./HandwritingQuiz.tsx";
 import { PracticeBand } from "./PracticeBand.tsx";
 import { PracticeDock } from "./PracticeDock.tsx";
+import { SlotRow } from "./SlotRow.tsx";
 import { Toast } from "./Toast.tsx";
 
 /**
@@ -75,6 +77,7 @@ export function Quiz({
   const [playerOn, setPlayerOn] = useState(false);
   const [handwritingEnabled, setHandwritingEnabled] = useHandwritingEnabled();
   const [drawIdx, setDrawIdx] = useState(0);
+  const [snapshots, setSnapshots] = useState<(SlotCapture | null)[]>([]);
 
   const current = items[idx];
   const chars = current ? [...current.entry.simplified] : [];
@@ -138,16 +141,27 @@ export function Quiz({
 
   // Handwriting self-check: one character at a time. The drawing is never
   // graded — completion just moves to the next character, and the final one
-  // reveals with no note chosen, so the learner grades their own attempt.
-  const handleCharComplete = useCallback(() => {
-    const next = drawIdx + 1;
-    if (next >= chars.length) {
-      setSelected(null);
-      setPhase("revealed");
-    } else {
-      setDrawIdx(next);
-    }
-  }, [drawIdx, chars.length]);
+  // reveals with no note chosen, so the learner grades their own attempt. Each
+  // completion stores its snapshot (the learner's drawing and the fetched model)
+  // so the slot row can hold it during recall and compare it at the reveal.
+  const handleCharComplete = useCallback(
+    (snapshot: SlotCapture) => {
+      setSnapshots((all) => {
+        const next =
+          all.length === chars.length ? [...all] : Array.from({ length: chars.length }, () => null);
+        next[drawIdx] = snapshot;
+        return next;
+      });
+      const next = drawIdx + 1;
+      if (next >= chars.length) {
+        setSelected(null);
+        setPhase("revealed");
+      } else {
+        setDrawIdx(next);
+      }
+    },
+    [drawIdx, chars.length],
+  );
 
   const canRollback = phase === "revealed" || (phase === "prompt" && mode === "lesson");
   const canGoNext = phase !== "revealed" || selected != null;
@@ -186,7 +200,8 @@ export function Quiz({
   useEffect(() => {
     if (promptedItemId === undefined) return;
     setDrawIdx(0);
-  }, [promptedItemId]);
+    setSnapshots(Array.from({ length: chars.length }, () => null));
+  }, [promptedItemId, chars.length]);
 
   useEffect(() => {
     if (!toast) return;
@@ -228,14 +243,24 @@ export function Quiz({
 
   const questionStrip = (
     <p className="flex items-center justify-center gap-1.5 rounded-full bg-slate-800 px-4 py-1.5 text-xs font-medium text-slate-100 ring-1 ring-white/10">
-      <span aria-hidden>{phase === "revealed" ? "✅" : "✍️"}</span>
-      {QUESTION_LABEL[phase]}
+      <span aria-hidden>{phase === "revealed" ? "🔍" : "✍️"}</span>
+      {questionLabel(phase, handwritingEnabled)}
     </p>
   );
+
+  const showSlotRow = handwritingEnabled && (phase === "prompt" || phase === "revealed");
 
   const middle = (
     <>
       {!desktop && questionStrip}
+      {showSlotRow && (
+        <SlotRow
+          chars={chars}
+          snapshots={snapshots}
+          currentIdx={drawIdx}
+          revealed={phase === "revealed"}
+        />
+      )}
       {phase === "info" && (
         <p className="px-4 text-center text-[11px] text-slate-400 lg:text-xs">
           Memorize os traços acima — a seguir você escreve de memória.
@@ -333,7 +358,7 @@ export function Quiz({
         <DesktopStage>
           {band}
           <div className="relative z-10 -mt-5 flex justify-center">{questionStrip}</div>
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 py-4">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-8 py-4">
             {middle}
           </div>
           {dock}

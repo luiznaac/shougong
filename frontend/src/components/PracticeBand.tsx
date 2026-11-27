@@ -81,7 +81,12 @@ export function PracticeBand({
   const mobile = presentation === "mobile";
   const chars = [...item.entry.simplified];
   const playerSize = mobile ? 150 : 175;
-  const showPlayer = phase === "info" || (phase === "revealed" && playerOn);
+  // At the handwriting comparison the middle carries the learner's drawing
+  // beside the model, so the band drops its own glyph (cards and player) and the
+  // model appears once. Pinyin, levels and meaning stay.
+  const compareWithDrawing = handwritingEnabled && phase === "revealed";
+  const showPlayer =
+    !compareWithDrawing && (phase === "info" || (phase === "revealed" && playerOn));
 
   const handwriting = (
     <div
@@ -156,16 +161,17 @@ export function PracticeBand({
           />
         </div>
 
-        {showPlayer ? (
-          <StrokePlayer key={item.id} word={item.entry.simplified} sizePx={playerSize} />
-        ) : (
-          <FlipCards
-            chars={chars}
-            writingLevels={item.character_writing_levels}
-            hidden={phase === "prompt"}
-            available={mobile ? 300 : 430}
-          />
-        )}
+        {!compareWithDrawing &&
+          (showPlayer ? (
+            <StrokePlayer key={item.id} word={item.entry.simplified} sizePx={playerSize} />
+          ) : (
+            <FlipCards
+              chars={chars}
+              writingLevels={item.character_writing_levels}
+              hidden={phase === "prompt"}
+              available={mobile ? 300 : 430}
+            />
+          ))}
 
         <div className="flex items-center gap-1.5 rounded-full bg-slate-950/35 px-3 py-1">
           <WordLevels
@@ -184,7 +190,7 @@ export function PracticeBand({
           {item.entry.definitions.slice(0, mobile ? 2 : 3).join(" · ")}
         </p>
 
-        {phase === "revealed" && (
+        {phase === "revealed" && !compareWithDrawing && (
           <button
             type="button"
             onClick={onTogglePlayer}

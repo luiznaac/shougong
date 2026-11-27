@@ -8,8 +8,18 @@ export type QuizPhase = "info" | "prompt" | "revealed";
 export const QUESTION_LABEL: Record<QuizPhase, string> = {
   info: "Estude o item",
   prompt: "Escreva o caractere à mão",
-  revealed: "Você acertou a escrita?",
+  revealed: "Compare seu traço com o modelo",
 };
+
+/**
+ * The phase copy the runner shows. The compare prompt belongs to the handwriting
+ * self-check: with handwriting off the reveal is still the flip-card answer, so
+ * it keeps asking whether the learner got the writing right.
+ */
+export function questionLabel(phase: QuizPhase, handwritingEnabled: boolean): string {
+  if (phase === "revealed" && !handwritingEnabled) return "Você acertou a escrita?";
+  return QUESTION_LABEL[phase];
+}
 
 /** The advance button's label for the current phase. */
 export const NEXT_LABEL: Record<QuizPhase, string> = {
