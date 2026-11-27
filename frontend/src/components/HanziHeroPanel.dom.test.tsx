@@ -8,6 +8,7 @@ import type {
   DictionaryEntry,
   HanziHeroStatus,
   HanziHeroSyncResponse,
+  StudyItem,
 } from "../api/types.ts";
 import { formatDateTime } from "../lib/format.ts";
 import { HanziHeroPanel } from "./HanziHeroPanel.tsx";
@@ -20,6 +21,7 @@ vi.mock("../api/client.ts", async (importOriginal) => {
       getHanziHeroStatus: vi.fn(),
       connectHanziHero: vi.fn(),
       syncHanziHero: vi.fn(),
+      addStudyItem: vi.fn(),
     },
   };
 });
@@ -116,6 +118,7 @@ beforeEach(() => {
   vi.mocked(api.getHanziHeroStatus).mockResolvedValue(disconnected());
   vi.mocked(api.connectHanziHero).mockReset();
   vi.mocked(api.syncHanziHero).mockReset();
+  vi.mocked(api.addStudyItem).mockReset();
 });
 
 describe("HanziHeroPanel", () => {
@@ -257,6 +260,38 @@ describe("HanziHeroPanel", () => {
     expect(screen.getByText(/gan1/)).toBeTruthy();
     expect(screen.getByText(/secar; fazer/)).toBeTruthy();
     expect(screen.getByText(/zhao2/)).toBeTruthy();
+  });
+
+  it("resolves an unmatched row by adding the candidate the learner picked", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getHanziHeroStatus).mockResolvedValue(connected());
+    vi.mocked(api.syncHanziHero).mockResolvedValue(syncResponse());
+    vi.mocked(api.addStudyItem).mockResolvedValue({ id: 99 } as StudyItem);
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
+    expect(await screen.findByLabelText("sem correspondência: 2")).toBeTruthy();
+
+    await user.click(await screen.findByRole("button", { name: /#1201 gan1/ }));
+
+    await waitFor(() => expect(api.addStudyItem).toHaveBeenCalledWith(1201));
+    expect(await screen.findByLabelText("criados: 2")).toBeTruthy();
+    expect(screen.getByLabelText("sem correspondência: 1")).toBeTruthy();
+  });
+
+  it("moves a picked candidate to already-in-queue when the add conflicts", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getHanziHeroStatus).mockResolvedValue(connected());
+    vi.mocked(api.syncHanziHero).mockResolvedValue(syncResponse());
+    vi.mocked(api.addStudyItem).mockRejectedValue(new ApiError(409, "already queued"));
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar agora" }));
+    await user.click(await screen.findByRole("button", { name: /#1201 gan1/ }));
+
+    await waitFor(() => expect(api.addStudyItem).toHaveBeenCalledWith(1201));
+    expect(await screen.findByLabelText("já na fila: 2")).toBeTruthy();
+    expect(screen.getByLabelText("sem correspondência: 1")).toBeTruthy();
   });
 
   it("returns to the connect step with the expired-session notice when a sync is rejected", async () => {

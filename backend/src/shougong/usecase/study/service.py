@@ -13,7 +13,7 @@ from shougong.usecase.commons.page import Page
 from shougong.usecase.commons.time import IClock
 from shougong.usecase.configuration.transaction import ITransactionTemplate
 from shougong.usecase.dictionary.gateway import IDictionaryRepository
-from shougong.usecase.dictionary.model import DictionaryEntry
+from shougong.usecase.dictionary.model import DictionaryEntry, is_surname_entry
 from shougong.usecase.dictionary.pinyin import is_numbered_pinyin, sanitize_pinyin
 from shougong.usecase.srs.engine import ISrsEngine
 from shougong.usecase.srs.model import SrsRating, SrsReviewLog, SrsState
@@ -60,6 +60,20 @@ def _batch_outcome(
 
 def _describe(entry: DictionaryEntry) -> str:
     return f"#{entry.id} ({'; '.join(entry.definitions) or '—'})"
+
+
+def _without_surnames(candidates: Sequence[DictionaryEntry]) -> list[DictionaryEntry]:
+    """Drop surname entries when a common entry shares the hanzi.
+
+    CC-CEDICT stores capitalized proper-noun rows (`明 Ming2 /Ming Dynasty/,
+    surname Ming/`) alongside the common reading, and sanitising the stored pinyin
+    collapses both onto `ming2`. When the same hanzi still has a non-surname entry,
+    the surname is never the reading a learner importing vocabulary wants, so it is
+    removed from both the exact match and the other-readings list. A hanzi whose
+    only entries are surnames keeps them.
+    """
+    common = [entry for entry in candidates if not is_surname_entry(entry.definitions)]
+    return common or list(candidates)
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,7 +212,9 @@ class StudyService:
 
         A row that can't be auto-resolved but has candidates in the dictionary
         (several exact matches, or none but other readings exist) is ambiguous and
-        carries those candidates so the caller can resolve it by hand.
+        carries those candidates so the caller can resolve it by hand. Surname
+        entries are dropped first whenever a common entry shares the hanzi, so a
+        proper-noun collision never surfaces as a choice.
 
         Stored `dictionary_entry.pinyin` is sanitised on import (lower-cased, ü as
         `v` — see `sanitize_pinyin`), so the row's pinyin is sanitised the same way
@@ -213,9 +229,10 @@ class StudyService:
                 "pinyin fora do formato esperado (use tons numéricos, ex.: xue2 xi2)",
             )
 
-        candidates = await self._dictionary.find_by_simplified(hanzi)
-        if not candidates:
+        found = await self._dictionary.find_by_simplified(hanzi)
+        if not found:
             return _Unresolved(ImportSkipReason.NOT_FOUND, "hanzi não encontrado no dicionário")
+        candidates = _without_surnames(found)
 
         matches = [entry for entry in candidates if entry.pinyin == sanitize_pinyin(pinyin)]
         if not matches:

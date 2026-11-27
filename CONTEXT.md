@@ -46,3 +46,4 @@ The vocabulary of the handwriting trainer. Terms are defined in the product's la
 - **Skipped item** — a HanziHero item the learner marked as known without drilling it. Skipped items are excluded from the sync.
 - **Already in queue** — a HanziHero item a sync recognised as a duplicate of one already queued; a re-sync reports it instead of creating a second copy.
 - **Unmatched item** — a HanziHero item whose hanzi plus reading matched no dictionary entry, so a sync enqueues nothing for it; the run reports it with the candidate readings to inspect.
+- **Surname entry** — a dictionary entry that is a proper noun whose gloss is `surname X`. Stored pinyin is lower-cased, so it collides with the common reading of the same hanzi; the import drops it as a candidate whenever a common entry exists, so `明` resolves to "bright", never "surname Ming".

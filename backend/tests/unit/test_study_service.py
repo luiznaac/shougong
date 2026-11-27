@@ -568,6 +568,60 @@ async def test_import_batch_reports_ambiguous_match_with_candidates() -> None:
     assert study.items == []
 
 
+async def test_import_batch_drops_a_surname_match_in_favour_of_the_common_reading() -> None:
+    common = DictionaryEntry(id=20, simplified="明", pinyin="ming2", definitions=("bright",))
+    surname = DictionaryEntry(
+        id=21,
+        simplified="明",
+        pinyin="ming2",
+        definitions=("Ming Dynasty (1368–1644)", "surname Ming"),
+    )
+    service, study = _batch_service([common, surname])
+
+    report = await service.import_batch([BatchImportRow(hanzi="明", pinyin="ming2")])
+
+    assert report.outcomes[0].status is BatchRowStatus.CREATED
+    assert [item.entry.id for item in study.items] == [20]
+
+
+async def test_import_batch_hides_surname_candidates_from_the_other_readings_list() -> None:
+    common = DictionaryEntry(id=30, simplified="行", pinyin="xing2", definitions=("to walk",))
+    surname = DictionaryEntry(id=31, simplified="行", pinyin="hang2", definitions=("surname Hang",))
+    service, study = _batch_service([common, surname])
+
+    report = await service.import_batch([BatchImportRow(hanzi="行", pinyin="hang4")])
+
+    outcome = report.outcomes[0]
+    assert outcome.status is BatchRowStatus.ERROR
+    assert [candidate.id for candidate in outcome.candidates] == [30]
+    assert "#31" not in (outcome.detail or "")
+    assert study.items == []
+
+
+async def test_import_batch_keeps_a_surname_candidate_when_no_common_entry_exists() -> None:
+    surname = DictionaryEntry(id=40, simplified="区", pinyin="ou1", definitions=("surname Ou",))
+    service, study = _batch_service([surname])
+
+    report = await service.import_batch([BatchImportRow(hanzi="区", pinyin="ou1")])
+
+    assert report.outcomes[0].status is BatchRowStatus.CREATED
+    assert [item.entry.id for item in study.items] == [40]
+
+
+async def test_import_batch_keeps_a_genuine_ambiguity_after_dropping_the_surname() -> None:
+    walk = DictionaryEntry(id=50, simplified="行", pinyin="xing2", definitions=("to walk",))
+    ok = DictionaryEntry(id=51, simplified="行", pinyin="xing2", definitions=("OK",))
+    surname = DictionaryEntry(id=52, simplified="行", pinyin="xing2", definitions=("surname Xing",))
+    service, study = _batch_service([walk, ok, surname])
+
+    report = await service.import_batch([BatchImportRow(hanzi="行", pinyin="xing2")])
+
+    outcome = report.outcomes[0]
+    assert outcome.status is BatchRowStatus.ERROR
+    assert [candidate.id for candidate in outcome.candidates] == [50, 51]
+    assert study.items == []
+
+
 async def test_import_batch_skips_rows_already_queued_or_duplicated_in_file() -> None:
     study = FakeStudyItemRepository([make_study_item(entry=_NI_HAO)])
     service, study = _batch_service([_XUE_XI, _NI_HAO], study=study)

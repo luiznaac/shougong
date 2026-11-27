@@ -348,7 +348,9 @@ Request: `{ "rows": [ { "hanzi": "学习", "pinyin": "xue2 xi2" } ] }` (1-1000 r
 
 `status` is `created | skipped | error`. An `error` row with `candidates` populated means the row was ambiguous or the pinyin did not match exactly; the client can offer those dictionary entries and resolve via `POST /study-items`.
 
-The dictionary is imported under one set-level policy (see [data model](./03-data-model.md#dictionary_entry)): alias rows that only point at another form of the same word are dropped when a real entry exists, and byte-identical duplicates are removed. So a common HSK word whose only collision was such an alias or duplicate — `了`, `吃` — now resolves to a single entry and its row is `created`. A **genuine homograph** — same hanzi and pinyin but a genuinely different word — still returns an `error` row with its candidates for the learner to choose: `下面` "below" vs "to boil noodles", `和` "and" vs the surname `和`, `你` vs the female form `妳`.
+The dictionary is imported under one set-level policy (see [data model](./03-data-model.md#dictionary_entry)): alias rows that only point at another form of the same word are dropped when a real entry exists, and byte-identical duplicates are removed. So a common HSK word whose only collision was such an alias or duplicate — `了`, `吃` — now resolves to a single entry and its row is `created`.
+
+A **surname row** — a CC-CEDICT proper-noun entry with a `surname X` gloss — is dropped as a candidate whenever the same hanzi also has a common entry. Stored pinyin is lower-cased, so `明 Ming2 /…, surname Ming/` collides with `明 ming2 /bright/`; the row resolves to the common entry and the surname is never offered. A **genuine homograph** — same hanzi and pinyin but a genuinely different word — still returns an `error` row with its candidates for the learner to choose: `下面` "below" vs "to boil noodles", `你` vs the female form `妳`.
 
 ### Reading tokens
 
