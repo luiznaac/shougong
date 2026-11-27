@@ -38,7 +38,9 @@ function ProgressSegments({
  * The practice stage's coloured subject band: the header row, session
  * progress, tone-coloured pinyin, the one glyph slot and the meaning. The
  * glyph renders once per phase — the stroke player in info, hidden cards in
- * prompt, and the answer cards in revealed with an in-place player swap.
+ * prompt, and the answer cards in revealed with an in-place player swap. With
+ * handwriting on the middle owns the glyph (the canvas in prompt, the
+ * comparison in revealed), so the band drops its slot.
  */
 export function PracticeBand({
   presentation,
@@ -50,7 +52,6 @@ export function PracticeBand({
   progress,
   playerOn,
   onTogglePlayer,
-  hideGlyph = false,
   canRollback,
   onRollback,
   onExit,
@@ -73,8 +74,6 @@ export function PracticeBand({
   };
   playerOn: boolean;
   onTogglePlayer: () => void;
-  /** Hides the band's glyph slot while the writing canvas is the phase's glyph. */
-  hideGlyph?: boolean;
   canRollback: boolean;
   onRollback: () => void;
   onExit: () => void;
@@ -84,7 +83,13 @@ export function PracticeBand({
   const mobile = presentation === "mobile";
   const chars = [...item.entry.simplified];
   const playerSize = mobile ? 150 : 175;
-  const showPlayer = phase === "info" || (phase === "revealed" && playerOn);
+  // With handwriting on the middle carries the glyph: the writing canvas during
+  // recall and the learner-vs-model comparison at the reveal. The band drops its
+  // own slot (cards and player) so that glyph appears once; pinyin, levels and
+  // meaning stay.
+  const middleCarriesGlyph = handwritingEnabled && (phase === "prompt" || phase === "revealed");
+  const showPlayer =
+    !middleCarriesGlyph && (phase === "info" || (phase === "revealed" && playerOn));
 
   const handwriting = (
     <div
@@ -159,7 +164,7 @@ export function PracticeBand({
           />
         </div>
 
-        {!hideGlyph &&
+        {!middleCarriesGlyph &&
           (showPlayer ? (
             <StrokePlayer key={item.id} word={item.entry.simplified} sizePx={playerSize} />
           ) : (
@@ -188,7 +193,7 @@ export function PracticeBand({
           {item.entry.definitions.slice(0, mobile ? 2 : 3).join(" · ")}
         </p>
 
-        {phase === "revealed" && (
+        {phase === "revealed" && !middleCarriesGlyph && (
           <button
             type="button"
             onClick={onTogglePlayer}

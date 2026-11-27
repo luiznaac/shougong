@@ -14,10 +14,20 @@ function word(simplified: string, pinyin: string): StudyItem {
   return studyItem({ entry: { ...studyItem().entry, simplified, pinyin } });
 }
 
-/** The handwriting child double: a button that fires completion on demand. */
+/** The handwriting child double: a button that reports a snapshot on demand. */
+const MODEL_STROKES = ["M0 0 L10 10", "M10 0 L0 10"];
+
 function CompletionDouble({ character, onComplete }: HandwritingStepProps) {
   return (
-    <button type="button" onClick={onComplete}>
+    <button
+      type="button"
+      onClick={() =>
+        onComplete({
+          drawing: { strokes: ["M0 0 L10 10"], size: 170 },
+          model: MODEL_STROKES,
+        })
+      }
+    >
       Concluir {character}
     </button>
   );
@@ -86,6 +96,10 @@ function stubStrokes() {
 
 function reviewCalls(): number {
   return fetchMock.mock.calls.filter(([input]) => String(input).includes("/reviews")).length;
+}
+
+function strokeCalls(): number {
+  return fetchMock.mock.calls.filter(([input]) => String(input).includes("/strokes")).length;
 }
 
 /** The nearest element that contains both nodes — the region they share. */
@@ -314,5 +328,111 @@ describe("Quiz interaction", () => {
 
     expect(await screen.findByText(/Prática concluída/)).toBeTruthy();
     expect(reviewCalls()).toBe(0);
+  });
+
+  it("shows one slot per character while recalling, even for a single character", () => {
+    renderQuiz({ handwriting: true, item: word("好", "hao3") });
+
+    const slots = screen.getAllByRole("listitem");
+    expect(slots).toHaveLength(1);
+    expect(slots[0].getAttribute("aria-current")).toBe("step");
+  });
+
+  it("moves the current highlight and keeps each completed drawing during recall", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("学习", "xue2 xi2") });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+
+    expect(screen.getByRole("img", { name: "Seu traço de 学" })).toBeTruthy();
+    expect(screen.getAllByRole("listitem")[1].getAttribute("aria-current")).toBe("step");
+    expect(screen.getByRole("button", { name: "Concluir 习" })).toBeTruthy();
+  });
+
+  it("shows the learner's drawing beside the model for every slot at the final reveal", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+    await user.click(screen.getByRole("button", { name: "Concluir 习" }));
+
+    expect(screen.getAllByText("Seu traço")).toHaveLength(2);
+    expect(screen.getAllByText("Modelo")).toHaveLength(2);
+    expect(screen.getByRole("img", { name: "Seu traço de 学" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Seu traço de 习" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Ordem dos traços de 学" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Ordem dos traços de 习" })).toBeTruthy();
+  });
+
+  it("draws the model from the already-fetched strokes without another request", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    expect(screen.getByRole("img", { name: "Ordem dos traços de 好" })).toBeTruthy();
+    expect(strokeCalls()).toBe(0);
+  });
+
+  it("hides the band's cards while the middle carries the handwriting glyph", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("好", "hao3") });
+
+    // Recall already owns the glyph (the canvas), so the band keeps no hidden card.
+    expect(screen.queryAllByText("?")).toHaveLength(0);
+
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    expect(screen.queryAllByText("?")).toHaveLength(0);
+    expect(screen.getByText("estudar")).toBeTruthy();
+  });
+
+  it("asks the learner to write, then to compare the drawings with the model", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, item: word("好", "hao3") });
+
+    expect(screen.getByText("Escreva o caractere à mão")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    expect(screen.getByText("Compare seu traço com o modelo")).toBeTruthy();
+  });
+
+  it("keeps the flip-card reveal prompt when handwriting is off", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: /Revelar/ }));
+
+    expect(screen.getByText("Você acertou a escrita?")).toBeTruthy();
+    expect(screen.queryByText("Compare seu traço com o modelo")).toBeNull();
+  });
+
+  it("shows the comparison in practice and still records no grade", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ handwriting: true, record: false, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    expect(screen.getAllByText("Modelo")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: /^Bom/ }));
+    await user.click(screen.getByRole("button", { name: /Próximo/ }));
+
+    expect(await screen.findByText(/Prática concluída/)).toBeTruthy();
+    expect(reviewCalls()).toBe(0);
+  });
+
+  it("shows the comparison in a lesson after studying the strokes", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ mode: "lesson", record: true, handwriting: true, item: word("好", "hao3") });
+
+    await user.click(screen.getByRole("button", { name: /Continuar/ }));
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+
+    expect(screen.getAllByText("Seu traço")).toHaveLength(1);
+    expect(screen.getAllByText("Modelo")).toHaveLength(1);
   });
 });
