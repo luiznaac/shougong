@@ -88,6 +88,7 @@ npm run be:check && npm run be:test && npm run fe:check
 - [ADR 0001 — two HSK levels](docs/adr/0001-two-hsk-levels.md) — open it for why vocabulary and handwriting levels are separate.
 - [ADR 0002 — HSK and dictionary sourcing](docs/adr/0002-hsk-and-dictionary-sourcing.md) — open it for the data sources, import policy and in-place re-enrichment.
 - [ADR 0003 — HanziHero sync](docs/adr/0003-hanzihero-sync.md) — open it for why the sync is a one-way CSV import over a stored session cookie.
+- [ADR 0004 — handwriting is an ungraded self-check](docs/adr/0004-handwriting-ungraded-self-check.md) — open it for why the stroke matcher no longer grades and the learner picks the grade after comparing.
 - [Research — HanziHero sync](docs/research/hanzihero-sync.md) — open it for the CSV shapes, the login handshake and the item mapping.
 - [Acceptance runbook — shougong](docs/runbooks/acceptance.md) — open it to boot the stack for self-served acceptance.
 - [Deploy runbook — shougong](docs/runbooks/deploy.md) — open it to run or publish the combined image.
