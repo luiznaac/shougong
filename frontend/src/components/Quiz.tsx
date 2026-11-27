@@ -10,6 +10,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client.ts";
 import { useCharacterStrokes, useReviewMutation } from "../api/queries.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
+import { handwritingCanvasCap } from "../lib/handwriting.ts";
 import { useAutoReveal, useHandwritingEnabled } from "../lib/localSettings.ts";
 import { PATHS, itemPath } from "../lib/navigation.ts";
 import { gradeByHotkey, gradeConsequence } from "../lib/practiceGrades.ts";
@@ -68,6 +69,9 @@ export function Quiz({
   const navigate = useNavigate();
   const { mutateAsync: review } = useReviewMutation();
   const desktop = useMediaQuery("(min-width: 1024px)");
+  const coarsePointer = useMediaQuery("(pointer: coarse)");
+  const stackHandwriting = useMediaQuery("(max-width: 22rem)");
+  const handwritingCap = handwritingCanvasCap(coarsePointer ? "coarse" : "fine");
   const presentation = desktop ? "desktop" : "mobile";
 
   const [idx, setIdx] = useState(0);
@@ -322,6 +326,25 @@ export function Quiz({
 
   const showSlotRow = handwritingEnabled && (phase === "prompt" || comparing);
 
+  // The recall row gives the drawing slot a definite height (stretch in a row,
+  // leftover in a column) so the canvas can measure it; below ~22rem the row
+  // stacks so the square keeps a legible minimum instead of shrinking forever.
+  const handwritingRowClass = desktop
+    ? "flex items-center gap-3"
+    : stackHandwriting
+      ? "flex min-h-0 w-full flex-1 flex-col gap-3"
+      : "flex min-h-0 w-full flex-1 items-stretch justify-center gap-3";
+  const handwritingSlotClass = desktop
+    ? "flex items-center justify-center"
+    : "flex min-h-0 min-w-0 flex-1 items-center justify-center";
+  const clearButtonClass = `inline-flex shrink-0 items-center justify-center rounded-full bg-slate-800 px-3 text-[11px] font-medium text-slate-200 ring-1 ring-white/10 hover:bg-slate-700 ${
+    desktop
+      ? "self-center py-1"
+      : stackHandwriting
+        ? "min-h-11 w-full py-2"
+        : "min-h-11 self-center py-2"
+  }`;
+
   const middle = (
     <>
       {!desktop && questionStrip}
@@ -341,23 +364,30 @@ export function Quiz({
       )}
       {phase === "prompt" &&
         (handwritingEnabled ? (
-          <div className="flex flex-col items-center gap-2">
+          <div
+            className={
+              desktop
+                ? "flex flex-col items-center gap-2"
+                : "flex min-h-[10rem] w-full flex-1 flex-col items-center gap-2"
+            }
+          >
             {chars.length > 1 && (
               <p className="text-xs text-slate-400 lg:hidden">
                 caractere {drawIdx + 1}/{chars.length}
               </p>
             )}
-            <div className="flex items-center gap-3">
-              <HandwritingStep
-                key={`${current.id}-${drawIdx}-${redrawCount}`}
-                character={chars[drawIdx]}
-                onComplete={handleCharComplete}
-              />
-              <button
-                type="button"
-                onClick={clearCurrent}
-                className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-medium text-slate-200 ring-1 ring-white/10 hover:bg-slate-700"
+            <div className={handwritingRowClass}>
+              <div
+                className={handwritingSlotClass}
+                style={desktop ? { width: handwritingCap, height: handwritingCap } : undefined}
               >
+                <HandwritingStep
+                  key={`${current.id}-${drawIdx}-${redrawCount}`}
+                  character={chars[drawIdx]}
+                  onComplete={handleCharComplete}
+                />
+              </div>
+              <button type="button" onClick={clearCurrent} className={clearButtonClass}>
                 Limpar
               </button>
             </div>
