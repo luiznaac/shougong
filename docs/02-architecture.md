@@ -149,7 +149,7 @@ flowchart LR
 - One image (`Dockerfile`) builds the SPA, resolves backend deps, then ships both processes under supervisord.
 - `deploy/entrypoint.sh` renders the nginx config from a template, applies Alembic migrations, then starts supervisord. A failed migration aborts boot.
 - The API is exposed directly on `API_PORT` (8080) and through nginx on `WEB_PORT` (8081) at `/api`. Both are container-internal and fixed; the local compose publishes them on shougong's host block (`api` 8130, `web` 8131, `mysql` 8132 — see [README.md](../README.md#quickstart)), beside the acceptance runbook's dev-only HanziHero stub on 8134.
-- CI (`backend` + `frontend` jobs) gates the Docker publish job, which only runs on `master` pushes and pushes `luiznaac/shougong:latest` + `:v<run-number>`.
+- CI (`backend` + `frontend` jobs) validates every push and PR. `.github/workflows/docker-publish.yml` builds the image with `push: false` on pull requests and publishes `luiznaac/shougong` only on a `v*` release tag (semver, major.minor and short SHA, `latest` only on a release) cut by `scripts/release.sh` — a merge to `master` never publishes.
 
 ## Configuration
 

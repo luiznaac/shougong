@@ -35,4 +35,9 @@ The published host ports are configurable with `HTTP_PORT` and `WEB_HOST_PORT`; 
 
 ## Publish
 
-After CI passes on a push to `master`, the `publish` job in `.github/workflows/ci.yml` builds and pushes `luiznaac/shougong:latest` and `luiznaac/shougong:v<run-number>` to Docker Hub. The job needs the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+A merge to `master` never publishes. `.github/workflows/docker-publish.yml` publishes
+`luiznaac/shougong` only on a deliberate `v*` release tag, pushed by `scripts/release.sh <version>`:
+it tags immutable semver, major.minor and short-SHA images, moving `latest` only on a release. On a
+pull request it builds the same image with `push: false`, so a broken Dockerfile fails CI before a
+release discovers it. Publishing needs the repository variable `DOCKERHUB_USERNAME` and secret
+`DOCKERHUB_TOKEN`.

@@ -26,3 +26,4 @@ Vocabulary: **module**, **interface**, **seam**, **adapter**.
 - `frontend/vite.config.ts` — dev server port, `/api` proxy target and production base path.
 - `package.json` (root) — the script shims every command in the README runs.
 - `docker-compose.yml`, `Dockerfile`, `deploy/` — the local stack and the combined production image.
+- `scripts/release.sh` — cut a release: validate the repository state, then create the `v*` tag and GitHub Release, which fires `.github/workflows/docker-publish.yml`.
