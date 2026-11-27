@@ -1,16 +1,20 @@
 import HanziWriter from "hanzi-writer";
 import { useEffect, useRef } from "react";
 import { useCharacterStrokes } from "../api/queries.ts";
+import type { SlotCapture } from "../lib/selfCheck.ts";
 
 /**
  * The interactive handwriting step's contract: one character drawn from memory.
  * The child reports completion, never pass/fail — the learner judges the result
- * in the reveal, not the stroke matcher.
+ * in the reveal, not the stroke matcher. The completion carries the snapshot the
+ * reveal needs: the learner's accepted strokes and the model's reference strokes
+ * (the data this child already fetched), so the comparison draws without a
+ * second network call.
  */
 export interface HandwritingStepProps {
   character: string;
   sizePx?: number;
-  onComplete: () => void;
+  onComplete: (snapshot: SlotCapture) => void;
 }
 
 /**
@@ -32,15 +36,18 @@ export function HandwritingQuiz({ character, sizePx = 220, onComplete }: Handwri
 
   const sentRef = useRef(false);
   const lastCharacterRef = useRef(character);
+  // The learner's accepted strokes in the canvas's pixel space, accumulated as
+  // the drawing runs so the snapshot is complete before the writer is remounted.
+  const drawnStrokesRef = useRef<string[]>([]);
 
   // No stroke data for this character (e.g. punctuation) — skip it rather
   // than blocking the sequence, same as StrokeOrder.tsx hiding itself.
   useEffect(() => {
     if (error && !sentRef.current) {
       sentRef.current = true;
-      onCompleteRef.current();
+      onCompleteRef.current({ drawing: { strokes: [], size: sizePx }, model: [] });
     }
-  }, [error]);
+  }, [error, sizePx]);
 
   const mountRef = useRef<HTMLDivElement>(null);
 
@@ -60,13 +67,20 @@ export function HandwritingQuiz({ character, sizePx = 220, onComplete }: Handwri
       charDataLoader: (_char, onLoad) => onLoad(data),
     });
 
+    drawnStrokesRef.current = [];
     writer.quiz({
       showHintAfterMisses: 3, // reachable before the stroke is force-accepted
       markStrokeCorrectAfterMisses: 4,
+      onCorrectStroke: ({ drawnPath }) => {
+        drawnStrokesRef.current.push(drawnPath.pathString);
+      },
       onComplete: () => {
         if (sentRef.current) return;
         sentRef.current = true;
-        onCompleteRef.current();
+        onCompleteRef.current({
+          drawing: { strokes: [...drawnStrokesRef.current], size: sizePx },
+          model: data.strokes,
+        });
       },
     });
 

@@ -1,8 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client.ts";
-import { stageBandClass, submitRevealedGrade, summaryCopy, topBarTitle } from "./quizPractice.ts";
+import {
+  QUESTION_LABEL,
+  questionLabel,
+  stageBandClass,
+  submitRevealedGrade,
+  summaryCopy,
+  topBarTitle,
+} from "./quizPractice.ts";
 
 describe("quiz practice copy", () => {
+  it("asks the learner to write, then to compare their drawing with the model", () => {
+    expect(QUESTION_LABEL.prompt).toBe("Escreva o caractere à mão");
+    expect(QUESTION_LABEL.revealed).toBe("Compare seu traço com o modelo");
+  });
+
+  it("keeps the flip-card reveal prompt when handwriting is off", () => {
+    expect(questionLabel("revealed", true)).toBe("Compare seu traço com o modelo");
+    expect(questionLabel("revealed", false)).toBe("Você acertou a escrita?");
+    expect(questionLabel("prompt", false)).toBe("Escreva o caractere à mão");
+  });
+
   it("keeps the ordinary top-bar labels when recording", () => {
     expect(topBarTitle("review", true)).toBe("Review");
     expect(topBarTitle("lesson", true)).toBe("Lição");
