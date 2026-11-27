@@ -540,4 +540,108 @@ describe("Quiz interaction", () => {
     expect(screen.getByRole("img", { name: "Ordem dos traços de 学" })).toBeTruthy();
     expect(screen.getByRole("img", { name: "Ordem dos traços de 习" })).toBeTruthy();
   });
+
+  const SELF_CHECK_MODES = [
+    { name: "lesson", mode: "lesson" as const, record: true },
+    { name: "review", mode: "review" as const, record: true },
+    { name: "practice", mode: "review" as const, record: false },
+  ];
+
+  it.each(SELF_CHECK_MODES)(
+    "clears a chosen grade then steps back one character ($name)",
+    async ({ mode, record }) => {
+      const user = userEvent.setup();
+      renderQuiz({ mode, record, handwriting: true, item: word("学习", "xue2 xi2") });
+      if (mode === "lesson") {
+        await user.click(screen.getByRole("button", { name: /Continuar/ }));
+      }
+
+      await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+      await user.click(screen.getByRole("button", { name: "Concluir 习" }));
+      expect(screen.getAllByText("Seu traço")).toHaveLength(2);
+
+      await user.click(screen.getByRole("button", { name: /^Bom/ }));
+      expect((screen.getByRole("button", { name: /Próximo/ }) as HTMLButtonElement).disabled).toBe(
+        false,
+      );
+
+      await user.click(screen.getByRole("button", { name: "Rollback" }));
+
+      // The grade is cleared, but the comparison stays on screen.
+      expect(screen.getAllByText("Seu traço")).toHaveLength(2);
+      expect(screen.getAllByText("Modelo")).toHaveLength(2);
+      expect((screen.getByRole("button", { name: /Próximo/ }) as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+
+      await user.click(screen.getByRole("button", { name: "Rollback" }));
+
+      // Back on the last character's recall; the earlier drawing survives.
+      expect(screen.getByRole("button", { name: "Concluir 习" })).toBeTruthy();
+      expect(screen.getByRole("img", { name: "Seu traço de 学" })).toBeTruthy();
+      expect(screen.queryByRole("img", { name: "Seu traço de 习" })).toBeNull();
+
+      if (!record) {
+        await user.click(screen.getByRole("button", { name: "Concluir 习" }));
+        await user.click(screen.getByRole("button", { name: /^Bom/ }));
+        await user.click(screen.getByRole("button", { name: /Próximo/ }));
+
+        expect(await screen.findByText(/Prática concluída/)).toBeTruthy();
+        expect(reviewCalls()).toBe(0);
+      }
+    },
+  );
+
+  it("leaves recall rollback unavailable in review", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ mode: "review", record: true, handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+
+    expect((screen.getByRole("button", { name: "Rollback" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("steps back one character from a lesson recall", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ mode: "lesson", record: true, handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: /Continuar/ }));
+    await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+    expect(screen.getByRole("button", { name: "Concluir 习" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Rollback" }));
+
+    expect(screen.getByRole("button", { name: "Concluir 学" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Seu traço de 学" })).toBeNull();
+  });
+
+  it("keeps every earlier drawing when rolling back through the word", async () => {
+    const user = userEvent.setup();
+    renderQuiz({
+      mode: "lesson",
+      record: true,
+      handwriting: true,
+      item: word("学习好", "xue2 xi2 hao3"),
+    });
+
+    await user.click(screen.getByRole("button", { name: /Continuar/ }));
+    await user.click(screen.getByRole("button", { name: "Concluir 学" }));
+    await user.click(screen.getByRole("button", { name: "Concluir 习" }));
+    await user.click(screen.getByRole("button", { name: "Concluir 好" }));
+    expect(screen.getAllByText("Seu traço")).toHaveLength(3);
+
+    await user.click(screen.getByRole("button", { name: "Rollback" }));
+
+    expect(screen.getByRole("img", { name: "Seu traço de 学" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Seu traço de 习" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Seu traço de 好" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Rollback" }));
+
+    expect(screen.getByRole("img", { name: "Seu traço de 学" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Seu traço de 习" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Concluir 习" })).toBeTruthy();
+  });
 });

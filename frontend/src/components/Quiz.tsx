@@ -24,7 +24,12 @@ import {
   topBarTitle,
 } from "../lib/quizPractice.ts";
 import { STAGE_HORIZONTAL_PADDING } from "../lib/safeArea.ts";
-import { type SlotCapture, afterCharacterComplete, revealTarget } from "../lib/selfCheck.ts";
+import {
+  type SlotCapture,
+  afterCharacterComplete,
+  revealTarget,
+  rollbackStep,
+} from "../lib/selfCheck.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
 import { HandwritingQuiz, type HandwritingStepProps } from "./HandwritingQuiz.tsx";
 import { PracticeBand } from "./PracticeBand.tsx";
@@ -160,26 +165,45 @@ export function Quiz({
     chars.length,
   ]);
 
-  // Backward: undo the selected grade, else step back a phase. An early peek
-  // returns to the character being drawn without losing its place.
+  // What rollback would do right now, derived during render so availability and
+  // behaviour read from the same pure rule.
+  const rollbackAction = rollbackStep({
+    phase,
+    hasGrade: selected != null,
+    drawIdx,
+    count: chars.length,
+    lesson: mode === "lesson",
+    handwriting: handwritingEnabled,
+  });
+  const canRollback = rollbackAction.kind !== "unavailable";
+
+  // Backward, in the self-check's order: clear the chosen grade first; with no
+  // grade step back one character (redrawing it) into recall; from recall a
+  // lesson steps back a character and review/practice have nowhere to go. A
+  // peek just returns to the character being drawn.
   const rollback = useCallback(() => {
     if (submitting) return;
-    if (phase === "revealed") {
-      if (selected) return setSelected(null);
-      setPhase("prompt");
-      setDrawIdx(0);
-      setRedrawCount(0);
-      setSnapshots([]);
-      return;
+    switch (rollbackAction.kind) {
+      case "clear-grade":
+        return setSelected(null);
+      case "step-back":
+        setPhase("prompt");
+        setDrawIdx(rollbackAction.drawIdx);
+        setRedrawCount(0);
+        setSnapshots((all) => all.map((s, i) => (i < rollbackAction.drawIdx ? s : null)));
+        return;
+      case "return-to-recall":
+        return setPhase("prompt");
+      case "back-to-info":
+        setPhase("info");
+        setDrawIdx(0);
+        setRedrawCount(0);
+        setSnapshots([]);
+        return;
+      case "unavailable":
+        return;
     }
-    if (phase === "peek") return setPhase("prompt");
-    if (phase === "prompt" && mode === "lesson") {
-      setPhase("info");
-      setDrawIdx(0);
-      setRedrawCount(0);
-      setSnapshots([]);
-    }
-  }, [phase, selected, submitting, mode]);
+  }, [submitting, rollbackAction]);
 
   // Handwriting self-check: one character at a time. The drawing is never
   // graded — completion just moves to the next character, and the final one
@@ -214,8 +238,6 @@ export function Quiz({
     setRedrawCount((count) => count + 1);
   }, [drawIdx]);
 
-  const canRollback =
-    phase === "revealed" || phase === "peek" || (phase === "prompt" && mode === "lesson");
   const canGoNext = phase !== "revealed" || selected != null;
   const awaitingReveal =
     phase === "prompt" &&
@@ -321,7 +343,7 @@ export function Quiz({
         (handwritingEnabled ? (
           <div className="flex flex-col items-center gap-2">
             {chars.length > 1 && (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 lg:hidden">
                 caractere {drawIdx + 1}/{chars.length}
               </p>
             )}
@@ -427,8 +449,8 @@ export function Quiz({
         <DesktopStage>
           {band}
           <div className="relative z-10 -mt-5 flex justify-center">{questionStrip}</div>
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-8 py-4">
-            {middle}
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 py-2">
+            <div className="my-auto flex w-full flex-col items-center gap-3">{middle}</div>
           </div>
           {dock}
         </DesktopStage>
@@ -456,8 +478,8 @@ export function Quiz({
 
 function DesktopStage({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-950 p-6">
-      <div className="flex h-[calc(100dvh-3rem)] max-h-[720px] w-full max-w-[720px] flex-col overflow-hidden rounded-[2rem] bg-slate-950 text-slate-200 ring-1 ring-white/10">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-slate-950 p-3">
+      <div className="flex h-[calc(100dvh-1.5rem)] max-h-[720px] w-full max-w-[720px] flex-col overflow-hidden rounded-[2rem] bg-slate-950 text-slate-200 ring-1 ring-white/10">
         {children}
       </div>
     </div>

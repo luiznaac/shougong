@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type SlotCapture, afterCharacterComplete, revealTarget, slotState } from "./selfCheck.ts";
+import {
+  type SlotCapture,
+  afterCharacterComplete,
+  revealTarget,
+  rollbackStep,
+  slotState,
+} from "./selfCheck.ts";
 
 const snapshot: SlotCapture = {
   drawing: { strokes: ["M0 0 L10 10"], size: 170 },
@@ -53,5 +59,58 @@ describe("afterCharacterComplete", () => {
   it("waits for the learner's reveal when auto-reveal is off", () => {
     expect(afterCharacterComplete(2, 3, false)).toBe("waiting");
     expect(afterCharacterComplete(0, 1, false)).toBe("waiting");
+  });
+});
+
+describe("rollbackStep", () => {
+  const base = { drawIdx: 0, count: 3, lesson: false, handwriting: true };
+
+  it("clears a chosen grade and keeps the comparison", () => {
+    expect(rollbackStep({ ...base, phase: "revealed", hasGrade: true })).toEqual({
+      kind: "clear-grade",
+    });
+  });
+
+  it("steps back to the last character from the comparison with no grade", () => {
+    expect(rollbackStep({ ...base, phase: "revealed", hasGrade: false, drawIdx: 2 })).toEqual({
+      kind: "step-back",
+      drawIdx: 2,
+    });
+  });
+
+  it("returns to the start of recall when handwriting is off", () => {
+    expect(
+      rollbackStep({ ...base, phase: "revealed", hasGrade: false, handwriting: false }),
+    ).toEqual({ kind: "step-back", drawIdx: 0 });
+  });
+
+  it("returns to the character being drawn from a peek", () => {
+    expect(rollbackStep({ ...base, phase: "peek", hasGrade: false, drawIdx: 1 })).toEqual({
+      kind: "return-to-recall",
+    });
+  });
+
+  it("steps back one character during a lesson recall", () => {
+    expect(
+      rollbackStep({ ...base, phase: "prompt", hasGrade: false, lesson: true, drawIdx: 2 }),
+    ).toEqual({ kind: "step-back", drawIdx: 1 });
+  });
+
+  it("returns to stroke study at the first lesson character", () => {
+    expect(
+      rollbackStep({ ...base, phase: "prompt", hasGrade: false, lesson: true, drawIdx: 0 }),
+    ).toEqual({ kind: "back-to-info" });
+  });
+
+  it("is unavailable from review and practice recall", () => {
+    expect(
+      rollbackStep({ ...base, phase: "prompt", hasGrade: false, lesson: false, drawIdx: 1 }),
+    ).toEqual({ kind: "unavailable" });
+  });
+
+  it("is unavailable before recall", () => {
+    expect(rollbackStep({ ...base, phase: "info", hasGrade: false })).toEqual({
+      kind: "unavailable",
+    });
   });
 });
