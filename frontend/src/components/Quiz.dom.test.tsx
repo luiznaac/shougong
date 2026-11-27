@@ -394,6 +394,13 @@ describe("Quiz interaction", () => {
     expect(screen.queryByRole("button", { name: "Limpar" })).toBeNull();
   });
 
+  it("keeps Limpar reachable beside the drawing step in recall", () => {
+    renderQuiz({ handwriting: true, item: word("好", "hao3") });
+
+    expect(screen.getByRole("button", { name: "Concluir 好" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Limpar" })).toBeTruthy();
+  });
+
   it("shows the learner's drawing beside the model for every slot at the final reveal", async () => {
     const user = userEvent.setup();
     renderQuiz({ handwriting: true, item: word("学习", "xue2 xi2") });

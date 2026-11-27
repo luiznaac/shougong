@@ -26,18 +26,21 @@ vi.mock("../api/queries.ts", () => ({
   useCharacterStrokes: () => strokeState.current,
 }));
 
+const { elementSize } = vi.hoisted(() => ({
+  elementSize: { current: { width: 448, height: 320 } },
+}));
+
+vi.mock("../lib/useElementSize.ts", () => ({
+  useElementSize: () => ({ ref: () => {}, size: elementSize.current }),
+}));
+
 const MODEL_STROKES = ["M0 0 L10 10", "M10 0 L0 10"];
 
 function quizOptions(): Record<string, unknown> {
   return quizMock.mock.calls[0][0] as Record<string, unknown>;
 }
 
-function setPointer(pointer: "coarse" | "fine", viewportWidth: number) {
-  Object.defineProperty(window, "innerWidth", {
-    configurable: true,
-    writable: true,
-    value: viewportWidth,
-  });
+function setPointer(pointer: "coarse" | "fine") {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     writable: true,
@@ -83,7 +86,8 @@ function complete() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  setPointer("fine", 1440);
+  elementSize.current = { width: 448, height: 320 };
+  setPointer("fine");
   strokeState.current = {
     data: { character: "好", strokes: MODEL_STROKES, medians: [] },
     isLoading: false,
@@ -110,22 +114,66 @@ describe("HandwritingQuiz", () => {
     );
   });
 
-  it("sizes one square for both the grid and the writer under a coarse pointer", () => {
-    setPointer("coarse", 390);
+  it("sizes one square to the measured slot under a coarse pointer", () => {
+    elementSize.current = { width: 270, height: 295 };
+    setPointer("coarse");
+    render(<HandwritingQuiz character="好" onComplete={vi.fn()} />);
+
+    expect(canvasFrame().style.width).toBe("270px");
+    expect(canvasFrame().style.height).toBe("270px");
+    expect(writerOptions()).toMatchObject({ width: 270, height: 270 });
+  });
+
+  it("caps a large coarse-pointer slot at 320px", () => {
+    elementSize.current = { width: 600, height: 600 };
+    setPointer("coarse");
     render(<HandwritingQuiz character="好" onComplete={vi.fn()} />);
 
     expect(canvasFrame().style.width).toBe("320px");
-    expect(canvasFrame().style.height).toBe("320px");
     expect(writerOptions()).toMatchObject({ width: 320, height: 320 });
   });
 
-  it("sizes one square for both the grid and the writer under a fine pointer", () => {
-    setPointer("fine", 1440);
+  it("fits a fine-pointer square to the smaller slot axis, capped at 220px", () => {
+    setPointer("fine");
     render(<HandwritingQuiz character="好" onComplete={vi.fn()} />);
 
     expect(canvasFrame().style.width).toBe("220px");
     expect(canvasFrame().style.height).toBe("220px");
     expect(writerOptions()).toMatchObject({ width: 220, height: 220 });
+  });
+
+  it("shrinks a fine-pointer square when the slot is narrower than the cap", () => {
+    elementSize.current = { width: 180, height: 320 };
+    setPointer("fine");
+    render(<HandwritingQuiz character="好" onComplete={vi.fn()} />);
+
+    expect(canvasFrame().style.width).toBe("180px");
+    expect(writerOptions()).toMatchObject({ width: 180, height: 180 });
+  });
+
+  it("renders no square until its slot has a measurable size", () => {
+    elementSize.current = { width: 0, height: 0 };
+    setPointer("coarse");
+    render(<HandwritingQuiz character="好" onComplete={vi.fn()} />);
+
+    expect(screen.queryByTestId("handwriting-canvas")).toBeNull();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { width: 215, height: 229 },
+    { width: 270, height: 295 },
+    { width: 285, height: 300 },
+    { width: 448, height: 320 },
+  ])("never draws a frame larger than its slot ($width×$height)", ({ width, height }) => {
+    elementSize.current = { width, height };
+    setPointer("coarse");
+    render(<HandwritingQuiz character="好" onComplete={vi.fn()} />);
+
+    const side = Number.parseInt(canvasFrame().style.width, 10);
+    expect(side).toBeLessThanOrEqual(width);
+    expect(side).toBeLessThanOrEqual(height);
+    expect(canvasFrame().style.height).toBe(`${side}px`);
   });
 
   it("hints after 3 misses and force-accepts the stroke on the 4th", () => {

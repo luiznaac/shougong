@@ -1,8 +1,10 @@
 import HanziWriter from "hanzi-writer";
 import { useEffect, useRef } from "react";
 import { useCharacterStrokes } from "../api/queries.ts";
-import { useHandwritingCanvasSize } from "../lib/handwriting.ts";
+import { handwritingCanvasSize } from "../lib/handwriting.ts";
 import type { SlotCapture } from "../lib/selfCheck.ts";
+import { useElementSize } from "../lib/useElementSize.ts";
+import { useMediaQuery } from "../lib/useMediaQuery.ts";
 
 /**
  * The interactive handwriting step's contract: one character drawn from memory.
@@ -52,13 +54,16 @@ function MiZiGeGrid() {
  * 4th, so the hint is reachable before the stroke is accepted. `onComplete`
  * fires exactly once, regardless of the mistake count.
  *
- * The square is sized for the pointer — coarse pointers get a finger-sized
- * canvas, fine pointers a mouse-sized one — and the grid and the writer always
- * share it.
+ * The square is sized from the box its parent gives it — the stage's width
+ * beside "Limpar" and the height above the action dock — capped for the
+ * pointer, so neither control can push it off-screen. The grid and the writer
+ * always share that one square.
  */
 export function HandwritingQuiz({ character, onComplete }: HandwritingStepProps) {
   const { data, isLoading, error } = useCharacterStrokes(character);
-  const sizePx = useHandwritingCanvasSize();
+  const coarsePointer = useMediaQuery("(pointer: coarse)");
+  const { ref: slotRef, size: slotSize } = useElementSize<HTMLDivElement>();
+  const sizePx = handwritingCanvasSize(coarsePointer ? "coarse" : "fine", slotSize);
 
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -87,7 +92,7 @@ export function HandwritingQuiz({ character, onComplete }: HandwritingStepProps)
       lastCharacterRef.current = character;
       sentRef.current = false;
     }
-    if (!data || !mountRef.current) return;
+    if (!data || !mountRef.current || sizePx <= 0) return;
 
     const writer = HanziWriter.create(mountRef.current, character, {
       width: sizePx,
@@ -124,18 +129,26 @@ export function HandwritingQuiz({ character, onComplete }: HandwritingStepProps)
 
   const frame = (
     <div
-      data-testid="handwriting-canvas"
-      className="relative overflow-hidden rounded-lg bg-slate-800/40"
-      style={{ width: sizePx, height: sizePx }}
+      ref={slotRef}
+      data-testid="handwriting-slot"
+      className="grid h-full w-full min-h-0 min-w-0 place-items-center"
     >
-      <MiZiGeGrid />
-      {!isLoading && !error && data && (
+      {sizePx > 0 && (
         <div
-          ref={mountRef}
-          data-testid="handwriting-writer"
-          className="absolute inset-0"
-          style={{ touchAction: "none" }}
-        />
+          data-testid="handwriting-canvas"
+          className="relative overflow-hidden rounded-lg bg-slate-800/40"
+          style={{ width: sizePx, height: sizePx }}
+        >
+          <MiZiGeGrid />
+          {!isLoading && !error && data && (
+            <div
+              ref={mountRef}
+              data-testid="handwriting-writer"
+              className="absolute inset-0"
+              style={{ touchAction: "none" }}
+            />
+          )}
+        </div>
       )}
     </div>
   );
