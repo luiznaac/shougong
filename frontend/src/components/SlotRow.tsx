@@ -145,9 +145,11 @@ function RecallSlot({
 function ComparisonSlot({
   character,
   snapshot,
+  model,
 }: {
   character: string;
   snapshot: SlotCapture | null;
+  model: string[];
 }) {
   return (
     <li
@@ -169,29 +171,33 @@ function ComparisonSlot({
           <figcaption className="pb-1 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
             Modelo
           </figcaption>
-          <ModelGlyph character={character} strokes={snapshot?.model ?? []} sizePx={COMPARE_SIZE} />
+          <ModelGlyph character={character} strokes={model} sizePx={COMPARE_SIZE} />
         </figure>
       </div>
     </li>
   );
 }
 
+export type SlotReveal = "none" | "peek" | "whole";
+
 /**
  * The word's per-character row, always one slot per character — a lone character
  * too. During recall the slot being drawn is highlighted and completed slots
- * hold the learner's snapshot; at the comparison every slot shows the learner's
- * drawing beside the model.
+ * hold the learner's snapshot. An early peek compares only the current slot;
+ * the final reveal compares every slot's learner drawing beside its model.
  */
 export function SlotRow({
   chars,
   snapshots,
   currentIdx,
-  revealed,
+  reveal = "none",
+  peekModel = [],
 }: {
   chars: string[];
   snapshots: (SlotCapture | null)[];
   currentIdx: number;
-  revealed: boolean;
+  reveal?: SlotReveal;
+  peekModel?: string[];
 }) {
   return (
     <ul
@@ -200,8 +206,14 @@ export function SlotRow({
     >
       {keyedOccurrences(chars, (char) => char).map(({ key, item: character }, index) => {
         const snapshot = snapshots[index] ?? null;
-        return revealed ? (
-          <ComparisonSlot key={key} character={character} snapshot={snapshot} />
+        const comparing = reveal === "whole" || (reveal === "peek" && index === currentIdx);
+        return comparing ? (
+          <ComparisonSlot
+            key={key}
+            character={character}
+            snapshot={snapshot}
+            model={snapshot?.model ?? (reveal === "peek" ? peekModel : [])}
+          />
         ) : (
           <RecallSlot
             key={key}

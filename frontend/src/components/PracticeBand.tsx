@@ -84,10 +84,11 @@ export function PracticeBand({
   const chars = [...item.entry.simplified];
   const playerSize = mobile ? 150 : 175;
   // With handwriting on the middle carries the glyph: the writing canvas during
-  // recall and the learner-vs-model comparison at the reveal. The band drops its
-  // own slot (cards and player) so that glyph appears once; pinyin, levels and
-  // meaning stay.
-  const middleCarriesGlyph = handwritingEnabled && (phase === "prompt" || phase === "revealed");
+  // recall, the single-character pair on an early peek, and the learner-vs-model
+  // comparison at the reveal. The band drops its own slot (cards and player) so
+  // that glyph appears once; pinyin, levels and meaning stay.
+  const middleCarriesGlyph =
+    handwritingEnabled && (phase === "prompt" || phase === "peek" || phase === "revealed");
   const showPlayer =
     !middleCarriesGlyph && (phase === "info" || (phase === "revealed" && playerOn));
 

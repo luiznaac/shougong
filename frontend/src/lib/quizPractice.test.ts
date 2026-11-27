@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client.ts";
 import {
+  NEXT_LABEL,
   QUESTION_LABEL,
   questionLabel,
   stageBandClass,
@@ -12,7 +13,13 @@ import {
 describe("quiz practice copy", () => {
   it("asks the learner to write, then to compare their drawing with the model", () => {
     expect(QUESTION_LABEL.prompt).toBe("Escreva o caractere à mão");
+    expect(QUESTION_LABEL.peek).toBe("Compare este caractere com o modelo");
     expect(QUESTION_LABEL.revealed).toBe("Compare seu traço com o modelo");
+  });
+
+  it("labels the peek's advance as continue", () => {
+    expect(NEXT_LABEL.prompt).toBe("Revelar");
+    expect(NEXT_LABEL.peek).toBe("Continuar");
   });
 
   it("keeps the flip-card reveal prompt when handwriting is off", () => {
