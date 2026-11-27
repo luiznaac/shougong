@@ -1,31 +1,34 @@
 import HanziWriter from "hanzi-writer";
 import { useEffect, useRef } from "react";
 import { useCharacterStrokes } from "../api/queries.ts";
-import { allowedMistakes } from "../lib/localSettings.ts";
 
 /**
- * Interactive stroke-order check for a single character: the user draws it
- * from memory (no outline hint), hanzi-writer grades each stroke against the
- * reference data we already fetch/cache ourselves (via `charDataLoader`, so
- * there's no second network round trip to a CDN). `onResult` fires exactly
- * once, with whether the total mistake count stayed within the tolerance for
- * this character's own stroke count.
+ * The interactive handwriting step's contract: one character drawn from memory.
+ * The child reports completion, never pass/fail — the learner judges the result
+ * in the reveal, not the stroke matcher.
  */
-export function HandwritingQuiz({
-  character,
-  tolerancePercent,
-  sizePx = 220,
-  onResult,
-}: {
+export interface HandwritingStepProps {
   character: string;
-  tolerancePercent: number;
   sizePx?: number;
-  onResult: (passed: boolean) => void;
-}) {
+  onComplete: () => void;
+}
+
+/**
+ * Interactive stroke-order self-check for a single character: the user draws it
+ * from memory (no outline hint), hanzi-writer guides each stroke against the
+ * reference data we already fetch/cache ourselves (via `charDataLoader`, so
+ * there's no second network round trip to a CDN). The automatic hint appears
+ * after 3 misses and the stroke is force-accepted on the 4th, so the hint is
+ * reachable before the stroke is accepted. `onComplete` fires exactly once,
+ * regardless of the mistake count.
+ */
+export function HandwritingQuiz({ character, sizePx = 220, onComplete }: HandwritingStepProps) {
   const { data, isLoading, error } = useCharacterStrokes(character);
 
-  const onResultRef = useRef(onResult);
-  onResultRef.current = onResult;
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   const sentRef = useRef(false);
   const lastCharacterRef = useRef(character);
@@ -35,7 +38,7 @@ export function HandwritingQuiz({
   useEffect(() => {
     if (error && !sentRef.current) {
       sentRef.current = true;
-      onResultRef.current(true);
+      onCompleteRef.current();
     }
   }, [error]);
 
@@ -48,7 +51,6 @@ export function HandwritingQuiz({
     }
     if (!data || !mountRef.current) return;
 
-    const allowed = allowedMistakes(data.strokes.length, tolerancePercent);
     const writer = HanziWriter.create(mountRef.current, character, {
       width: sizePx,
       height: sizePx,
@@ -59,12 +61,12 @@ export function HandwritingQuiz({
     });
 
     writer.quiz({
-      showHintAfterMisses: false, // strictly from-memory — no hint
-      markStrokeCorrectAfterMisses: 3, // don't block forever on one stroke; misses still count
-      onComplete: ({ totalMistakes }) => {
+      showHintAfterMisses: 3, // reachable before the stroke is force-accepted
+      markStrokeCorrectAfterMisses: 4,
+      onComplete: () => {
         if (sentRef.current) return;
         sentRef.current = true;
-        onResultRef.current(totalMistakes <= allowed);
+        onCompleteRef.current();
       },
     });
 
@@ -73,7 +75,7 @@ export function HandwritingQuiz({
       writer.cancelQuiz();
       mountNode.innerHTML = ""; // hanzi-writer has no public destroy(); clear its SVG manually
     };
-  }, [data, character, tolerancePercent, sizePx]);
+  }, [data, character, sizePx]);
 
   if (isLoading) return <div style={{ width: sizePx, height: sizePx }} />;
   if (error || !data) return null;

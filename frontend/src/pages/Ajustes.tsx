@@ -1,29 +1,16 @@
 import { HanziHeroPanel } from "../components/HanziHeroPanel.tsx";
 import { PageHeader } from "../components/PageHeader.tsx";
 import { Panel } from "../components/Panel.tsx";
-import {
-  TOLERANCE_PRESETS,
-  allowedMistakes,
-  useHandwritingEnabled,
-  useHandwritingTolerance,
-} from "../lib/localSettings.ts";
-
-const SAMPLE_STROKES = 6;
-
-function mistakeCopy(allowed: number): string {
-  const noun = allowed === 1 ? "erro permitido" : "erros permitidos";
-  return `${allowed} ${noun} em um caractere de ${SAMPLE_STROKES} traços.`;
-}
+import { useHandwritingEnabled } from "../lib/localSettings.ts";
 
 /**
- * Ajustes: the per-browser handwriting preferences, composed from the shared
- * header and panel. The toggle and tolerance persist locally through
- * `lib/localSettings.ts`, so a reload keeps them and the quiz reads the same
- * values. No server involvement.
+ * Ajustes: the per-browser handwriting preference, composed from the shared
+ * header and panel. The toggle persists locally through
+ * `lib/localSettings.ts`, so a reload keeps it and the quiz reads the same
+ * value. No server involvement.
  */
 export function Ajustes() {
   const [enabled, setEnabled] = useHandwritingEnabled();
-  const [tolerancePercent, setTolerancePercent] = useHandwritingTolerance();
 
   return (
     <div className="space-y-6">
@@ -50,42 +37,12 @@ export function Ajustes() {
             />
           </div>
 
-          <div>
-            <label htmlFor="handwriting-tolerance" className="text-sm font-medium text-slate-200">
-              Tolerância de erros
-            </label>
-            <select
-              id="handwriting-tolerance"
-              value={tolerancePercent}
-              onChange={(event) => setTolerancePercent(Number(event.target.value))}
-              disabled={!enabled}
-              className="mt-1 block w-full rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50"
-            >
-              {TOLERANCE_PRESETS.map((preset) => (
-                <option key={preset} value={preset}>
-                  {preset === 0 ? "Sem tolerância (0%)" : `${preset}%`}
-                </option>
-              ))}
-            </select>
-            {enabled ? (
-              <>
-                <p className="mt-1 text-xs text-slate-500">
-                  {mistakeCopy(allowedMistakes(SAMPLE_STROKES, tolerancePercent))}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  A tolerância cresce com o número de traços.
-                </p>
-              </>
-            ) : (
-              <p className="mt-1 text-xs text-slate-500">
-                A checagem está desligada neste navegador.
-              </p>
-            )}
-          </div>
+          {!enabled && (
+            <p className="text-xs text-slate-500">A checagem está desligada neste navegador.</p>
+          )}
 
           <p className="text-xs text-slate-500">
-            Estas preferências ficam salvas neste navegador — não são sincronizadas entre
-            dispositivos.
+            Esta preferência fica salva neste navegador — não é sincronizada entre dispositivos.
           </p>
         </div>
       </Panel>

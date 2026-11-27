@@ -1,9 +1,16 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ComponentType,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client.ts";
 import { useReviewMutation } from "../api/queries.ts";
 import type { SrsRating, StudyItem } from "../api/types.ts";
-import { useHandwritingEnabled, useHandwritingTolerance } from "../lib/localSettings.ts";
+import { useHandwritingEnabled } from "../lib/localSettings.ts";
 import { PATHS, itemPath } from "../lib/navigation.ts";
 import { gradeByHotkey, gradeConsequence } from "../lib/practiceGrades.ts";
 import {
@@ -18,7 +25,7 @@ import {
 } from "../lib/quizPractice.ts";
 import { STAGE_HORIZONTAL_PADDING } from "../lib/safeArea.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
-import { HandwritingQuiz } from "./HandwritingQuiz.tsx";
+import { HandwritingQuiz, type HandwritingStepProps } from "./HandwritingQuiz.tsx";
 import { PracticeBand } from "./PracticeBand.tsx";
 import { PracticeDock } from "./PracticeDock.tsx";
 import { Toast } from "./Toast.tsx";
@@ -33,17 +40,23 @@ import { Toast } from "./Toast.tsx";
  * `record` defaults to true. Practice passes false, which keeps the whole
  * runner but never issues a write request — there is no grade call at all, so
  * "not recorded" is structural rather than a flag the backend has to honour.
+ *
+ * The handwriting step is a seam: `HandwritingStep` defaults to `HandwritingQuiz`
+ * and its tests inject a double that fires completion, so the flow runs without
+ * hanzi-writer.
  */
 export function Quiz({
   items,
   mode,
   emptyMessage,
   record = true,
+  HandwritingStep = HandwritingQuiz,
 }: {
   items: StudyItem[];
   mode: QuizMode;
   emptyMessage: string;
   record?: boolean;
+  HandwritingStep?: ComponentType<HandwritingStepProps>;
 }) {
   const navigate = useNavigate();
   const { mutateAsync: review } = useReviewMutation();
@@ -61,9 +74,7 @@ export function Quiz({
   const [toast, setToast] = useState<string | null>(null);
   const [playerOn, setPlayerOn] = useState(false);
   const [handwritingEnabled, setHandwritingEnabled] = useHandwritingEnabled();
-  const [tolerancePercent, setTolerancePercent] = useHandwritingTolerance();
   const [drawIdx, setDrawIdx] = useState(0);
-  const drawFailedRef = useRef(false);
 
   const current = items[idx];
   const chars = current ? [...current.entry.simplified] : [];
@@ -125,22 +136,18 @@ export function Quiz({
     if (phase === "prompt" && mode === "lesson") return setPhase("info");
   }, [phase, selected, submitting, mode]);
 
-  // Handwriting quiz: one character at a time. A failing character pre-selects
-  // "Errei" — same as if the user had clicked it themselves, so the existing
-  // rating grid / rollback / submit flow handles the rest with no new logic.
-  const handleCharResult = useCallback(
-    (passed: boolean) => {
-      if (!passed) drawFailedRef.current = true;
-      const next = drawIdx + 1;
-      if (next >= chars.length) {
-        setPhase("revealed");
-        setSelected(drawFailedRef.current ? "again" : null);
-      } else {
-        setDrawIdx(next);
-      }
-    },
-    [drawIdx, chars.length],
-  );
+  // Handwriting self-check: one character at a time. The drawing is never
+  // graded — completion just moves to the next character, and the final one
+  // reveals with no note chosen, so the learner grades their own attempt.
+  const handleCharComplete = useCallback(() => {
+    const next = drawIdx + 1;
+    if (next >= chars.length) {
+      setSelected(null);
+      setPhase("revealed");
+    } else {
+      setDrawIdx(next);
+    }
+  }, [drawIdx, chars.length]);
 
   const canRollback = phase === "revealed" || (phase === "prompt" && mode === "lesson");
   const canGoNext = phase !== "revealed" || selected != null;
@@ -179,7 +186,6 @@ export function Quiz({
   useEffect(() => {
     if (promptedItemId === undefined) return;
     setDrawIdx(0);
-    drawFailedRef.current = false;
   }, [promptedItemId]);
 
   useEffect(() => {
@@ -243,12 +249,11 @@ export function Quiz({
                 caractere {drawIdx + 1}/{chars.length}
               </p>
             )}
-            <HandwritingQuiz
+            <HandwritingStep
               key={`${current.id}-${drawIdx}`}
               character={chars[drawIdx]}
-              tolerancePercent={tolerancePercent}
               sizePx={desktop ? 170 : 150}
-              onResult={handleCharResult}
+              onComplete={handleCharComplete}
             />
           </div>
         ) : (
@@ -304,8 +309,6 @@ export function Quiz({
       onExit={() => navigate(PATHS.hoje)}
       handwritingEnabled={handwritingEnabled}
       onHandwritingEnabledChange={setHandwritingEnabled}
-      tolerancePercent={tolerancePercent}
-      onToleranceChange={setTolerancePercent}
     />
   );
 

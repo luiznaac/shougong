@@ -1,5 +1,4 @@
 import type { SrsRating, StudyItem } from "../api/types.ts";
-import { TOLERANCE_PRESETS } from "../lib/localSettings.ts";
 import { gradeOf } from "../lib/practiceGrades.ts";
 import type { QuizPhase } from "../lib/quizPractice.ts";
 import { STAGE_HORIZONTAL_PADDING, STAGE_TOP } from "../lib/safeArea.ts";
@@ -56,8 +55,6 @@ export function PracticeBand({
   onExit,
   handwritingEnabled,
   onHandwritingEnabledChange,
-  tolerancePercent,
-  onToleranceChange,
 }: {
   presentation: Presentation;
   item: StudyItem;
@@ -80,8 +77,6 @@ export function PracticeBand({
   onExit: () => void;
   handwritingEnabled: boolean;
   onHandwritingEnabledChange: (on: boolean) => void;
-  tolerancePercent: number;
-  onToleranceChange: (percent: number) => void;
 }) {
   const mobile = presentation === "mobile";
   const chars = [...item.entry.simplified];
@@ -101,20 +96,6 @@ export function PracticeBand({
         />
         Escrever à mão
       </label>
-      {handwritingEnabled && (
-        <select
-          value={tolerancePercent}
-          onChange={(event) => onToleranceChange(Number(event.target.value))}
-          title="Tolerância de erros"
-          className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/90"
-        >
-          {TOLERANCE_PRESETS.map((preset) => (
-            <option key={preset} value={preset} className="text-slate-900">
-              {preset}%
-            </option>
-          ))}
-        </select>
-      )}
     </div>
   );
 
