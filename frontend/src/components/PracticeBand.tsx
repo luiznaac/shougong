@@ -50,6 +50,7 @@ export function PracticeBand({
   progress,
   playerOn,
   onTogglePlayer,
+  hideGlyph = false,
   canRollback,
   onRollback,
   onExit,
@@ -72,6 +73,8 @@ export function PracticeBand({
   };
   playerOn: boolean;
   onTogglePlayer: () => void;
+  /** Hides the band's glyph slot while the writing canvas is the phase's glyph. */
+  hideGlyph?: boolean;
   canRollback: boolean;
   onRollback: () => void;
   onExit: () => void;
@@ -156,16 +159,17 @@ export function PracticeBand({
           />
         </div>
 
-        {showPlayer ? (
-          <StrokePlayer key={item.id} word={item.entry.simplified} sizePx={playerSize} />
-        ) : (
-          <FlipCards
-            chars={chars}
-            writingLevels={item.character_writing_levels}
-            hidden={phase === "prompt"}
-            available={mobile ? 300 : 430}
-          />
-        )}
+        {!hideGlyph &&
+          (showPlayer ? (
+            <StrokePlayer key={item.id} word={item.entry.simplified} sizePx={playerSize} />
+          ) : (
+            <FlipCards
+              chars={chars}
+              writingLevels={item.character_writing_levels}
+              hidden={phase === "prompt"}
+              available={mobile ? 300 : 430}
+            />
+          ))}
 
         <div className="flex items-center gap-1.5 rounded-full bg-slate-950/35 px-3 py-1">
           <WordLevels

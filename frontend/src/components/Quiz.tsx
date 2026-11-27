@@ -84,6 +84,7 @@ export function Quiz({
 
   const practice = !record;
   const bandClass = stageBandClass(mode, record);
+  const writingCanvasIsGlyph = handwritingEnabled && phase === "prompt";
 
   const advance = useCallback(() => {
     setSelected(null);
@@ -252,7 +253,6 @@ export function Quiz({
             <HandwritingStep
               key={`${current.id}-${drawIdx}`}
               character={chars[drawIdx]}
-              sizePx={desktop ? 170 : 150}
               onComplete={handleCharComplete}
             />
           </div>
@@ -304,6 +304,7 @@ export function Quiz({
       }}
       playerOn={playerOn}
       onTogglePlayer={() => setPlayerOn((on) => !on)}
+      hideGlyph={writingCanvasIsGlyph}
       canRollback={canRollback}
       onRollback={rollback}
       onExit={() => navigate(PATHS.hoje)}

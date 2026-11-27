@@ -176,6 +176,16 @@ describe("Quiz interaction", () => {
     expect(screen.getAllByText("?")).toHaveLength(2);
   });
 
+  it("drops the band's hidden-card glyph while the writing canvas is the glyph", async () => {
+    const user = userEvent.setup();
+    renderQuiz({ mode: "lesson", handwriting: true, item: word("学习", "xue2 xi2") });
+
+    await user.click(screen.getByRole("button", { name: /Continuar/ }));
+
+    expect(screen.getByRole("button", { name: "Concluir 学" })).toBeTruthy();
+    expect(screen.queryAllByText("?")).toHaveLength(0);
+  });
+
   it("swaps the revealed answer cards for the player in place and back", async () => {
     const user = userEvent.setup();
     renderQuiz({ item: word("学习", "xue2 xi2") });
