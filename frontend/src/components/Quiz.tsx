@@ -24,7 +24,12 @@ import {
   topBarTitle,
 } from "../lib/quizPractice.ts";
 import { STAGE_HORIZONTAL_PADDING } from "../lib/safeArea.ts";
-import { type SlotCapture, afterCharacterComplete, revealTarget } from "../lib/selfCheck.ts";
+import {
+  type SlotCapture,
+  afterCharacterComplete,
+  revealTarget,
+  rollbackStep,
+} from "../lib/selfCheck.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
 import { HandwritingQuiz, type HandwritingStepProps } from "./HandwritingQuiz.tsx";
 import { PracticeBand } from "./PracticeBand.tsx";
@@ -158,24 +163,43 @@ export function Quiz({
     chars.length,
   ]);
 
-  // Backward: undo the selected grade, else step back a phase. An early peek
-  // returns to the character being drawn without losing its place.
+  // What rollback would do right now, derived during render so availability and
+  // behaviour read from the same pure rule.
+  const rollbackAction = rollbackStep({
+    phase,
+    hasGrade: selected != null,
+    drawIdx,
+    count: chars.length,
+    lesson: mode === "lesson",
+    handwriting: handwritingEnabled,
+  });
+  const canRollback = rollbackAction.kind !== "unavailable";
+
+  // Backward, in the self-check's order: clear the chosen grade first; with no
+  // grade step back one character (redrawing it) into recall; from recall a
+  // lesson steps back a character and review/practice have nowhere to go. A
+  // peek just returns to the character being drawn.
   const rollback = useCallback(() => {
     if (submitting) return;
-    if (phase === "revealed") {
-      if (selected) return setSelected(null);
-      setPhase("prompt");
-      setDrawIdx(0);
-      setSnapshots([]);
-      return;
+    switch (rollbackAction.kind) {
+      case "clear-grade":
+        return setSelected(null);
+      case "step-back":
+        setPhase("prompt");
+        setDrawIdx(rollbackAction.drawIdx);
+        setSnapshots((all) => all.map((s, i) => (i < rollbackAction.drawIdx ? s : null)));
+        return;
+      case "return-to-recall":
+        return setPhase("prompt");
+      case "back-to-info":
+        setPhase("info");
+        setDrawIdx(0);
+        setSnapshots([]);
+        return;
+      case "unavailable":
+        return;
     }
-    if (phase === "peek") return setPhase("prompt");
-    if (phase === "prompt" && mode === "lesson") {
-      setPhase("info");
-      setDrawIdx(0);
-      setSnapshots([]);
-    }
-  }, [phase, selected, submitting, mode]);
+  }, [submitting, rollbackAction]);
 
   // Handwriting self-check: one character at a time. The drawing is never
   // graded — completion just moves to the next character, and the final one
@@ -202,8 +226,6 @@ export function Quiz({
     [drawIdx, chars.length, autoReveal],
   );
 
-  const canRollback =
-    phase === "revealed" || phase === "peek" || (phase === "prompt" && mode === "lesson");
   const canGoNext = phase !== "revealed" || selected != null;
   const awaitingReveal =
     phase === "prompt" &&
