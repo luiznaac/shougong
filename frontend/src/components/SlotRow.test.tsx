@@ -26,6 +26,16 @@ describe("SlotRow", () => {
     expect(html).toContain('aria-current="step"');
   });
 
+  it("labels each recall slot with its 1-based position", () => {
+    const html = renderToStaticMarkup(
+      <SlotRow chars={["学", "习"]} snapshots={[null, null]} currentIdx={0} reveal="none" />,
+    );
+
+    expect(html).toContain('aria-label="Progresso por caractere"');
+    expect(html).toContain(">1<");
+    expect(html).toContain(">2<");
+  });
+
   it("highlights the current slot and keeps each completed drawing", () => {
     const html = renderToStaticMarkup(
       <SlotRow chars={["学", "习"]} snapshots={[drawn(), null]} currentIdx={1} reveal="none" />,

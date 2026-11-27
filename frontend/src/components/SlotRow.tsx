@@ -103,8 +103,8 @@ function SlotBadge({ index, state }: { index: number; state: SlotState }) {
   return (
     <span
       aria-hidden
-      className={`absolute -top-2 left-1.5 rounded-full px-1.5 text-[9px] font-semibold tabular-nums ${
-        state === "current" ? "bg-accent-500 text-white" : "bg-slate-950 text-slate-400"
+      className={`absolute -top-2 left-1.5 rounded-full px-1.5 py-0.5 text-[11px] leading-none font-semibold tabular-nums ${
+        state === "current" ? "bg-accent-500 text-white" : "bg-slate-800 text-slate-200"
       }`}
     >
       {index + 1}
@@ -202,7 +202,9 @@ export function SlotRow({
   return (
     <ul
       aria-label="Progresso por caractere"
-      className="flex w-full items-start gap-2 overflow-x-auto pb-1"
+      // `overflow-x-auto` makes the row a scroll container, which also clips
+      // vertically: `pt-3` keeps the slots' -top-2 number badges from being cut.
+      className="flex w-full items-start gap-2 overflow-x-auto pt-3 pb-1"
     >
       {keyedOccurrences(chars, (char) => char).map(({ key, item: character }, index) => {
         const snapshot = snapshots[index] ?? null;
