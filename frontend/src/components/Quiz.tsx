@@ -77,6 +77,7 @@ export function Quiz({
   const [playerOn, setPlayerOn] = useState(false);
   const [handwritingEnabled, setHandwritingEnabled] = useHandwritingEnabled();
   const [drawIdx, setDrawIdx] = useState(0);
+  const [redrawCount, setRedrawCount] = useState(0);
   const [snapshots, setSnapshots] = useState<(SlotCapture | null)[]>([]);
 
   const current = items[idx];
@@ -163,6 +164,14 @@ export function Quiz({
     [drawIdx, chars.length],
   );
 
+  // Clear the character being drawn: bumping the count remounts the writer so
+  // its strokes and hint state reset, while earlier characters keep their
+  // snapshots in the slot row.
+  const clearCurrent = useCallback(() => {
+    setSnapshots((all) => all.map((capture, i) => (i === drawIdx ? null : capture)));
+    setRedrawCount((count) => count + 1);
+  }, [drawIdx]);
+
   const canRollback = phase === "revealed" || (phase === "prompt" && mode === "lesson");
   const canGoNext = phase !== "revealed" || selected != null;
 
@@ -200,6 +209,7 @@ export function Quiz({
   useEffect(() => {
     if (promptedItemId === undefined) return;
     setDrawIdx(0);
+    setRedrawCount(0);
     setSnapshots(Array.from({ length: chars.length }, () => null));
   }, [promptedItemId, chars.length]);
 
@@ -274,12 +284,21 @@ export function Quiz({
                 caractere {drawIdx + 1}/{chars.length}
               </p>
             )}
-            <HandwritingStep
-              key={`${current.id}-${drawIdx}`}
-              character={chars[drawIdx]}
-              sizePx={desktop ? 170 : 150}
-              onComplete={handleCharComplete}
-            />
+            <div className="flex items-center gap-3">
+              <HandwritingStep
+                key={`${current.id}-${drawIdx}-${redrawCount}`}
+                character={chars[drawIdx]}
+                sizePx={desktop ? 170 : 150}
+                onComplete={handleCharComplete}
+              />
+              <button
+                type="button"
+                onClick={clearCurrent}
+                className="rounded-full bg-slate-800 px-3 py-1 text-[11px] font-medium text-slate-200 ring-1 ring-white/10 hover:bg-slate-700"
+              >
+                Limpar
+              </button>
+            </div>
           </div>
         ) : (
           <p className="text-center text-xs text-slate-400">
